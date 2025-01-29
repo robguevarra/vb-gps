@@ -1,0 +1,320 @@
+Below is a **fully rethought, end-to-end set of instructions** for building your staff portal using **Next.js (App Router)** on the front end and **Supabase** for the backend. It integrates **Xendit webhooks** for online donations, offline donation entry for finance officers, multi-level roles (missionary, campus director, lead pastor, finance officer, superadmin), surplus handling, partial approvals, and a modern UI design. This specification is meant to be given to an AI code composer so it can generate the system from start to finish.
+
+---
+
+# **1. High-Level Requirements**
+
+1. **System Roles**  
+   - **Missionary**: Tracks monthly donation progress vs. salary goal, can request surplus, can apply for leave.  
+   - **Campus Director** (also a missionary but with leadership responsibilities): Oversees missionaries, approves their surplus and leave requests (jointly with lead pastor).  
+   - **Lead Pastor**: Oversees local church. Approves requests from campus directors, missionaries (jointly with campus director), can override campus director if needed.  
+   - **Finance Officer**: Adds manual/offline donations, sees donation data for the local church. No approval powers.  
+   - **Superadmin**: Complete system control—manages data, configures relationships, sets up local churches and roles, resets passwords, views advanced reporting (local church → district → province).
+
+2. **Donation & Surplus Management**  
+   - Each missionary has a **monthly salary goal**.  
+   - **Online donations**: Inserted automatically by **Xendit** webhooks.  
+   - **Offline donations**: Manually added by finance officers.  
+   - If donations exceed the monthly goal, the difference goes into a **surplus balance** for that missionary.  
+   - Missionaries can **request surplus** usage (only up to the surplus amount).  
+   - Surplus requests must be approved by campus director + lead pastor (partial approvals possible).
+
+3. **Leave Management**  
+   - Missionaries (and possibly staff) can request leave.  
+   - Approvals are from campus director + lead pastor, similar to surplus.  
+   - If either rejects, it’s rejected—unless the lead pastor overrides.
+
+4. **Reporting & Hierarchy**  
+   - We have **16 local churches** under one “province,” and each local church can belong to a “district” if needed.  
+   - **Superadmin** can generate **reports** at local church level, district level, or province level, showing donation summaries, surplus usage, leaves, etc.
+
+5. **Modern Front-End**  
+   - Built with the **Next.js App Router**.  
+   - Responsive, minimal design using a component library (e.g., **Tailwind CSS**, **Material UI**, or **Chakra UI**).  
+   - Clean dashboards for missionaries, finance officers, pastors, and superadmin.
+
+---
+
+# **2. Technology Stack**
+
+1. **Front End**: **Next.js** (using the App Router in the `app/` directory).  
+2. **Backend**: **Supabase** (Postgres DB + Auth + APIs).  
+3. **Payment Gateway**: **Xendit** for online donations. We’ll create a webhook endpoint in Next.js for Xendit to call.  
+4. **Hosting**:  
+   - Next.js can be deployed on **Vercel** or any Node-compatible host.  
+   - Supabase is hosted, providing DB + Auth.  
+5. **Email Notifications**: Possibly integrated via a service like SendGrid or an SMTP-based solution.
+
+---
+
+# **3. Database Design (Supabase)**
+
+Use **Supabase** to create the following tables and relationships (Note: table names can vary, but this is the conceptual layout):
+
+1. **`local_churches`**  
+   - `id (bigserial PK)`, `name (text)`, `district_id (bigint, optional)`, `lead_pastor_id (uuid)`, etc.
+
+2. **`districts`** (optional if you want to group local churches)  
+   - `id (bigserial PK)`, `name (text)`, `province_id (bigint, optional)`.
+
+3. **`users` / `profiles`** (extending `auth.users` if using Supabase Auth)  
+   - `id (uuid PK references auth.users(id))`  
+   - `full_name (text)`  
+   - `role (text: missionary, campus_director, lead_pastor, finance_officer, superadmin)`  
+   - `local_church_id (bigint references local_churches(id))`  
+   - `campus_director_id (uuid, references users(id) if the user is a missionary supervised by a campus director)`  
+   - `monthly_goal (numeric(10,2))`  
+   - `surplus_balance (numeric(10,2) default 0)`  
+   - `created_at, updated_at`
+
+4. **`donations`**  
+   - `id (bigserial PK)`  
+   - `missionary_id (uuid references users(id))`  
+   - `donor_name (text, optional)` or `donor_id (optional) if you store donors as users`  
+   - `amount (numeric(10,2))`  
+   - `date (timestamptz)`  
+   - `source (varchar: 'online','offline')`  
+   - `status (varchar: 'completed','refunded','failed', etc.)`  
+   - `created_by (uuid, references users(id) if finance officer added manually)`
+
+5. **`surplus_requests`**  
+   - `id (bigserial PK)`  
+   - `missionary_id (uuid references users(id))`  
+   - `amount_requested (numeric(10,2))`  
+   - `reason (text)`  
+   - `status (varchar: 'pending','approved','rejected')`  
+   - `campus_director_approval (varchar: 'none','approved','rejected')`  
+   - `lead_pastor_approval (varchar: 'none','approved','rejected','override')`  
+   - `created_at (timestamptz)`, `updated_at (timestamptz)`
+
+6. **`leave_requests`**  
+   - `id (bigserial PK)`  
+   - `requester_id (uuid references users(id))`  
+   - `start_date (date)`  
+   - `end_date (date)`  
+   - `reason (text)`  
+   - `status (varchar: 'pending','approved','rejected')`  
+   - `campus_director_approval (varchar: 'none','approved','rejected')`  
+   - `lead_pastor_approval (varchar: 'none','approved','rejected','override')`  
+   - `created_at, updated_at`
+
+7. **`webhook_logs`** (optional, for debugging)  
+   - `id (bigserial PK)`  
+   - `payload (jsonb)`  
+   - `created_at (timestamptz)`
+
+**Row-level security** or policy-based restrictions can be used so that finance officers only see their local church’s data, missionaries only see their own, etc.
+
+---
+
+# **4. Webhook Integration (Xendit)**
+
+1. **API Endpoint**: `app/api/xendit-webhook/route.ts`  
+   - **Method**: `POST`  
+   - **Process**:  
+     1. Validate the request body for the correct fields (amount, missionary identifier, status, etc.).  
+     2. Insert or update a record in the `donations` table with `source = 'online'` and `status = 'completed'` or whatever Xendit provides.  
+     3. Optionally store the entire payload in `webhook_logs`.  
+
+2. **Security**:  
+   - If Xendit supports signing requests, verify the signature.  
+   - Otherwise, use a secret token in the URL to ensure only Xendit can call it.
+
+3. **Testing**:  
+   - Use Xendit’s sandbox mode to send test events.  
+   - Confirm the data shows up on the missionary’s donation list.
+
+---
+
+# **5. Next.js App Router Structure**
+
+Proposed structure in `app/`:
+
+```
+app/
+  layout.tsx              // Global layout, includes main nav if needed
+  page.tsx                // Possibly a landing or redirect to /login
+
+  api/
+    xendit-webhook/
+      route.ts            // POST endpoint for Xendit webhooks
+
+  dashboard/
+    missionary/
+      page.tsx            // Missionary dashboard
+      [donorId]/
+        page.tsx          // Optional page or route to show a specific donor's history
+
+    finance/
+      page.tsx            // Finance officer dashboard
+      create-donation/
+        page.tsx          // Page or modal for adding offline donation
+
+    campus-director/
+      page.tsx            // Approvals + oversight
+
+    lead-pastor/
+      page.tsx            // Approvals + oversight, override logic
+
+    superadmin/
+      page.tsx            // Main superadmin panel
+      reports/
+        page.tsx          // Detailed reports
+      local-churches/
+        page.tsx          // Manage churches, assign pastors
+      users/
+        page.tsx          // Manage user accounts
+```
+
+You can refine the structure as needed, but this ensures a **clean separation** of each role’s dashboard.
+
+---
+
+# **6. Role-Specific Dashboards & Features**
+
+## 6.1 Missionary Dashboard
+
+- **View Monthly Donation Stats**: A progress bar or percentage of monthly_goal.  
+- **Recent Donations**: Show a table of date, amount, donor name (if available).  
+- **Donor History**: Clicking a donor name reveals a modal or separate page listing that donor’s full giving history **to this missionary**.  
+- **Request Surplus**: A form if the missionary’s surplus_balance > 0.  
+- **Request Leave**: A form to request start_date, end_date, reason.  
+- **View Surplus & Leave Request Status**: For each request, see pending/approved/rejected, with partial approvals if applicable.
+
+## 6.2 Finance Officer Dashboard
+
+- **Add Offline Donation**:
+  - Form: missionary selection, donor name/email (optional), amount, date.  
+  - Inserts into `donations` with `source='offline'` and `created_by=finance_officer_id`.
+- **Recent Manual Donations**: Table of offline donations added recently for the local church.  
+- **Optional Stats**: Show how many donations have been recorded this month, total amounts, etc.
+
+## 6.3 Campus Director Dashboard
+
+- **Approve Surplus & Leave**:
+  - List of all missionaries in the local church under this director.  
+  - Surplus requests: click “approve” or “reject.”  
+  - Leave requests: same.  
+- **Partially Approved**: The request remains pending until the lead pastor also acts (or overrides).
+
+## 6.4 Lead Pastor Dashboard
+
+- **Approve Surplus & Leave**:
+  - List of requests from missionaries (or campus director if that’s also a missionary) in the local church.  
+  - If campus director already approved, it shows “campus director: approved.” The lead pastor can finalize or override.  
+- **Override**: If campus director rejects but lead pastor wants to approve, that’s an override scenario. If the business logic is allowed, implement it.
+
+## 6.5 Superadmin Dashboard
+
+- **Manage Organizational Structure**:
+  - Add local churches, districts, and assign lead pastors, campus directors, finance officers, missionaries.  
+- **User Management**:
+  - Create new user accounts, reset passwords, update roles, monthly goals, etc.  
+- **Global Reporting**:
+  - Filter by local church, district, or entire province. Summaries of donations vs. goals, surplus usage, leaves requested.  
+  - Possibly export data to CSV/PDF.
+
+---
+
+# **7. Surplus Handling Logic**
+
+1. **Accumulation**:
+   - End of each month (or real-time), if `month_donations > monthly_goal`, surplus = `month_donations - monthly_goal`.  
+   - Add that to the user’s `surplus_balance`. If you carry it forward monthly, store it in `profiles.surplus_balance`.  
+2. **Request**:
+   - Missionary can request up to `surplus_balance`.  
+   - On approval, subtract from `surplus_balance`. On rejection, do nothing.  
+3. **Partial Approvals**:
+   - If campus director and lead pastor differ, the lead pastor can override or finalize the decision.
+
+---
+
+# **8. Data Flow Examples**
+
+**Example: Online Donation**  
+1. Donor pays via Xendit.  
+2. Xendit calls `POST /api/xendit-webhook/`.  
+3. The route parses the payload, inserts a row in `donations`.  
+4. Missionary sees updated donation total. Surplus is calculated if it surpasses the monthly goal.
+
+**Example: Surplus Request**  
+1. Missionary has surplus_balance = \$200.  
+2. They request \$150 for a special need.  
+3. The campus director sees it in the queue, approves or rejects.  
+4. The lead pastor sees it, finalizes approval or override.  
+5. On final approval, the system subtracts \$150 from `surplus_balance`.
+
+---
+
+# **9. Ensuring a Modern UI**
+
+1. **Design Language**:
+   - Use a library like **Tailwind CSS** + a style extension (like DaisyUI or Headless UI) or **Chakra UI** for quick, consistent styling.  
+2. **Responsive Layout**:
+   - A main sidebar or top nav that collapses on mobile.  
+   - Dashboard cards, tables, modals, etc. for each role.  
+3. **Visuals**:
+   - **Donations** might have a simple bar or ring chart.  
+   - Surplus usage can be displayed in a card.  
+   - Approvals can be displayed as “pending requests” lists with clear Accept/Reject buttons.
+
+---
+
+# **10. Implementation Steps for the AI Code Composer**
+
+1. **Initialize Next.js Project**:  
+   - `npx create-next-app@latest` with TypeScript, set up the app router structure.
+
+2. **Install Dependencies**:
+   - `@supabase/supabase-js` for DB connectivity, or plan to use the Supabase API.  
+   - UI library (Tailwind or Material UI).  
+   - Possibly an email library for notifications if needed.
+
+3. **Generate DB Schema**:
+   - Create or refine a `schema.sql` (or a set of migrations) for the Supabase tables described.  
+   - Ensure `role`-based logic for partial approvals and leftover surplus.
+
+4. **Set Up Supabase Auth**:
+   - Decide how users sign in (email/password).  
+   - Create a `profiles` table referencing `auth.users.id`.  
+   - The AI can auto-generate code for sign-up flows, or you might do it manually as an admin process.
+
+5. **API Routes**:
+   - `app/api/xendit-webhook/route.ts`: Insert donations on successful payment.  
+   - Possibly other routes like `app/api/donations/` or `app/api/surplus-requests/`.
+
+6. **Front-End Dashboard Pages**:
+   - **Missionary**: donation summary, surplus request form, leave request form, partial donor info modal.  
+   - **Finance**: offline donation entry, recent donations.  
+   - **Campus Director**: requests from missionaries, approval actions.  
+   - **Lead Pastor**: same, plus override logic.  
+   - **Superadmin**: manage local churches, roles, advanced reporting.
+
+7. **Reporting**:
+   - Create queries that aggregate donation data at local-church, district, or province levels.  
+   - Possibly render charts with a library like `recharts` or `chart.js`.
+
+8. **Email Notifications** (if needed):
+   - On creation of a surplus or leave request, email campus director & lead pastor.  
+   - On approval or rejection, email the requester.  
+   - The AI can integrate SendGrid or a simple SMTP-based approach.
+
+9. **Testing & Deployment**:
+   - Test the entire flow: from Xendit payment -> donation record -> missionary sees updated total -> surplus requests -> partial approvals.  
+   - Deploy Next.js to Vercel or your platform of choice.  
+   - Supabase handles the DB hosting.
+
+---
+
+## **Conclusion**
+
+With these **comprehensive instructions**, your AI code composer should be able to:
+
+1. **Set up** the **Next.js** front-end with separate dashboards for each role.  
+2. **Integrate Supabase** as the backend, storing user profiles, donations, surplus requests, leaves, etc.  
+3. **Implement** the **Xendit webhook** route for automatic donation recording.  
+4. **Ensure** partial approvals for surplus/leave.  
+5. **Provide** a modern UI using a recognized styling library.  
+6. **Offer** robust superadmin management & multi-level reporting across local churches, districts, and the entire province.
+
+This blueprint covers the entire system from data schema to user flows and UI design, enabling the AI to generate a working, production-ready staff portal.
