@@ -1,45 +1,150 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import { generateMockDonations, mockProfile } from '@/utils/mockData'
 import DashboardCards from '@/components/dashboard-cards'
 import RecentDonations from '@/components/recent-donations'
 import { Button } from '@/components/ui/button'
 import { CalendarDays, WalletCards } from 'lucide-react'
-import Link from 'next/link'
-import { generateMockLeaveRequests, generateMockSurplusRequests } from '@/utils/mockData'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import ProfileSelector from '@/components/ProfileSelector'
 
-export default async function MissionaryDashboard() {
+export const dynamic = 'force-dynamic'
+
+interface LeaveRequest {
+  id: string;
+  type: 'Leave';
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: string;
+  date: string;
+}
+
+interface SurplusRequest {
+  id: string;
+  type: 'Surplus';
+  amount: number;
+  reason: string;
+  status: string;
+  date: string;
+}
+
+export default async function MissionaryDashboard({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
+  // First await other async operations
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Then access searchParams after awaits
+  const userIdParam = typeof searchParams.userId === 'string' 
+    ? searchParams.userId 
+    : Array.isArray(searchParams.userId)
+      ? searchParams.userId[0]
+      : undefined
 
   if (!user) {
     redirect('/login')
   }
 
-  // Mock data
-  const mockDonations = generateMockDonations(5)
-  const currentDonations = mockDonations.reduce((acc, d) => acc + d.amount, 0)
-  const pendingRequests = 2
-  const leaveRequests = generateMockLeaveRequests(3)
-  const surplusRequests = generateMockSurplusRequests(2)
+  // Check for superadmin
+  const isSuperAdmin = user.email === 'robneil@gmail.com'
+
+  // Fetch all missionaries if superadmin
+  const { data: allMissionaries } = isSuperAdmin 
+    ? await supabase
+        .from('profiles')
+        .select('id, full_name, role')
+        .neq('role', 'super_admin') // Exclude other superadmins
+    : { data: null }
+
+  // Fetch profile data (either selected or current user)
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('*, local_churches(name)')
+    .eq('id', userIdParam || user.id)
+    .single()
+
+  // Fetch donations
+  const { data: donationsData } = await supabase
+    .from('donations')
+    .select('amount, created_at')
+    .eq('user_id', userIdParam || user.id)
+    .order('created_at', { ascending: false })
+    .limit(5)
+
+  // Fetch leave requests
+  const { data: leaveRequestsData } = await supabase
+    .from('leave_requests')
+    .select('*')
+    .eq('user_id', userIdParam || user.id)
+    .order('created_at', { ascending: false })
+
+  // Fetch surplus requests
+  const { data: surplusRequestsData } = await supabase
+    .from('surplus_requests')
+    .select('*')
+    .eq('user_id', userIdParam || user.id)
+    .order('created_at', { ascending: false })
+
+  if (!profileData) {
+    redirect('/login')
+  }
+
+  // Process data
+  const currentDonations = donationsData?.reduce((acc, d) => acc + d.amount, 0) || 0
+  const pendingRequests = [
+    ...(leaveRequestsData?.filter(r => r.status === 'pending') || []),
+    ...(surplusRequestsData?.filter(r => r.status === 'pending') || [])
+  ].length
+
+  // Transform requests
+  const leaveRequests = leaveRequestsData?.map(r => ({
+    id: r.id,
+    type: 'Leave' as const,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    reason: r.reason,
+    status: r.status,
+    date: new Date(r.created_at).toLocaleDateString()
+  })) || []
+
+  const surplusRequests = surplusRequestsData?.map(r => ({
+    id: r.id,
+    type: 'Surplus' as const,
+    amount: r.amount,
+    reason: r.reason,
+    status: r.status,
+    date: new Date(r.created_at).toLocaleDateString()
+  })) || []
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto p-6 space-y-8">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-bold text-foreground">
-            {mockProfile.full_name}
-          </h1>
-          <div className="flex items-center gap-4 text-muted-foreground">
-            <p className="bg-accent px-3 py-1 rounded-full text-sm">
-              {mockProfile.role.replace(/_/g, ' ')}
-              {mockProfile.role === 'campus_director' && ' (Director)'}
-            </p>
-            <p className="text-sm">•</p>
-            <p className="text-sm">{mockProfile.local_churches?.name}</p>
-          </div>
-        </header>
+        <div className="flex justify-between items-start">
+          <header className="space-y-2">
+            <h1 className="text-3xl font-bold text-foreground">
+              {profileData.full_name}
+            </h1>
+            <div className="flex items-center gap-4 text-muted-foreground">
+              <p className="bg-accent px-3 py-1 rounded-full text-sm">
+                {profileData.role.replace(/_/g, ' ')}
+                {profileData.role === 'campus_director' && ' (Director)'}
+              </p>
+              <p className="text-sm">•</p>
+              <p className="text-sm">{profileData.local_churches?.name}</p>
+            </div>
+          </header>
+          
+          {isSuperAdmin && (
+            <ProfileSelector 
+              missionaries={allMissionaries || []}
+              userId={typeof userIdParam === 'string' ? userIdParam : undefined}
+            />
+          )}
+        </div>
 
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="grid w-full grid-cols-3 lg:w-1/2">
@@ -50,12 +155,17 @@ export default async function MissionaryDashboard() {
 
           <TabsContent value="overview" className="space-y-8">
             <DashboardCards
-              monthlyGoal={mockProfile.monthly_goal}
+              monthlyGoal={profileData.monthly_goal}
               currentDonations={currentDonations}
               pendingRequests={pendingRequests}
-              surplusBalance={mockProfile.surplus_balance}
+              surplusBalance={profileData.surplus_balance}
             />
-            <RecentDonations donations={mockDonations} />
+            <RecentDonations donations={donationsData?.map(d => ({
+              id: d.created_at,
+              amount: d.amount,
+              date: new Date(d.created_at).toLocaleDateString(),
+              donor: 'Donor' // Update if you have donor names
+            })) || []} />
           </TabsContent>
 
           <TabsContent value="requests">
@@ -73,7 +183,7 @@ export default async function MissionaryDashboard() {
                     </label>
                     <input
                       type="number"
-                      max={mockProfile.surplus_balance}
+                      max={profileData.surplus_balance}
                       className="w-full p-2 border rounded"
                       placeholder="Enter amount"
                     />
@@ -141,7 +251,7 @@ export default async function MissionaryDashboard() {
             <div className="space-y-4">
               <h2 className="text-2xl font-semibold">Recent Applications</h2>
               <div className="space-y-4">
-                {[...leaveRequests, ...surplusRequests].map((request) => (
+                {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map((request) => (
                   <div key={request.id} className="p-4 bg-background rounded-lg border">
                     <div className="flex justify-between items-start">
                       <div>
@@ -164,7 +274,7 @@ export default async function MissionaryDashboard() {
                     </div>
                     {request.type === 'Leave' && (
                       <p className="text-sm mt-2">
-                        Dates: {request.startDate} - {request.endDate}
+                        Dates: {(request as LeaveRequest).startDate} - {(request as LeaveRequest).endDate}
                       </p>
                     )}
                     <p className="text-sm text-muted-foreground mt-2">
