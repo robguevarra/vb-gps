@@ -1,5 +1,3 @@
-// components/request-surplus-form.tsx
-
 'use client'
 
 import { useState } from 'react'
@@ -13,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 export function RequestSurplusForm({ surplusBalance }: { surplusBalance: number }) {
   const supabase = createClient()
   const router = useRouter()
+
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -20,15 +19,16 @@ export function RequestSurplusForm({ surplusBalance }: { surplusBalance: number 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setError('')
 
     if (!amount || isNaN(parseFloat(amount))) {
       setError('Please enter a valid amount')
-      setLoading(false)
       return
     }
 
-    const { error } = await supabase.from('surplus_requests').insert({
+    setLoading(true)
+
+    const { error: submitError } = await supabase.from('surplus_requests').insert({
       amount_requested: parseFloat(amount),
       reason,
       status: 'pending',
@@ -36,7 +36,9 @@ export function RequestSurplusForm({ surplusBalance }: { surplusBalance: number 
       lead_pastor_approval: 'none'
     })
 
-    if (!error) {
+    if (submitError) {
+      setError(submitError.message)
+    } else {
       router.refresh()
       setAmount('')
       setReason('')
@@ -72,9 +74,11 @@ export function RequestSurplusForm({ surplusBalance }: { surplusBalance: number 
         />
       </div>
 
-      <Button type="submit" disabled={loading}>
+      {error && <p className="text-red-500">{error}</p>}
+
+      <Button type="submit" disabled={loading} className="w-full">
         {loading ? 'Submitting...' : 'Request Surplus'}
       </Button>
     </form>
   )
-} 
+}

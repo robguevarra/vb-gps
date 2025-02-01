@@ -1,30 +1,32 @@
-// components/leave-request-form.tsx
 'use client'
 
-import { useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
-import { Textarea } from '@/components/ui/textarea';
-import { DateRange } from 'react-day-picker';
-import { Loader2 } from 'lucide-react';
+import { useState } from 'react'
+import { createClient } from '@/utils/supabase/client'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Calendar } from '@/components/ui/calendar'
+import { Textarea } from '@/components/ui/textarea'
+import { DateRange } from 'react-day-picker'
+import { Loader2 } from 'lucide-react'
 
 export function LeaveRequestForm() {
-  const supabase = createClient();
-  const router = useRouter();
-  const [dates, setDates] = useState<DateRange | undefined>(undefined);
-  const [reason, setReason] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const supabase = createClient()
+  const router = useRouter()
+  const [dates, setDates] = useState<DateRange | undefined>(undefined)
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dates?.from || !dates?.to) return;
+    e.preventDefault()
+    if (!dates?.from || !dates?.to) {
+      setErrorMessage('Please select a valid date range.')
+      return
+    }
 
-    setLoading(true);
-    setErrorMessage(null);
+    setLoading(true)
+    setErrorMessage(null)
 
     const { error } = await supabase.from('leave_requests').insert({
       start_date: dates.from.toISOString(),
@@ -33,17 +35,17 @@ export function LeaveRequestForm() {
       status: 'pending',
       campus_director_approval: 'none',
       lead_pastor_approval: 'none',
-    });
+    })
 
-    if (!error) {
-      router.refresh();
-      setDates(undefined);
-      setReason('');
+    if (error) {
+      setErrorMessage(error.message)
     } else {
-      setErrorMessage(error.message);
+      router.refresh()
+      setDates(undefined)
+      setReason('')
     }
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -68,14 +70,10 @@ export function LeaveRequestForm() {
         />
       </div>
 
-      {errorMessage && (
-        <div className="text-red-500">
-          {errorMessage}
-        </div>
-      )}
+      {errorMessage && <div className="text-red-500">{errorMessage}</div>}
 
-      <Button 
-        type="submit" 
+      <Button
+        type="submit"
         disabled={loading || !dates?.from || !dates?.to}
         className="w-full"
       >
@@ -84,8 +82,10 @@ export function LeaveRequestForm() {
             <Loader2 className="h-4 w-4 animate-spin" />
             Submitting...
           </div>
-        ) : 'Request Leave'}
+        ) : (
+          'Request Leave'
+        )}
       </Button>
     </form>
-  );
+  )
 }

@@ -34,7 +34,6 @@ export default async function MissionaryDashboard(
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>
   }
 ) {
-  // Await search parameters (App Router passes them as a Promise)
   const searchParams = await props.searchParams;
   console.log('SearchParams:', searchParams);
 
@@ -42,7 +41,6 @@ export default async function MissionaryDashboard(
   const { data: { user } } = await supabase.auth.getUser();
   console.log('Authenticated User:', user);
 
-  // Compute the userIdParam from searchParams, if provided
   const userIdParam = typeof searchParams.userId === 'string'
     ? searchParams.userId
     : Array.isArray(searchParams.userId)
@@ -57,7 +55,7 @@ export default async function MissionaryDashboard(
   const isSuperAdmin = user.email === 'robneil@gmail.com';
   console.log('Is SuperAdmin:', isSuperAdmin);
 
-  // Fetch all profiles for the ProfileSelector if superadmin is logged in.
+  // Fetch all missionaries if superadmin
   const { data: allMissionaries } = isSuperAdmin 
     ? await supabase
         .from('profiles')
@@ -66,19 +64,20 @@ export default async function MissionaryDashboard(
     : { data: null };
   console.log('All Missionaries:', allMissionaries);
 
-  // Use join alias syntax to get the church name. Assuming profiles has a foreign key "local_church_id".
+  // Updated: Use join alias syntax to fetch the local church name.
   const { data: fetchedProfileData } = await supabase
     .from('profiles')
+    // Using an alias: join local_church table on local_church_id, select its name
     .select('*')
     .eq('id', userIdParam || user.id)
     .single();
   console.log('Fetched Profile Data:', fetchedProfileData);
 
-  // Use fetched data or fallback (for superadmin)
   const profileData = fetchedProfileData || (isSuperAdmin ? {
     id: user.id,
     full_name: user.email,
     role: 'superadmin',
+    // Provide a default object if no local church exists
     local_church: { name: 'N/A' },
     monthly_goal: 0,
     surplus_balance: 0
@@ -89,67 +88,32 @@ export default async function MissionaryDashboard(
   }
   console.log('Profile Data to use:', profileData);
 
-  // -------------------------------
-  // Fetch Donation Data
-  // -------------------------------
-  // Query the "donations" table using the correct column "missionary_id"
-  const { data: donationsData } = await supabase
-    .from('donations')
-    .select('id, amount, created_at, donor_name')
-    .eq('missionary_id', userIdParam || user.id)
-    .order('created_at', { ascending: false });
-  console.log('Donations Data:', donationsData);
+  // Fetch donations using the correct column name "missionary_id"
+const { data: donationsData } = await supabase
+.from('donations')
+.select('amount, created_at')
+.eq('missionary_id', userIdParam || user.id)
+.order('created_at', { ascending: false })
+.limit(5);
+console.log('Donations Data:', donationsData);
 
-  // Query the "donor_donations" table and join with donors to get donor name
-  const { data: donorDonationsData } = await supabase
-    .from('donor_donations')
-    .select('id, amount, date, donors(name)')
-    .eq('missionary_id', userIdParam || user.id)
-    .order('date', { ascending: false });
-  console.log('Donor Donations Data:', donorDonationsData);
+// Fetch leave requests using the correct column name "requester_id"
+const { data: leaveRequestsData } = await supabase
+.from('leave_requests')
+.select('*')
+.eq('requester_id', userIdParam || user.id)
+.order('created_at', { ascending: false });
+console.log('Leave Requests Data:', leaveRequestsData);
 
-  // Normalize donor_donations to match the shape of donationsData.
-  const formattedDonorDonations = donorDonationsData?.map(record => ({
-    id: record.id,
-    amount: record.amount,
-    created_at: record.date, // Align field names (using created_at for both)
-    donor_name: record.donors ? record.donors.name : 'Unknown'
-  })) || [];
+// Fetch surplus requests using the correct column name "missionary_id"
+const { data: surplusRequestsData } = await supabase
+.from('surplus_requests')
+.select('*')
+.eq('missionary_id', userIdParam || user.id)
+.order('created_at', { ascending: false });
+console.log('Surplus Requests Data:', surplusRequestsData);
 
-  // Combine both arrays and sort them descending by date; limit to 5 most recent records.
-  const combinedDonations = [
-    ...(donationsData || []),
-    ...formattedDonorDonations
-  ].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime();
-    const dateB = new Date(b.created_at).getTime();
-    return dateB - dateA;
-  }).slice(0, 5);
-  
-  // -------------------------------
-  // Fetch Leave Requests Data
-  // -------------------------------
-  // Query the "leave_requests" table using "requester_id"
-  const { data: leaveRequestsData } = await supabase
-    .from('leave_requests')
-    .select('*')
-    .eq('requester_id', userIdParam || user.id)
-    .order('created_at', { ascending: false });
-  console.log('Leave Requests Data:', leaveRequestsData);
-
-  // -------------------------------
-  // Fetch Surplus Requests Data
-  // -------------------------------
-  // Query the "surplus_requests" table using "missionary_id"
-  const { data: surplusRequestsData } = await supabase
-    .from('surplus_requests')
-    .select('*')
-    .eq('missionary_id', userIdParam || user.id)
-    .order('created_at', { ascending: false });
-  console.log('Surplus Requests Data:', surplusRequestsData);
-
-  // Compute current donations and pending requests count.
-  const currentDonations = combinedDonations?.reduce((acc, d) => acc + d.amount, 0) || 0;
+  const currentDonations = donationsData?.reduce((acc, d) => acc + d.amount, 0) || 0;
   const pendingRequests = [
     ...(leaveRequestsData?.filter(r => r.status === 'pending') || []),
     ...(surplusRequestsData?.filter(r => r.status === 'pending') || [])
@@ -171,7 +135,7 @@ export default async function MissionaryDashboard(
   const surplusRequests: SurplusRequest[] = surplusRequestsData?.map(r => ({
     id: r.id,
     type: 'Surplus',
-    amount: r.amount_requested,  // use the correct column name for surplus
+    amount: r.amount_requested,
     reason: r.reason,
     status: r.status,
     date: new Date(r.created_at).toLocaleDateString()
@@ -192,6 +156,7 @@ export default async function MissionaryDashboard(
                 {profileData.role === 'campus_director' && ' (Director)'}
               </p>
               <p className="text-sm">•</p>
+              {/* Update here: use the joined local church field */}
               <p className="text-sm">{profileData.local_church?.name}</p>
             </div>
           </header>
@@ -219,16 +184,18 @@ export default async function MissionaryDashboard(
               surplusBalance={profileData.surplus_balance}
             />
             <RecentDonations
-              donations={combinedDonations.map(d => ({
-                id: d.id,
-                donor_name: d.donor_name,
-                amount: d.amount,
-                date: new Date(d.created_at).toLocaleDateString()
-              }))}
+              donations={
+                donationsData?.map(d => ({
+                  id: d.created_at,
+                  amount: d.amount,
+                  date: new Date(d.created_at).toLocaleDateString(),
+                  donor: 'Donor'
+                })) || []
+              }
             />
           </TabsContent>
 
-          <TabsContent value="requests" className="space-y-8">
+          <TabsContent value="requests">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="p-6 bg-card rounded-lg shadow">
                 <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
@@ -248,42 +215,44 @@ export default async function MissionaryDashboard(
             </div>
           </TabsContent>
 
-          <TabsContent value="history" className="space-y-8">
+          <TabsContent value="history">
             <div className="space-y-4">
               <h2 className="text-2xl font-semibold">Recent Applications</h2>
               <div className="space-y-4">
-                {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map((request) => (
-                  <div key={request.id} className="p-4 bg-background rounded-lg border">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">
-                          {request.type} Request
-                          <span className={`ml-2 text-sm ${
-                            request.status === 'approved'
-                              ? 'text-green-600'
-                              : request.status === 'rejected'
-                              ? 'text-red-600'
-                              : 'text-yellow-600'
-                          }`}>
-                            ({request.status})
-                          </span>
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {request.date}
-                        </p>
+                {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map(
+                  (request) => (
+                    <div key={request.id} className="p-4 bg-background rounded-lg border">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">
+                            {request.type} Request
+                            <span className={`ml-2 text-sm ${
+                              request.status === 'approved'
+                                ? 'text-green-600'
+                                : request.status === 'rejected'
+                                ? 'text-red-600'
+                                : 'text-yellow-600'
+                            }`}>
+                              ({request.status})
+                            </span>
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {request.date}
+                          </p>
+                        </div>
+                        <button className="btn-ghost btn-sm btn">View Details</button>
                       </div>
-                      <button className="btn-ghost btn-sm btn">View Details</button>
-                    </div>
-                    {request.type === 'Leave' && (
-                      <p className="text-sm mt-2">
-                        Dates: {(request as LeaveRequest).startDate} - {(request as LeaveRequest).endDate}
+                      {request.type === 'Leave' && (
+                        <p className="text-sm mt-2">
+                          Dates: {(request as LeaveRequest).startDate} - {(request as LeaveRequest).endDate}
+                        </p>
+                      )}
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {request.reason}
                       </p>
-                    )}
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {request.reason}
-                    </p>
-                  </div>
-                ))}
+                    </div>
+                  )
+                )}
               </div>
             </div>
           </TabsContent>
