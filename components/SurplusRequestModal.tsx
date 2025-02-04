@@ -10,7 +10,12 @@ import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
-export function SurplusRequestModal({ surplusBalance }: { surplusBalance: number }) {
+interface SurplusRequestModalProps {
+  surplusBalance: number
+  missionaryId?: string
+}
+
+export function SurplusRequestModal({ surplusBalance, missionaryId }: SurplusRequestModalProps) {
   const supabase = createClient()
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -22,7 +27,7 @@ export function SurplusRequestModal({ surplusBalance }: { surplusBalance: number
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
+
     const numericAmount = parseFloat(amount)
     if (isNaN(numericAmount) || numericAmount <= 0 || numericAmount > surplusBalance) {
       setError('Invalid amount')
@@ -31,11 +36,19 @@ export function SurplusRequestModal({ surplusBalance }: { surplusBalance: number
 
     setLoading(true)
 
+    // Retrieve the current authenticated user's id
+    const { data: authData } = await supabase.auth.getUser()
+    const currentUserId = authData.user?.id
+
+    // Use the passed-in missionaryId if provided, otherwise default to the current user
+    const requesterId = missionaryId || currentUserId
+    console.log('[SurplusRequestModal] requesterId:', requesterId)
+
     const { error: submitError } = await supabase.from('surplus_requests').insert({
       amount_requested: numericAmount,
       reason,
       status: 'pending',
-      missionary_id: (await supabase.auth.getUser()).data.user?.id
+      missionary_id: requesterId
     })
 
     if (submitError) {
@@ -92,4 +105,4 @@ export function SurplusRequestModal({ surplusBalance }: { surplusBalance: number
       </DialogContent>
     </Dialog>
   )
-} 
+}

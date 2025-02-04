@@ -1,17 +1,17 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
-import DashboardCards from '@/components/DashboardCards'
-import RecentDonations from '@/components/RecentDonations'
-import { CalendarDays, WalletCards } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import ProfileSelector from '@/components/ProfileSelector'
-import { RequestSurplusForm } from '@/components/RequestSurplusForm'
-import { LeaveRequestForm } from '@/components/LeaveRequestForm'
-import { LeaveRequestModal } from '@/components/LeaveRequestModal'
-import { SurplusRequestModal } from '@/components/SurplusRequestModal'
-import RealtimeSubscriptions from '@/components/RealtimeSubscriptions'
+// app/dashboard/missionary/page.tsx
+import { createClient } from '@/utils/supabase/server';
+import { redirect } from 'next/navigation';
+import DashboardCards from '@/components/DashboardCards';
+import RecentDonations from '@/components/RecentDonations';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ProfileSelector from '@/components/ProfileSelector';
+import { RequestSurplusForm } from '@/components/RequestSurplusForm';
+import { LeaveRequestForm } from '@/components/LeaveRequestForm';
+import { LeaveRequestModal } from '@/components/LeaveRequestModal';
+import { SurplusRequestModal } from '@/components/SurplusRequestModal';
+import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
 interface LeaveRequest {
   id: string;
@@ -32,11 +32,7 @@ interface SurplusRequest {
   date: string;
 }
 
-export default async function MissionaryDashboard(
-  props: {
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-  }
-) {
+export default async function MissionaryDashboard(props: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   // Await search parameters (App Router passes them as a Promise)
   const searchParams = await props.searchParams;
 
@@ -52,7 +48,6 @@ export default async function MissionaryDashboard(
       : undefined;
   console.log('Computed userIdParam:', userIdParam);
 
-  // Add this after getting the userIdParam
   console.log(
     'UserIdParam vs Current User:',
     `Param: ${userIdParam}`,
@@ -68,28 +63,28 @@ export default async function MissionaryDashboard(
   console.log('Is SuperAdmin:', isSuperAdmin);
 
   // Fetch all profiles for the ProfileSelector if superadmin is logged in.
-  const { data: allMissionaries, error } = isSuperAdmin 
+  const { data: allMissionaries } = isSuperAdmin 
     ? await supabase
         .from('profiles')
         .select('*')
         .neq('role', 'superadmin')
     : { data: null };
 
-  // Keep the simple profile query that works
+  // Fetch profile data using either the provided userIdParam or the authenticated user's id.
   const { data: fetchedProfileData } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userIdParam || user.id)
     .single();
 
-  // Add separate query for church name
+  // Query for church name
   const { data: churchData } = await supabase
     .from('local_churches')
     .select('name')
     .eq('id', fetchedProfileData?.local_church_id)
     .single();
 
-  // Update fallback to include church name
+  // Fallback profile if necessary
   const profileData = fetchedProfileData || (isSuperAdmin ? {
     id: user.id,
     full_name: user.user_metadata?.full_name || user.email,
@@ -99,7 +94,7 @@ export default async function MissionaryDashboard(
     surplus_balance: 0
   } : null);
 
-  // Get church name from separate query or fallback
+  // Determine church name
   const churchName = churchData?.name || (isSuperAdmin ? 'All Churches' : 'Unknown Church');
 
   if (!profileData) {
@@ -110,23 +105,18 @@ export default async function MissionaryDashboard(
   // -------------------------------
   // Fetch Donation Data
   // -------------------------------
-  // Query the "donations" table using the correct column "missionary_id"
   const { data: donationsData } = await supabase
     .from('donations')
     .select('id, amount, created_at, donor_name')
     .eq('missionary_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
 
-
-  // Query the "donor_donations" table and join with donors to get donor name
   const { data: donorDonationsData } = await supabase
     .from('donor_donations')
     .select('id, amount, date, donors(name)')
     .eq('missionary_id', userIdParam || user.id)
     .order('date', { ascending: false });
 
-
-  // Normalize donor_donations to match the shape of donationsData.
   const formattedDonorDonations = donorDonationsData?.map(record => ({
     id: record.id,
     amount: record.amount,
@@ -134,32 +124,25 @@ export default async function MissionaryDashboard(
     donor_name: record.donors?.name || 'Unknown'
   })) || [];
 
-  // Combine both arrays and sort them descending by date; limit to 5 most recent records.
   const combinedDonations = [
     ...(donationsData || []),
     ...formattedDonorDonations
-  ].sort((a, b) => {
-    const dateA = new Date(a.created_at).getTime();
-    const dateB = new Date(b.created_at).getTime();
-    return dateB - dateA;
-  }).slice(0, 5);
-  
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
   // -------------------------------
   // Fetch Leave Requests Data
   // -------------------------------
-  // Query the "leave_requests" table using "requester_id"
   const { data: leaveRequestsData } = await supabase
     .from('leave_requests')
     .select('*')
-    // Add superadmin override
-    .eq(isSuperAdmin ? 'requester_id' : 'requester_id', userIdParam || user.id)
+    .eq('requester_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
   console.log('Leave Requests Data:', leaveRequestsData);
 
   // -------------------------------
   // Fetch Surplus Requests Data
   // -------------------------------
-  // Query the "surplus_requests" table using "missionary_id"
   const { data: surplusRequestsData } = await supabase
     .from('surplus_requests')
     .select('*')
@@ -167,29 +150,25 @@ export default async function MissionaryDashboard(
     .order('created_at', { ascending: false });
   console.log('Surplus Requests Data:', surplusRequestsData);
 
-  // Compute current donations and pending requests count.
   const currentDonations = combinedDonations?.reduce((acc, d) => acc + d.amount, 0) || 0;
   const pendingRequests = [
     ...(leaveRequestsData?.filter(r => r.status === 'pending') || []),
     ...(surplusRequestsData?.filter(r => r.status === 'pending') || [])
   ].length;
-
   console.log('Pending Requests Count:', pendingRequests);
 
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
-    // Calculate status based on approval workflow
     const status = r.lead_pastor_approval === 'override' ? 'approved' :
-                  r.campus_director_approval === 'rejected' ? 'rejected' :
-                  r.lead_pastor_approval === 'approved' ? 'approved' :
-                  r.status;
-    
+                   r.campus_director_approval === 'rejected' ? 'rejected' :
+                   r.lead_pastor_approval === 'approved' ? 'approved' :
+                   r.status;
     return {
       id: r.id.toString(),
       type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
       startDate: r.start_date,
       endDate: r.end_date,
       reason: r.reason,
-      status: status,
+      status,
       date: new Date(r.created_at).toLocaleDateString()
     };
   }) || [];
@@ -203,11 +182,10 @@ export default async function MissionaryDashboard(
     date: new Date(r.created_at).toLocaleDateString()
   })) || [];
 
-  // Add this before returning the component
   console.log(
     '[Dashboard] Modal IDs:',
-    `Leave: ${userIdParam}`,
-    `Surplus: ${userIdParam}`
+    `Leave: ${userIdParam || user.id}`,
+    `Surplus: ${userIdParam || user.id}`
   );
 
   return (
@@ -277,7 +255,7 @@ export default async function MissionaryDashboard(
           <TabsContent value="history" className="space-y-8">
             <div className="flex gap-4">
               <LeaveRequestModal 
-                missionaryId={userIdParam}
+                missionaryId={userIdParam || user.id}
                 validateMissionary={isSuperAdmin}
               />
               <SurplusRequestModal 

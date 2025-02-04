@@ -1,62 +1,78 @@
-'use client'
+// components/LeaveRequestModal.tsx
+'use client';
 
-import { useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { DateRange } from 'react-day-picker'
-import { Loader2 } from 'lucide-react'
-import { createClient } from '@/utils/supabase/client'
-import { useRouter } from 'next/navigation'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export function LeaveRequestModal() {
-  const supabase = createClient()
-  const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const [dates, setDates] = useState<DateRange | undefined>(undefined)
-  const [reason, setReason] = useState('')
-  const [type, setType] = useState<'sick' | 'vacation'>('sick')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+interface LeaveRequestModalProps {
+  missionaryId?: string;
+  validateMissionary?: boolean;
+}
+
+export function LeaveRequestModal({ missionaryId, validateMissionary }: LeaveRequestModalProps) {
+  const supabase = createClient();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [dates, setDates] = useState<{ from?: Date; to?: Date }>({});
+  const [reason, setReason] = useState('');
+  const [type, setType] = useState<'sick' | 'vacation'>('sick');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!dates?.from || !dates?.to) {
-      setError('Please select valid dates')
-      return
+    e.preventDefault();
+
+    if (validateMissionary && !missionaryId) {
+      setError('Please select a missionary first');
+      return;
+    }
+
+    if (!dates.from || !dates.to) {
+      setError('Please select valid dates');
+      return;
     }
 
     if (dates.to < dates.from) {
-      setError('End date cannot be before start date')
-      return
+      setError('End date cannot be before start date');
+      return;
     }
 
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
 
-    const { data: user } = await supabase.auth.getUser()
+    const { data: authData } = await supabase.auth.getUser();
+    const currentUserId = authData.user?.id;
+    const requesterId = missionaryId || currentUserId;
+    console.log('[LeaveRequestModal] requesterId:', requesterId);
 
     const { error: submitError } = await supabase.from('leave_requests').insert({
       type,
-      start_date: dates.from,
-      end_date: dates.to,
+      start_date: dates.from.toISOString(),
+      end_date: dates.to.toISOString(),
       reason,
       status: 'pending',
-      requester_id: user.user?.id
-    })
+      requester_id: requesterId,
+      campus_director_approval: 'none',
+      lead_pastor_approval: 'none'
+    });
 
     if (submitError) {
-      setError(submitError.message)
+      setError(submitError.message);
     } else {
-      router.refresh()
-      setOpen(false)
-      setTimeout(() => router.refresh(), 500)
+      router.refresh();
+      setOpen(false);
+      setTimeout(() => router.refresh(), 500);
     }
-    setLoading(false)
-  }
+    setLoading(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -86,26 +102,19 @@ export function LeaveRequestModal() {
               <Label>Start Date</Label>
               <Input
                 type="date"
-                value={dates?.from?.toISOString().split('T')[0] || ''}
-                onChange={(e) => setDates(prev => ({
-                  from: new Date(e.target.value),
-                  to: prev?.to
-                }))}
+                value={dates.from ? dates.from.toISOString().split('T')[0] : ''}
+                onChange={(e) => setDates(prev => ({ ...prev, from: new Date(e.target.value) }))}
                 min={new Date().toISOString().split('T')[0]}
                 required
               />
             </div>
-            
             <div className="space-y-2 flex-1">
               <Label>End Date</Label>
               <Input
                 type="date"
-                value={dates?.to?.toISOString().split('T')[0] || ''}
-                onChange={(e) => setDates(prev => ({
-                  from: prev?.from,
-                  to: new Date(e.target.value)
-                }))}
-                min={dates?.from?.toISOString().split('T')[0] || new Date().toISOString().split('T')[0]}
+                value={dates.to ? dates.to.toISOString().split('T')[0] : ''}
+                onChange={(e) => setDates(prev => ({ ...prev, to: new Date(e.target.value) }))}
+                min={dates.from ? dates.from.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
                 required
               />
             </div>
@@ -128,5 +137,5 @@ export function LeaveRequestModal() {
         </form>
       </DialogContent>
     </Dialog>
-  )
-} 
+  );
+}
