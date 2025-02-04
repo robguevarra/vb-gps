@@ -5,14 +5,10 @@ import DashboardCards from '@/components/DashboardCards';
 import RecentDonations from '@/components/RecentDonations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProfileSelector from '@/components/ProfileSelector';
-import { RequestSurplusForm } from '@/components/RequestSurplusForm';
-import { LeaveRequestForm } from '@/components/LeaveRequestForm';
 import { LeaveRequestModal } from '@/components/LeaveRequestModal';
 import { SurplusRequestModal } from '@/components/SurplusRequestModal';
 import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 import { ApprovalTab } from '@/components/ApprovalTab';
-import { Button } from '@/components/ui/button';
-
 
 export const dynamic = 'force-dynamic';
 
@@ -152,6 +148,7 @@ export default async function MissionaryDashboard(
   ].length;
   console.log('Pending Requests Count:', pendingRequests);
 
+  // Map for Request History (non-interactive, static display)
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
     const status = r.lead_pastor_approval === 'override' ? 'approved' :
                    r.campus_director_approval === 'rejected' ? 'rejected' :
@@ -180,7 +177,7 @@ export default async function MissionaryDashboard(
   })) || [];
 
   // -------------------------------
-  // Approvals for Campus Directors
+  // Approvals for Campus Directors (only pending requests)
   // -------------------------------
   const isCampusDirector = profileData.role === 'campus_director';
   let leaveApprovals: LeaveRequest[] = [];
@@ -193,6 +190,7 @@ export default async function MissionaryDashboard(
       .eq('campus_director_id', profileData.id);
     const subordinateIds = subordinateProfiles?.map(p => p.id) || [];
 
+    // Fetch only pending leave requests from subordinates:
     const { data: leaveApprovalsData } = await supabase
       .from('leave_requests')
       .select(`
@@ -201,6 +199,7 @@ export default async function MissionaryDashboard(
       `)
       .in('requester_id', subordinateIds)
       .eq('campus_director_approval', 'none')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
     leaveApprovals = leaveApprovalsData?.map(r => {
       const status = r.lead_pastor_approval === 'override' ? 'approved' :
@@ -219,6 +218,7 @@ export default async function MissionaryDashboard(
       };
     }) || [];
 
+    // Fetch only pending surplus requests from subordinates:
     const { data: surplusApprovalsData } = await supabase
       .from('surplus_requests')
       .select(`
@@ -227,6 +227,7 @@ export default async function MissionaryDashboard(
       `)
       .in('missionary_id', subordinateIds)
       .eq('campus_director_approval', 'none')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
     surplusApprovals = surplusApprovalsData?.map(r => ({
       id: r.id,
@@ -306,42 +307,23 @@ export default async function MissionaryDashboard(
           </TabsContent>
 
           <TabsContent value="history" className="space-y-8">
-            <div className="flex gap-4">
-              <LeaveRequestModal 
-                missionaryId={userIdParam || user.id}
-                validateMissionary={isSuperAdmin}
-              />
-              <SurplusRequestModal 
-                surplusBalance={profileData.surplus_balance}
-                missionaryId={userIdParam}
-                validateMissionary={isSuperAdmin}
-              />
-            </div>
             <div className="space-y-4">
               <h2 className="text-2xl font-semibold">Request History</h2>
               <div className="space-y-4">
                 {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map((request) => (
                   <div key={`${request.type}-${request.id}`} className="p-4 bg-background rounded-lg border">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">
-                          {request.type} Request by {request.requester?.full_name || 'Unknown'}
-                          <span className={`ml-2 text-sm ${
-                            request.status === 'approved'
-                              ? 'text-green-600'
-                              : request.status === 'rejected'
-                              ? 'text-red-600'
-                              : 'text-yellow-600'
-                          }`}>
-                            ({request.status})
-                          </span>
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">{request.date}</p>
-                      </div>
-                      {/* For history, no interactive action is needed */}
-                      <Button variant="ghost" size="sm" disabled>
-                        View Details
-                      </Button>
+                    <div className="flex flex-col">
+                      <p className="font-medium">{request.type} Request</p>
+                      <p className="text-sm text-muted-foreground mt-1">{request.date}</p>
+                      <p className="text-sm mt-2">
+                        {request.type !== 'Surplus'
+                          ? `Dates: ${(request as LeaveRequest).startDate} - ${(request as LeaveRequest).endDate}. Reason: ${request.reason}`
+                          : `Requested Amount: ₱${(request as SurplusRequest).amount.toLocaleString()}. Reason: ${request.reason}`
+                        }
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Status: {request.status}
+                      </p>
                     </div>
                   </div>
                 ))}
