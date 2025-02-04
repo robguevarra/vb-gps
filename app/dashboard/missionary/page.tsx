@@ -126,7 +126,7 @@ export default async function MissionaryDashboard(
     id: record.id,
     amount: record.amount,
     created_at: record.date,
-    donor_name: record.donors?.length ? record.donors[0].name : 'Unknown'
+    donor_name: record.donors?.name || 'Unknown'
   })) || [];
 
   // Combine both arrays and sort them descending by date; limit to 5 most recent records.
@@ -146,7 +146,8 @@ export default async function MissionaryDashboard(
   const { data: leaveRequestsData } = await supabase
     .from('leave_requests')
     .select('*')
-    .or(`requester_id.eq.${userIdParam || user.id},requester_id.eq.${user.id}`)
+    // Add superadmin override
+    .eq(isSuperAdmin ? 'requester_id' : 'requester_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
   console.log('Leave Requests Data:', leaveRequestsData);
 
@@ -170,21 +171,29 @@ export default async function MissionaryDashboard(
   console.log('Current Donations:', currentDonations);
   console.log('Pending Requests Count:', pendingRequests);
 
-  const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => ({
-    id: r.id,
-    type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
-    startDate: r.start_date,
-    endDate: r.end_date,
-    reason: r.reason,
-    status: r.status,
-    date: new Date(r.created_at).toLocaleDateString()
-  })) || [];
+  const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
+    // Calculate status based on approval workflow
+    const status = r.lead_pastor_approval === 'override' ? 'approved' :
+                  r.campus_director_approval === 'rejected' ? 'rejected' :
+                  r.lead_pastor_approval === 'approved' ? 'approved' :
+                  r.status;
+    
+    return {
+      id: r.id.toString(),
+      type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
+      startDate: r.start_date,
+      endDate: r.end_date,
+      reason: r.reason,
+      status: status,
+      date: new Date(r.created_at).toLocaleDateString()
+    };
+  }) || [];
   console.log('Processed Leave Requests:', leaveRequests);
 
   const surplusRequests: SurplusRequest[] = surplusRequestsData?.map(r => ({
     id: r.id,
     type: 'Surplus',
-    amount: r.amount_requested,  // use the correct column name for surplus
+    amount: r.amount_requested,
     reason: r.reason,
     status: r.status,
     date: new Date(r.created_at).toLocaleDateString()
@@ -193,7 +202,20 @@ export default async function MissionaryDashboard(
 
   return (
     <div className="min-h-screen bg-background" key={userIdParam || user.id}>
-      <RealtimeSubscriptions />
+      <RealtimeSubscriptions 
+        tables={[
+          { 
+            name: 'leave_requests',
+            filter: `requester_id=eq.${userIdParam || user.id}`,
+            event: 'INSERT,UPDATE,DELETE'
+          },
+          {
+            name: 'surplus_requests',
+            filter: `missionary_id=eq.${userIdParam || user.id}`,
+            event: 'INSERT,UPDATE,DELETE'
+          }
+        ]}
+      />
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         <div className="flex justify-between items-start">
           <header className="space-y-2">
