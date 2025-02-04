@@ -115,23 +115,25 @@ CREATE POLICY select_own_donations ON donations
   FOR SELECT
   USING (missionary_id = auth.uid());
 
-CREATE POLICY insert_own_leave_requests ON leave_requests
+CREATE POLICY insert_leave_requests ON leave_requests
 FOR INSERT WITH CHECK (
-  requester_id = auth.uid()
+  (SELECT role FROM profiles WHERE id = auth.uid()) = 'superadmin'
 );
 
-CREATE POLICY select_own_leave_requests ON leave_requests
+CREATE POLICY select_leave_requests ON leave_requests
 FOR SELECT USING (
-  requester_id = auth.uid()
+  requester_id = auth.uid() OR
+  (SELECT role FROM profiles WHERE id = auth.uid()) = 'superadmin'
 );
 
 -- Add similar policies for surplus_requests
-CREATE POLICY insert_own_surplus_requests ON surplus_requests
+CREATE POLICY insert_surplus_requests ON surplus_requests
 FOR INSERT WITH CHECK (
-  missionary_id = auth.uid()
+  (SELECT role FROM profiles WHERE id = auth.uid()) = 'superadmin'
 );
 
-CREATE POLICY select_own_surplus_requests ON surplus_requests
+CREATE POLICY select_surplus_requests ON surplus_requests
 FOR SELECT USING (
-  missionary_id = auth.uid()
+  missionary_id = auth.uid() OR
+  (SELECT role FROM profiles WHERE id = auth.uid()) = 'superadmin'
 ); 

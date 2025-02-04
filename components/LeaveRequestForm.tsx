@@ -11,17 +11,39 @@ import { Calendar } from '@/components/ui/calendar'
 import { Textarea } from '@/components/ui/textarea'
 import { DateRange } from 'react-day-picker'
 import { Loader2 } from 'lucide-react'
+import { useUser } from '@/contexts/UserContext'
 
-export function LeaveRequestForm() {
+export function LeaveRequestForm({
+  missionaryId,
+  validateMissionary
+}: {
+  missionaryId?: string
+  validateMissionary?: boolean
+}) {
   const supabase = createClient()
   const router = useRouter()
   const [dates, setDates] = useState<DateRange | undefined>(undefined)
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const user = useUser()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    console.log('[Leave] Initial missionaryId:', missionaryId);
+    console.log('[Leave] validateMissionary prop:', validateMissionary);
+
+    if (validateMissionary && !missionaryId) {
+      console.error('[Leave] Validation failed - no missionary selected');
+      setErrorMessage('Please select a missionary first');
+      return;
+    }
+
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    console.log('[Leave] Current auth user ID:', currentUser?.id);
+    
+    const requesterId = missionaryId;
+    console.log('[Leave] Final requesterId:', requesterId);
+
     if (!dates?.from || !dates?.to) {
       setErrorMessage('Please select a valid date range.')
       return
@@ -37,6 +59,7 @@ export function LeaveRequestForm() {
       status: 'pending',
       campus_director_approval: 'none',
       lead_pastor_approval: 'none',
+      requester_id: requesterId
     })
 
     if (error) {

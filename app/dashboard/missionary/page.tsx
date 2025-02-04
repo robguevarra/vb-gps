@@ -39,7 +39,6 @@ export default async function MissionaryDashboard(
 ) {
   // Await search parameters (App Router passes them as a Promise)
   const searchParams = await props.searchParams;
-  console.log('SearchParams:', searchParams);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -52,6 +51,14 @@ export default async function MissionaryDashboard(
       ? searchParams.userId[0]
       : undefined;
   console.log('Computed userIdParam:', userIdParam);
+
+  // Add this after getting the userIdParam
+  console.log(
+    'UserIdParam vs Current User:',
+    `Param: ${userIdParam}`,
+    `User: ${user?.id}`,
+    `Is SuperAdmin: ${user.email === 'robneil@gmail.com'}`
+  );
 
   if (!user) {
     redirect('/login');
@@ -67,8 +74,6 @@ export default async function MissionaryDashboard(
         .select('*')
         .neq('role', 'superadmin')
     : { data: null };
-  console.log('All Missionaries:', allMissionaries);
-  console.log('Missionary Fetch Error:', error);
 
   // Keep the simple profile query that works
   const { data: fetchedProfileData } = await supabase
@@ -111,7 +116,7 @@ export default async function MissionaryDashboard(
     .select('id, amount, created_at, donor_name')
     .eq('missionary_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
-  console.log('Donations Data:', donationsData);
+
 
   // Query the "donor_donations" table and join with donors to get donor name
   const { data: donorDonationsData } = await supabase
@@ -119,7 +124,7 @@ export default async function MissionaryDashboard(
     .select('id, amount, date, donors(name)')
     .eq('missionary_id', userIdParam || user.id)
     .order('date', { ascending: false });
-  console.log('Donor Donations Data:', donorDonationsData);
+
 
   // Normalize donor_donations to match the shape of donationsData.
   const formattedDonorDonations = donorDonationsData?.map(record => ({
@@ -168,7 +173,7 @@ export default async function MissionaryDashboard(
     ...(leaveRequestsData?.filter(r => r.status === 'pending') || []),
     ...(surplusRequestsData?.filter(r => r.status === 'pending') || [])
   ].length;
-  console.log('Current Donations:', currentDonations);
+
   console.log('Pending Requests Count:', pendingRequests);
 
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
@@ -188,7 +193,6 @@ export default async function MissionaryDashboard(
       date: new Date(r.created_at).toLocaleDateString()
     };
   }) || [];
-  console.log('Processed Leave Requests:', leaveRequests);
 
   const surplusRequests: SurplusRequest[] = surplusRequestsData?.map(r => ({
     id: r.id,
@@ -198,7 +202,13 @@ export default async function MissionaryDashboard(
     status: r.status,
     date: new Date(r.created_at).toLocaleDateString()
   })) || [];
-  console.log('Processed Surplus Requests:', surplusRequests);
+
+  // Add this before returning the component
+  console.log(
+    '[Dashboard] Modal IDs:',
+    `Leave: ${userIdParam}`,
+    `Surplus: ${userIdParam}`
+  );
 
   return (
     <div className="min-h-screen bg-background" key={userIdParam || user.id}>
@@ -236,6 +246,7 @@ export default async function MissionaryDashboard(
             <ProfileSelector 
               missionaries={allMissionaries || []}
               userId={typeof userIdParam === 'string' ? userIdParam : undefined}
+              required
             />
           )}
         </div>
@@ -265,8 +276,15 @@ export default async function MissionaryDashboard(
 
           <TabsContent value="history" className="space-y-8">
             <div className="flex gap-4">
-              <LeaveRequestModal />
-              <SurplusRequestModal surplusBalance={profileData.surplus_balance} />
+              <LeaveRequestModal 
+                missionaryId={userIdParam}
+                validateMissionary={isSuperAdmin}
+              />
+              <SurplusRequestModal 
+                surplusBalance={profileData.surplus_balance}
+                missionaryId={userIdParam}
+                validateMissionary={isSuperAdmin}
+              />
             </div>
 
             <div className="space-y-4">
