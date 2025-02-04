@@ -1,0 +1,38 @@
+@import 'react-day-picker/dist/style.css';
+
+/* Or if using Tailwind, add these base styles */
+.rdp {
+  @apply p-4;
+}
+
+.rdp-caption {
+  @apply flex items-center justify-between px-2 mb-4;
+}
+
+.rdp-nav {
+  @apply flex gap-1;
+}
+
+.rdp-table {
+  @apply w-full border-collapse;
+}
+
+.rdp-head {
+  @apply text-muted-foreground font-normal text-sm;
+}
+
+.rdp-cell {
+  @apply text-center text-sm p-1;
+}
+
+.rdp-day {
+  @apply h-9 w-9 p-0 font-normal aria-selected:opacity-100;
+}
+
+.rdp-day_selected {
+  @apply bg-primary text-primary-foreground rounded-full;
+}
+
+.rdp-day_today {
+  @apply font-bold;
+} 

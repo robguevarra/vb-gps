@@ -7,12 +7,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ProfileSelector from '@/components/ProfileSelector'
 import { RequestSurplusForm } from '@/components/RequestSurplusForm'
 import { LeaveRequestForm } from '@/components/LeaveRequestForm'
+import { LeaveRequestModal } from '@/components/LeaveRequestModal'
+import { SurplusRequestModal } from '@/components/SurplusRequestModal'
+import RealtimeSubscriptions from '@/components/RealtimeSubscriptions'
 
 export const dynamic = 'force-dynamic'
 
 interface LeaveRequest {
   id: string;
-  type: 'Leave';
+  type: 'Sick Leave' | 'Vacation Leave';
   startDate: string;
   endDate: string;
   reason: string;
@@ -58,31 +61,41 @@ export default async function MissionaryDashboard(
   console.log('Is SuperAdmin:', isSuperAdmin);
 
   // Fetch all profiles for the ProfileSelector if superadmin is logged in.
-  const { data: allMissionaries } = isSuperAdmin 
+  const { data: allMissionaries, error } = isSuperAdmin 
     ? await supabase
         .from('profiles')
-        .select('id, full_name, role')
+        .select('*')
         .neq('role', 'superadmin')
     : { data: null };
   console.log('All Missionaries:', allMissionaries);
+  console.log('Missionary Fetch Error:', error);
 
-  // Use join alias syntax to get the church name. Assuming profiles has a foreign key "local_church_id".
+  // Keep the simple profile query that works
   const { data: fetchedProfileData } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userIdParam || user.id)
     .single();
-  console.log('Fetched Profile Data:', fetchedProfileData);
 
-  // Use fetched data or fallback (for superadmin)
+  // Add separate query for church name
+  const { data: churchData } = await supabase
+    .from('local_churches')
+    .select('name')
+    .eq('id', fetchedProfileData?.local_church_id)
+    .single();
+
+  // Update fallback to include church name
   const profileData = fetchedProfileData || (isSuperAdmin ? {
     id: user.id,
-    full_name: user.email,
+    full_name: user.user_metadata?.full_name || user.email,
     role: 'superadmin',
-    local_church: { name: 'N/A' },
+    local_church_id: null,
     monthly_goal: 0,
     surplus_balance: 0
   } : null);
+
+  // Get church name from separate query or fallback
+  const churchName = churchData?.name || (isSuperAdmin ? 'All Churches' : 'Unknown Church');
 
   if (!profileData) {
     redirect('/login');
@@ -112,8 +125,8 @@ export default async function MissionaryDashboard(
   const formattedDonorDonations = donorDonationsData?.map(record => ({
     id: record.id,
     amount: record.amount,
-    created_at: record.date, // Align field names (using created_at for both)
-    donor_name: record.donors ? record.donors.name : 'Unknown'
+    created_at: record.date,
+    donor_name: record.donors?.length ? record.donors[0].name : 'Unknown'
   })) || [];
 
   // Combine both arrays and sort them descending by date; limit to 5 most recent records.
@@ -133,7 +146,7 @@ export default async function MissionaryDashboard(
   const { data: leaveRequestsData } = await supabase
     .from('leave_requests')
     .select('*')
-    .eq('requester_id', userIdParam || user.id)
+    .or(`requester_id.eq.${userIdParam || user.id},requester_id.eq.${user.id}`)
     .order('created_at', { ascending: false });
   console.log('Leave Requests Data:', leaveRequestsData);
 
@@ -159,7 +172,7 @@ export default async function MissionaryDashboard(
 
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => ({
     id: r.id,
-    type: 'Leave',
+    type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
     startDate: r.start_date,
     endDate: r.end_date,
     reason: r.reason,
@@ -179,12 +192,13 @@ export default async function MissionaryDashboard(
   console.log('Processed Surplus Requests:', surplusRequests);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" key={userIdParam || user.id}>
+      <RealtimeSubscriptions />
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         <div className="flex justify-between items-start">
           <header className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground">
-              {profileData.full_name}
+              {profileData.full_name || user.email}
             </h1>
             <div className="flex items-center gap-4 text-muted-foreground">
               <p className="bg-accent px-3 py-1 rounded-full text-sm">
@@ -192,7 +206,7 @@ export default async function MissionaryDashboard(
                 {profileData.role === 'campus_director' && ' (Director)'}
               </p>
               <p className="text-sm">•</p>
-              <p className="text-sm">{profileData.local_church?.name}</p>
+              <p className="text-sm">{churchName}</p>
             </div>
           </header>
           
@@ -205,15 +219,14 @@ export default async function MissionaryDashboard(
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 lg:w-1/2">
+          <TabsList className="grid w-full grid-cols-2 lg:w-1/2">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="requests">New Requests</TabsTrigger>
             <TabsTrigger value="history">Request History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-8">
             <DashboardCards
-              monthlyGoal={profileData.monthly_goal}
+              monthlyGoal={profileData.monthly_goal || 0}
               currentDonations={currentDonations}
               pendingRequests={pendingRequests}
               surplusBalance={profileData.surplus_balance}
@@ -228,32 +241,17 @@ export default async function MissionaryDashboard(
             />
           </TabsContent>
 
-          <TabsContent value="requests" className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="p-6 bg-card rounded-lg shadow">
-                <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
-                  <WalletCards className="h-5 w-5" />
-                  Surplus Request
-                </h2>
-                <RequestSurplusForm surplusBalance={profileData.surplus_balance} />
-              </div>
-
-              <div className="p-6 bg-card rounded-lg shadow">
-                <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
-                  <CalendarDays className="h-5 w-5" />
-                  Leave Request
-                </h2>
-                <LeaveRequestForm />
-              </div>
-            </div>
-          </TabsContent>
-
           <TabsContent value="history" className="space-y-8">
+            <div className="flex gap-4">
+              <LeaveRequestModal />
+              <SurplusRequestModal surplusBalance={profileData.surplus_balance} />
+            </div>
+
             <div className="space-y-4">
-              <h2 className="text-2xl font-semibold">Recent Applications</h2>
+              <h2 className="text-2xl font-semibold">Request History</h2>
               <div className="space-y-4">
                 {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map((request) => (
-                  <div key={request.id} className="p-4 bg-background rounded-lg border">
+                  <div key={`${request.type}-${request.id}`} className="p-4 bg-background rounded-lg border">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium">

@@ -57,7 +57,8 @@ CREATE TABLE leave_requests (
   campus_director_approval TEXT NOT NULL CHECK (campus_director_approval IN ('none', 'approved', 'rejected')) DEFAULT 'none',
   lead_pastor_approval TEXT NOT NULL CHECK (lead_pastor_approval IN ('none', 'approved', 'rejected', 'override')) DEFAULT 'none',
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  type TEXT NOT NULL CHECK (type IN ('sick', 'vacation')) DEFAULT 'sick'
 );
 
 CREATE TABLE donors (
@@ -103,18 +104,34 @@ CREATE INDEX idx_missionary_id_donor_donations ON donor_donations(missionary_id)
 ALTER TABLE leave_requests ENABLE ROW LEVEL SECURITY;
 
 -- Example security policy (customize as needed)
+DROP POLICY IF EXISTS select_own_profile ON profiles;
 CREATE POLICY select_own_profile ON profiles
-  FOR SELECT
-  USING (id = auth.uid());
+FOR SELECT USING (
+  id = auth.uid() OR 
+  (SELECT role FROM profiles WHERE id = auth.uid()) = 'superadmin'
+);
 
 CREATE POLICY select_own_donations ON donations
   FOR SELECT
   USING (missionary_id = auth.uid());
 
-CREATE POLICY select_own_leave_requests ON leave_requests
-  FOR SELECT
-  USING (requester_id = auth.uid());
+CREATE POLICY insert_own_leave_requests ON leave_requests
+FOR INSERT WITH CHECK (
+  requester_id = auth.uid()
+);
 
--- Add role column to profiles
-ALTER TABLE profiles
-ADD COLUMN role VARCHAR NOT NULL DEFAULT 'missionary'; 
+CREATE POLICY select_own_leave_requests ON leave_requests
+FOR SELECT USING (
+  requester_id = auth.uid()
+);
+
+-- Add similar policies for surplus_requests
+CREATE POLICY insert_own_surplus_requests ON surplus_requests
+FOR INSERT WITH CHECK (
+  missionary_id = auth.uid()
+);
+
+CREATE POLICY select_own_surplus_requests ON surplus_requests
+FOR SELECT USING (
+  missionary_id = auth.uid()
+); 
