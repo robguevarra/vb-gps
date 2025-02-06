@@ -125,7 +125,7 @@ export default async function MissionaryDashboard(
     .slice(0, 5);
 
   // -------------------------------
-  // Fetch Request History Data for this missionary
+  // Fetch Request History Data for this missionary (static)
   // -------------------------------
   const { data: leaveRequestsData } = await supabase
     .from('leave_requests')
@@ -148,7 +148,7 @@ export default async function MissionaryDashboard(
   ].length;
   console.log('Pending Requests Count:', pendingRequests);
 
-  // Map for Request History (non-interactive, static display)
+  // Static Request History mapping (no interactive buttons)
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
     const status = r.lead_pastor_approval === 'override' ? 'approved' :
                    r.campus_director_approval === 'rejected' ? 'rejected' :
@@ -290,6 +290,18 @@ export default async function MissionaryDashboard(
           </TabsList>
 
           <TabsContent value="overview" className="space-y-8">
+            {/* Request Creation Buttons moved to Overview tab */}
+            <div className="flex gap-4">
+              <LeaveRequestModal 
+                missionaryId={userIdParam || user.id}
+                validateMissionary={isSuperAdmin}
+              />
+              <SurplusRequestModal 
+                surplusBalance={profileData.surplus_balance}
+                missionaryId={userIdParam}
+                validateMissionary={isSuperAdmin}
+              />
+            </div>
             <DashboardCards
               monthlyGoal={profileData.monthly_goal || 0}
               currentDonations={currentDonations}

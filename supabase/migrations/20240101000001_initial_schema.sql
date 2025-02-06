@@ -42,6 +42,7 @@ CREATE TABLE surplus_requests (
   reason TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
   campus_director_approval TEXT NOT NULL CHECK (campus_director_approval IN ('none', 'approved', 'rejected')) DEFAULT 'none',
+  campus_director_notes TEXT,
   lead_pastor_approval TEXT NOT NULL CHECK (lead_pastor_approval IN ('none', 'approved', 'rejected', 'override')) DEFAULT 'none',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -55,6 +56,7 @@ CREATE TABLE leave_requests (
   reason TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
   campus_director_approval TEXT NOT NULL CHECK (campus_director_approval IN ('none', 'approved', 'rejected')) DEFAULT 'none',
+  campus_director_notes TEXT,
   lead_pastor_approval TEXT NOT NULL CHECK (lead_pastor_approval IN ('none', 'approved', 'rejected', 'override')) DEFAULT 'none',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),

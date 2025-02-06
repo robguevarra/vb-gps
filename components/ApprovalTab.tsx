@@ -1,7 +1,7 @@
 // components/ApprovalTab.tsx
 'use client';
 
-import { ApprovalCard } from '@/components/ApprovalCard';
+import { ApprovalCard } from './ApprovalCard';
 
 interface LeaveApproval {
   id: string;
