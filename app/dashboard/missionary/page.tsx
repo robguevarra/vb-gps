@@ -125,7 +125,7 @@ export default async function MissionaryDashboard(
     .slice(0, 5);
 
   // -------------------------------
-  // Fetch Request History Data for this missionary (static)
+  // Fetch Request History Data for this missionary (static display)
   // -------------------------------
   const { data: leaveRequestsData } = await supabase
     .from('leave_requests')
@@ -148,7 +148,7 @@ export default async function MissionaryDashboard(
   ].length;
   console.log('Pending Requests Count:', pendingRequests);
 
-  // Static Request History mapping (no interactive buttons)
+  // Map for Request History (static display)
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
     const status = r.lead_pastor_approval === 'override' ? 'approved' :
                    r.campus_director_approval === 'rejected' ? 'rejected' :
@@ -177,11 +177,13 @@ export default async function MissionaryDashboard(
   })) || [];
 
   // -------------------------------
-  // Approvals for Campus Directors (only pending requests)
+  // Approvals for Campus Directors (only pending and approved)
   // -------------------------------
   const isCampusDirector = profileData.role === 'campus_director';
-  let leaveApprovals: LeaveRequest[] = [];
-  let surplusApprovals: SurplusRequest[] = [];
+  let pendingLeaveApprovals: LeaveRequest[] = [];
+  let approvedLeaveApprovals: LeaveRequest[] = [];
+  let pendingSurplusApprovals: SurplusRequest[] = [];
+  let approvedSurplusApprovals: SurplusRequest[] = [];
 
   if (isCampusDirector) {
     const { data: subordinateProfiles } = await supabase
@@ -190,8 +192,8 @@ export default async function MissionaryDashboard(
       .eq('campus_director_id', profileData.id);
     const subordinateIds = subordinateProfiles?.map(p => p.id) || [];
 
-    // Fetch only pending leave requests from subordinates:
-    const { data: leaveApprovalsData } = await supabase
+    // Pending leave approvals:
+    const { data: pendingLeaveApprovalsData } = await supabase
       .from('leave_requests')
       .select(`
         *,
@@ -201,7 +203,7 @@ export default async function MissionaryDashboard(
       .eq('campus_director_approval', 'none')
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
-    leaveApprovals = leaveApprovalsData?.map(r => {
+    pendingLeaveApprovals = pendingLeaveApprovalsData?.map(r => {
       const status = r.lead_pastor_approval === 'override' ? 'approved' :
                      r.campus_director_approval === 'rejected' ? 'rejected' :
                      r.lead_pastor_approval === 'approved' ? 'approved' :
@@ -218,8 +220,35 @@ export default async function MissionaryDashboard(
       };
     }) || [];
 
-    // Fetch only pending surplus requests from subordinates:
-    const { data: surplusApprovalsData } = await supabase
+    // Approved leave requests:
+    const { data: approvedLeaveApprovalsData } = await supabase
+      .from('leave_requests')
+      .select(`
+        *,
+        requester:profiles(full_name)
+      `)
+      .in('requester_id', subordinateIds)
+      .eq('campus_director_approval', 'approved')
+      .order('created_at', { ascending: false });
+    approvedLeaveApprovals = approvedLeaveApprovalsData?.map(r => {
+      const status = r.lead_pastor_approval === 'override' ? 'approved' :
+                     r.campus_director_approval === 'rejected' ? 'rejected' :
+                     r.lead_pastor_approval === 'approved' ? 'approved' :
+                     r.status;
+      return {
+        id: r.id.toString(),
+        type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
+        startDate: r.start_date,
+        endDate: r.end_date,
+        reason: r.reason,
+        status,
+        date: new Date(r.created_at).toLocaleDateString(),
+        requester: r.requester || null,
+      };
+    }) || [];
+
+    // Pending surplus approvals:
+    const { data: pendingSurplusApprovalsData } = await supabase
       .from('surplus_requests')
       .select(`
         *,
@@ -229,7 +258,27 @@ export default async function MissionaryDashboard(
       .eq('campus_director_approval', 'none')
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
-    surplusApprovals = surplusApprovalsData?.map(r => ({
+    pendingSurplusApprovals = pendingSurplusApprovalsData?.map(r => ({
+      id: r.id,
+      type: 'Surplus',
+      amount: r.amount_requested,
+      reason: r.reason,
+      status: r.status,
+      date: new Date(r.created_at).toLocaleDateString(),
+      requester: r.requester || null,
+    })) || [];
+
+    // Approved surplus approvals:
+    const { data: approvedSurplusApprovalsData } = await supabase
+      .from('surplus_requests')
+      .select(`
+        *,
+        requester:profiles(full_name)
+      `)
+      .in('missionary_id', subordinateIds)
+      .eq('campus_director_approval', 'approved')
+      .order('created_at', { ascending: false });
+    approvedSurplusApprovals = approvedSurplusApprovalsData?.map(r => ({
       id: r.id,
       type: 'Surplus',
       amount: r.amount_requested,
@@ -290,7 +339,7 @@ export default async function MissionaryDashboard(
           </TabsList>
 
           <TabsContent value="overview" className="space-y-8">
-            {/* Request Creation Buttons moved to Overview tab */}
+            {/* Request creation buttons */}
             <div className="flex gap-4">
               <LeaveRequestModal 
                 missionaryId={userIdParam || user.id}
@@ -346,8 +395,10 @@ export default async function MissionaryDashboard(
           {isCampusDirector && (
             <TabsContent value="approvals" className="space-y-8">
               <ApprovalTab
-                leaveApprovals={leaveApprovals}
-                surplusApprovals={surplusApprovals}
+                pendingLeaveApprovals={pendingLeaveApprovals}
+                approvedLeaveApprovals={approvedLeaveApprovals}
+                pendingSurplusApprovals={pendingSurplusApprovals}
+                approvedSurplusApprovals={approvedSurplusApprovals}
               />
             </TabsContent>
           )}

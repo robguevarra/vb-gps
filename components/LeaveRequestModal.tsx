@@ -39,7 +39,6 @@ export function LeaveRequestModal({ missionaryId, validateMissionary }: LeaveReq
       setError('Please select valid dates');
       return;
     }
-
     if (dates.to < dates.from) {
       setError('End date cannot be before start date');
       return;
@@ -50,9 +49,10 @@ export function LeaveRequestModal({ missionaryId, validateMissionary }: LeaveReq
 
     const { data: authData } = await supabase.auth.getUser();
     const currentUserId = authData.user?.id;
+    // Either the passed-in missionaryId or the current user
     const requesterId = missionaryId || currentUserId;
-    console.log('[LeaveRequestModal] requesterId:', requesterId);
 
+    // Insert using valid approval statuses
     const { error: submitError } = await supabase.from('leave_requests').insert({
       type,
       start_date: dates.from.toISOString(),
@@ -60,8 +60,10 @@ export function LeaveRequestModal({ missionaryId, validateMissionary }: LeaveReq
       reason,
       status: 'pending',
       requester_id: requesterId,
+      // must be one of [ 'none', 'approved', 'rejected' ]
       campus_director_approval: 'none',
-      lead_pastor_approval: 'none'
+      // must be one of [ 'none', 'approved', 'rejected', 'override' ]
+      lead_pastor_approval: 'none',
     });
 
     if (submitError) {
@@ -69,7 +71,8 @@ export function LeaveRequestModal({ missionaryId, validateMissionary }: LeaveReq
     } else {
       router.refresh();
       setOpen(false);
-      setTimeout(() => router.refresh(), 500);
+      // small delay to ensure revalidation
+      setTimeout(() => router.refresh(), 300);
     }
     setLoading(false);
   };

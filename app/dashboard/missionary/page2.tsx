@@ -5,11 +5,10 @@ import DashboardCards from '@/components/DashboardCards';
 import RecentDonations from '@/components/RecentDonations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProfileSelector from '@/components/ProfileSelector';
-import { RequestSurplusForm } from '@/components/RequestSurplusForm';
-import { LeaveRequestForm } from '@/components/LeaveRequestForm';
 import { LeaveRequestModal } from '@/components/LeaveRequestModal';
 import { SurplusRequestModal } from '@/components/SurplusRequestModal';
 import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
+import { ApprovalTab } from '@/components/ApprovalTab';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +20,7 @@ interface LeaveRequest {
   reason: string;
   status: string;
   date: string;
+  requester?: { full_name: string } | null;
 }
 
 interface SurplusRequest {
@@ -30,24 +30,23 @@ interface SurplusRequest {
   reason: string;
   status: string;
   date: string;
+  requester?: { full_name: string } | null;
 }
 
-export default async function MissionaryDashboard(props: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
-  // Await search parameters (App Router passes them as a Promise)
+export default async function MissionaryDashboard(
+  props: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }
+) {
   const searchParams = await props.searchParams;
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   console.log('Authenticated User:', user);
 
-  // Compute the userIdParam from searchParams, if provided
   const userIdParam = typeof searchParams.userId === 'string'
     ? searchParams.userId
     : Array.isArray(searchParams.userId)
       ? searchParams.userId[0]
       : undefined;
   console.log('Computed userIdParam:', userIdParam);
-
   console.log(
     'UserIdParam vs Current User:',
     `Param: ${userIdParam}`,
@@ -62,29 +61,25 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
   const isSuperAdmin = user.email === 'robneil@gmail.com';
   console.log('Is SuperAdmin:', isSuperAdmin);
 
-  // Fetch all profiles for the ProfileSelector if superadmin is logged in.
   const { data: allMissionaries } = isSuperAdmin 
     ? await supabase
-        .from('profiles')
-        .select('*')
-        .neq('role', 'superadmin')
+          .from('profiles')
+          .select('*')
+          .neq('role', 'superadmin')
     : { data: null };
 
-  // Fetch profile data using either the provided userIdParam or the authenticated user's id.
   const { data: fetchedProfileData } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userIdParam || user.id)
     .single();
 
-  // Query for church name
   const { data: churchData } = await supabase
     .from('local_churches')
     .select('name')
     .eq('id', fetchedProfileData?.local_church_id)
     .single();
 
-  // Fallback profile if necessary
   const profileData = fetchedProfileData || (isSuperAdmin ? {
     id: user.id,
     full_name: user.user_metadata?.full_name || user.email,
@@ -94,7 +89,6 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
     surplus_balance: 0
   } : null);
 
-  // Determine church name
   const churchName = churchData?.name || (isSuperAdmin ? 'All Churches' : 'Unknown Church');
 
   if (!profileData) {
@@ -131,7 +125,7 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
     .slice(0, 5);
 
   // -------------------------------
-  // Fetch Leave Requests Data
+  // Fetch Request History Data for this missionary (static display)
   // -------------------------------
   const { data: leaveRequestsData } = await supabase
     .from('leave_requests')
@@ -140,9 +134,6 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
     .order('created_at', { ascending: false });
   console.log('Leave Requests Data:', leaveRequestsData);
 
-  // -------------------------------
-  // Fetch Surplus Requests Data
-  // -------------------------------
   const { data: surplusRequestsData } = await supabase
     .from('surplus_requests')
     .select('*')
@@ -157,6 +148,7 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
   ].length;
   console.log('Pending Requests Count:', pendingRequests);
 
+  // Map for Request History (static display)
   const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
     const status = r.lead_pastor_approval === 'override' ? 'approved' :
                    r.campus_director_approval === 'rejected' ? 'rejected' :
@@ -169,7 +161,8 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
       endDate: r.end_date,
       reason: r.reason,
       status,
-      date: new Date(r.created_at).toLocaleDateString()
+      date: new Date(r.created_at).toLocaleDateString(),
+      requester: null,
     };
   }) || [];
 
@@ -179,14 +172,124 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
     amount: r.amount_requested,
     reason: r.reason,
     status: r.status,
-    date: new Date(r.created_at).toLocaleDateString()
+    date: new Date(r.created_at).toLocaleDateString(),
+    requester: null,
   })) || [];
 
-  console.log(
-    '[Dashboard] Modal IDs:',
-    `Leave: ${userIdParam || user.id}`,
-    `Surplus: ${userIdParam || user.id}`
-  );
+  // -------------------------------
+  // Approvals for Campus Directors (only pending and approved)
+  // -------------------------------
+  const isCampusDirector = profileData.role === 'campus_director';
+  let pendingLeaveApprovals: LeaveRequest[] = [];
+  let approvedLeaveApprovals: LeaveRequest[] = [];
+  let pendingSurplusApprovals: SurplusRequest[] = [];
+  let approvedSurplusApprovals: SurplusRequest[] = [];
+
+  if (isCampusDirector) {
+    const { data: subordinateProfiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('campus_director_id', profileData.id);
+    const subordinateIds = subordinateProfiles?.map(p => p.id) || [];
+
+    // Pending leave approvals:
+    const { data: pendingLeaveApprovalsData } = await supabase
+      .from('leave_requests')
+      .select(`
+        *,
+        requester:profiles(full_name)
+      `)
+      .in('requester_id', subordinateIds)
+      .eq('campus_director_approval', 'none')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    pendingLeaveApprovals = pendingLeaveApprovalsData?.map(r => {
+      const status = r.lead_pastor_approval === 'override' ? 'approved' :
+                     r.campus_director_approval === 'rejected' ? 'rejected' :
+                     r.lead_pastor_approval === 'approved' ? 'approved' :
+                     r.status;
+      return {
+        id: r.id.toString(),
+        type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
+        startDate: r.start_date,
+        endDate: r.end_date,
+        reason: r.reason,
+        status,
+        date: new Date(r.created_at).toLocaleDateString(),
+        requester: r.requester || null,
+      };
+    }) || [];
+
+    // Approved leave requests:
+    const { data: approvedLeaveApprovalsData } = await supabase
+      .from('leave_requests')
+      .select(`
+        *,
+        requester:profiles(full_name)
+      `)
+      .in('requester_id', subordinateIds)
+      .eq('campus_director_approval', 'approved')
+      .order('created_at', { ascending: false });
+    approvedLeaveApprovals = approvedLeaveApprovalsData?.map(r => {
+      const status = r.lead_pastor_approval === 'override' ? 'approved' :
+                     r.campus_director_approval === 'rejected' ? 'rejected' :
+                     r.lead_pastor_approval === 'approved' ? 'approved' :
+                     r.status;
+      return {
+        id: r.id.toString(),
+        type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
+        startDate: r.start_date,
+        endDate: r.end_date,
+        reason: r.reason,
+        status,
+        date: new Date(r.created_at).toLocaleDateString(),
+        requester: r.requester || null,
+      };
+    }) || [];
+
+    // Pending surplus approvals:
+    const { data: pendingSurplusApprovalsData } = await supabase
+      .from('surplus_requests')
+      .select(`
+        *,
+        requester:profiles(full_name)
+      `)
+      .in('missionary_id', subordinateIds)
+      .eq('campus_director_approval', 'none')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    pendingSurplusApprovals = pendingSurplusApprovalsData?.map(r => ({
+      id: r.id,
+      type: 'Surplus',
+      amount: r.amount_requested,
+      reason: r.reason,
+      status: r.status,
+      date: new Date(r.created_at).toLocaleDateString(),
+      requester: r.requester || null,
+    })) || [];
+
+    // Approved surplus approvals:
+    const { data: approvedSurplusApprovalsData } = await supabase
+      .from('surplus_requests')
+      .select(`
+        *,
+        requester:profiles(full_name)
+      `)
+      .in('missionary_id', subordinateIds)
+      .eq('campus_director_approval', 'approved')
+      .order('created_at', { ascending: false });
+    approvedSurplusApprovals = approvedSurplusApprovalsData?.map(r => ({
+      id: r.id,
+      type: 'Surplus',
+      amount: r.amount_requested,
+      reason: r.reason,
+      status: r.status,
+      date: new Date(r.created_at).toLocaleDateString(),
+      requester: r.requester || null,
+    })) || [];
+  }
+
+  console.log('[Dashboard] Modal IDs:', `Leave: ${userIdParam || user.id}`, `Surplus: ${userIdParam || user.id}`);
 
   return (
     <div className="min-h-screen bg-background" key={userIdParam || user.id}>
@@ -219,7 +322,6 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
               <p className="text-sm">{churchName}</p>
             </div>
           </header>
-          
           {isSuperAdmin && (
             <ProfileSelector 
               missionaries={allMissionaries || []}
@@ -230,29 +332,14 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 lg:w-1/2">
+          <TabsList className="grid w-full grid-cols-3 lg:w-1/2">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="history">Request History</TabsTrigger>
+            {isCampusDirector && <TabsTrigger value="approvals">Approvals</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="overview" className="space-y-8">
-            <DashboardCards
-              monthlyGoal={profileData.monthly_goal || 0}
-              currentDonations={currentDonations}
-              pendingRequests={pendingRequests}
-              surplusBalance={profileData.surplus_balance}
-            />
-            <RecentDonations
-              donations={combinedDonations.map(d => ({
-                id: d.id,
-                donor_name: d.donor_name,
-                amount: d.amount,
-                date: new Date(d.created_at).toLocaleDateString()
-              }))}
-            />
-          </TabsContent>
-
-          <TabsContent value="history" className="space-y-8">
+            {/* Request creation buttons */}
             <div className="flex gap-4">
               <LeaveRequestModal 
                 missionaryId={userIdParam || user.id}
@@ -264,45 +351,57 @@ export default async function MissionaryDashboard(props: { searchParams: Promise
                 validateMissionary={isSuperAdmin}
               />
             </div>
+            <DashboardCards
+              monthlyGoal={profileData.monthly_goal || 0}
+              currentDonations={currentDonations}
+              pendingRequests={pendingRequests}
+              surplusBalance={profileData.surplus_balance}
+            />
+            <RecentDonations
+              donations={combinedDonations.map(d => ({
+                id: d.id,
+                donor_name: d.donor_name,
+                amount: d.amount,
+                date: new Date(d.created_at).toLocaleDateString(),
+              }))}
+            />
+          </TabsContent>
 
+          <TabsContent value="history" className="space-y-8">
             <div className="space-y-4">
               <h2 className="text-2xl font-semibold">Request History</h2>
               <div className="space-y-4">
                 {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map((request) => (
                   <div key={`${request.type}-${request.id}`} className="p-4 bg-background rounded-lg border">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">
-                          {request.type} Request
-                          <span className={`ml-2 text-sm ${
-                            request.status === 'approved'
-                              ? 'text-green-600'
-                              : request.status === 'rejected'
-                              ? 'text-red-600'
-                              : 'text-yellow-600'
-                          }`}>
-                            ({request.status})
-                          </span>
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {request.date}
-                        </p>
-                      </div>
-                      <button className="btn-ghost btn-sm btn">View Details</button>
-                    </div>
-                    {request.type === 'Leave' && (
+                    <div className="flex flex-col">
+                      <p className="font-medium">{request.type} Request</p>
+                      <p className="text-sm text-muted-foreground mt-1">{request.date}</p>
                       <p className="text-sm mt-2">
-                        Dates: {(request as LeaveRequest).startDate} - {(request as LeaveRequest).endDate}
+                        {request.type !== 'Surplus'
+                          ? `Dates: ${(request as LeaveRequest).startDate} - ${(request as LeaveRequest).endDate}. Reason: ${request.reason}`
+                          : `Requested Amount: ₱${(request as SurplusRequest).amount.toLocaleString()}. Reason: ${request.reason}`
+                        }
                       </p>
-                    )}
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {request.reason}
-                    </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Status: {request.status}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           </TabsContent>
+
+          {isCampusDirector && (
+            <TabsContent value="approvals" className="space-y-8">
+              <ApprovalTab
+                pendingLeaveApprovals={pendingLeaveApprovals}
+                approvedLeaveApprovals={approvedLeaveApprovals}
+                pendingSurplusApprovals={pendingSurplusApprovals}
+                approvedSurplusApprovals={approvedSurplusApprovals}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

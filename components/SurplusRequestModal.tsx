@@ -1,3 +1,4 @@
+// components/SurplusRequestModal.tsx
 'use client'
 
 import { useState } from 'react'
@@ -42,13 +43,17 @@ export function SurplusRequestModal({ surplusBalance, missionaryId }: SurplusReq
 
     // Use the passed-in missionaryId if provided, otherwise default to the current user
     const requesterId = missionaryId || currentUserId
-    console.log('[SurplusRequestModal] requesterId:', requesterId)
 
+    // Insert with valid statuses
     const { error: submitError } = await supabase.from('surplus_requests').insert({
       amount_requested: numericAmount,
       reason,
       status: 'pending',
-      missionary_id: requesterId
+      missionary_id: requesterId,
+      // valid campus director
+      campus_director_approval: 'none',
+      // valid lead pastor
+      lead_pastor_approval: 'none'
     })
 
     if (submitError) {
@@ -78,7 +83,7 @@ export function SurplusRequestModal({ surplusBalance, missionaryId }: SurplusReq
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              min="0"
+              min="1"
               max={surplusBalance}
               required
             />

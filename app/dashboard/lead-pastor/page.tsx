@@ -1,19 +1,196 @@
+// app/dashboard/lead-pastor/page.tsx
+
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { generateMockRequests } from '@/utils/mockData'
+import LeadPastorSelector from '@/components/LeadPastorSelector'
+import LeadPastorDashboardClient from './LeadPastorDashboardClient'
 
-export default async function LeadPastorDashboard() {
+export default async function LeadPastorDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const resolvedSearchParams = await searchParams
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
+  // 1) Auth check
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user) {
     redirect('/login')
   }
 
-  // Mock data
-  const pendingRequests = generateMockRequests(5)
+  // 2) Determine selected lead pastor ID
+  const selectedLeadPastorId =
+    typeof resolvedSearchParams.userId === 'string'
+      ? resolvedSearchParams.userId
+      : Array.isArray(resolvedSearchParams.userId)
+      ? resolvedSearchParams.userId[0]
+      : user.id
 
+  // 3) (Optional) fetch lead pastors for the dropdown
+  const { data: leadPastors } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .eq('role', 'lead_pastor')
+
+  // 4) Optionally fetch local church name
+  const { data: localChurch } = await supabase
+    .from('local_churches')
+    .select('name')
+    .eq('lead_pastor_id', selectedLeadPastorId)
+    .single()
+
+  // ------------------- Pending Leaves -------------------
+  const { data: pendingLeaveRows } = await supabase
+    .from('leave_requests')
+    .select(`
+      id,
+      type,
+      start_date,
+      end_date,
+      reason,
+      status,
+      created_at,
+      campus_director_approval,
+      campus_director_notes,
+      lead_pastor_approval,
+      lead_pastor_notes,
+      requester:requester_id!inner (
+        full_name,
+        local_church:local_churches!profiles_local_church_id_fkey!inner (
+          lead_pastor_id
+        )
+      )
+    `)
+    .eq('status', 'pending')
+    .eq('lead_pastor_approval', 'none')
+    .eq('requester.local_church.lead_pastor_id', selectedLeadPastorId)
+    .order('created_at', { ascending: false })
+
+  // ------------------- Approved Leaves -------------------
+  // We treat 'override-approved' as also "approved"
+  const { data: approvedLeaveRows } = await supabase
+    .from('leave_requests')
+    .select(`
+      id,
+      type,
+      start_date,
+      end_date,
+      reason,
+      status,
+      created_at,
+      campus_director_approval,
+      campus_director_notes,
+      lead_pastor_approval,
+      lead_pastor_notes,
+      requester:requester_id!inner (
+        full_name,
+        local_church:local_churches!profiles_local_church_id_fkey!inner (
+          lead_pastor_id
+        )
+      )
+    `)
+    .eq('status', 'approved')
+    .in('lead_pastor_approval', ['approved', 'override-approved'])
+    .eq('requester.local_church.lead_pastor_id', selectedLeadPastorId)
+    .order('created_at', { ascending: false })
+
+  // ------------------- Pending Surplus -------------------
+  const { data: pendingSurplusRows } = await supabase
+    .from('surplus_requests')
+    .select(`
+      id,
+      amount_requested,
+      reason,
+      status,
+      created_at,
+      campus_director_approval,
+      campus_director_notes,
+      lead_pastor_approval,
+      lead_pastor_notes,
+      missionary:missionary_id!inner (
+        full_name,
+        local_church:local_churches!profiles_local_church_id_fkey!inner (
+          lead_pastor_id
+        )
+      )
+    `)
+    .eq('status', 'pending')
+    .eq('lead_pastor_approval', 'none')
+    .eq('missionary.local_church.lead_pastor_id', selectedLeadPastorId)
+    .order('created_at', { ascending: false })
+
+  // ------------------- Approved Surplus -------------------
+  const { data: approvedSurplusRows } = await supabase
+    .from('surplus_requests')
+    .select(`
+      id,
+      amount_requested,
+      reason,
+      status,
+      created_at,
+      campus_director_approval,
+      campus_director_notes,
+      lead_pastor_approval,
+      lead_pastor_notes,
+      missionary:missionary_id!inner (
+        full_name,
+        local_church:local_churches!profiles_local_church_id_fkey!inner (
+          lead_pastor_id
+        )
+      )
+    `)
+    .eq('status', 'approved')
+    .in('lead_pastor_approval', ['approved', 'override-approved'])
+    .eq('missionary.local_church.lead_pastor_id', selectedLeadPastorId)
+    .order('created_at', { ascending: false })
+
+  // 5) Transform each row into a simpler shape if needed
+  function transformLeave(req: any) {
+    return {
+      id: String(req.id),
+      type: req.type === 'vacation' ? 'Vacation Leave' : 'Sick Leave',
+      startDate: req.start_date,
+      endDate: req.end_date,
+      reason: req.reason,
+      status: req.status,
+      date: req.created_at,
+      campusDirectorApproval: req.campus_director_approval,
+      campusDirectorNotes: req.campus_director_notes,
+      leadPastorApproval: req.lead_pastor_approval,
+      leadPastorNotes: req.lead_pastor_notes,
+      requester: {
+        full_name: req.requester?.full_name || 'Unknown',
+      },
+    }
+  }
+
+  function transformSurplus(req: any) {
+    return {
+      id: String(req.id),
+      type: 'Surplus' as const,
+      amount: req.amount_requested,
+      reason: req.reason,
+      status: req.status,
+      date: req.created_at,
+      campusDirectorApproval: req.campus_director_approval,
+      campusDirectorNotes: req.campus_director_notes,
+      leadPastorApproval: req.lead_pastor_approval,
+      leadPastorNotes: req.lead_pastor_notes,
+      requester: {
+        full_name: req.missionary?.full_name || 'Unknown',
+      },
+    }
+  }
+
+  const pendingLeaveApprovals = (pendingLeaveRows || []).map(transformLeave)
+  const approvedLeaveApprovals = (approvedLeaveRows || []).map(transformLeave)
+  const pendingSurplusApprovals = (pendingSurplusRows || []).map(transformSurplus)
+  const approvedSurplusApprovals = (approvedSurplusRows || []).map(transformSurplus)
+
+  // 6) Render
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto p-6 space-y-8">
@@ -22,33 +199,26 @@ export default async function LeadPastorDashboard() {
             Lead Pastor Dashboard
           </h1>
           <p className="text-lg text-muted-foreground mt-1">
-            Final approvals and church oversight
+            {localChurch?.name ?? 'No local church assigned'}
           </p>
         </header>
 
-        <div className="space-y-6">
-          <h2 className="text-2xl font-semibold">Pending Final Approvals</h2>
-          <div className="space-y-4">
-            {pendingRequests.map((request) => (
-              <div key={request.id} className="p-4 bg-card rounded-lg shadow">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-medium">{request.type} Request</p>
-                    <p className="text-sm text-muted-foreground">
-                      From: {request.missionaryName} • Status: {request.status}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline">Approve</Button>
-                    <Button variant="destructive">Reject</Button>
-                    <Button variant="secondary">Override</Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Lead Pastor Selector */}
+        <div className="mb-4">
+          <LeadPastorSelector
+            leadPastors={leadPastors || []}
+            userId={selectedLeadPastorId}
+          />
         </div>
+
+        {/* Pass data to a client component, e.g. LeadPastorDashboardClient */}
+        <LeadPastorDashboardClient
+          pendingLeaveApprovals={pendingLeaveApprovals}
+          approvedLeaveApprovals={approvedLeaveApprovals}
+          pendingSurplusApprovals={pendingSurplusApprovals}
+          approvedSurplusApprovals={approvedSurplusApprovals}
+        />
       </div>
     </div>
   )
-} 
+}
