@@ -60,6 +60,7 @@ export default async function LeadPastorDashboard({
       status,
       created_at,
       campus_director_approval,
+      campus_director_notes,
       lead_pastor_approval,
       requester:profiles!inner(full_name, local_churches!fk_local_church!inner(lead_pastor_id))
     `)
@@ -86,6 +87,7 @@ export default async function LeadPastorDashboard({
       status,
       created_at,
       campus_director_approval,
+      campus_director_notes,
       lead_pastor_approval,
       requester:profiles!inner(full_name, local_churches!fk_local_church!inner(lead_pastor_id))
     `)
@@ -108,6 +110,7 @@ export default async function LeadPastorDashboard({
       status,
       created_at,
       campus_director_approval,
+      campus_director_notes,
       lead_pastor_approval,
       missionary:profiles!inner(full_name, local_churches!fk_local_church!inner(lead_pastor_id))
     `)
@@ -131,6 +134,7 @@ export default async function LeadPastorDashboard({
       status,
       created_at,
       campus_director_approval,
+      campus_director_notes,
       lead_pastor_approval,
       missionary:profiles!inner(full_name, local_churches!fk_local_church!inner(lead_pastor_id))
     `)

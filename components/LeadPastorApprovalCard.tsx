@@ -116,15 +116,18 @@ export function LeadPastorApprovalCard({
     setLoading(false)
   }
 
-  // Format details
-  let details = ''
-  if (requestType === 'leave') {
-    const r = request as LeaveRequestData
-    details = `Dates: ${r.startDate} - ${r.endDate}. Reason: ${r.reason}`
-  } else {
-    const r = request as SurplusRequestData
-    details = `Amount: ₱${r.amount?.toLocaleString()}. Reason: ${r.reason}`
-  }
+  // Helper function for details
+  const getDetails = () => {
+    if (requestType === 'leave') {
+      const leaveRequest = request as LeaveRequestData;
+      return `Dates: ${leaveRequest.startDate} - ${leaveRequest.endDate}. Reason: ${leaveRequest.reason}`;
+    } else {
+      const surplusRequest = request as SurplusRequestData;
+      return `Requested Amount: ₱${surplusRequest.amount.toLocaleString()}. Reason: ${surplusRequest.reason}`;
+    }
+  };
+
+  const details = getDetails();
 
   return (
     <div className="p-4 bg-background rounded-lg border flex flex-col gap-4 mb-4">
@@ -137,31 +140,56 @@ export function LeadPastorApprovalCard({
         </div>
         <p className="text-sm mt-1 text-muted-foreground">{details}</p>
 
-        {request.campusDirectorApproval && (
-          <p className="text-xs">
-            <strong>Campus Director Approval:</strong> {request.campusDirectorApproval.toUpperCase()}
-          </p>
-        )}
-        {request.campusDirectorNotes && (
-          <p className="text-xs italic">CD Notes: {request.campusDirectorNotes}</p>
-        )}
+        <div className="mt-2">
+          <span className="text-xs font-semibold">Campus Director:</span>
+          {request.campusDirectorApproval === 'approved' && (
+            <Badge variant="success" className="ml-1 text-xs inline-block">
+              Approved
+            </Badge>
+          )}
+          {request.campusDirectorApproval === 'rejected' && (
+            <Badge variant="destructive" className="ml-1 text-xs inline-block">
+              Rejected
+            </Badge>
+          )}
+          {request.campusDirectorApproval === 'none' && (
+            <Badge variant="secondary" className="ml-1 text-xs inline-block">
+              Pending
+            </Badge>
+          )}
+        </div>
+
         {request.leadPastorNotes && (
           <p className="text-xs italic mt-1">
             Your Notes: {request.leadPastorNotes}
           </p>
         )}
+        {request.campusDirectorNotes && (
+          <div className="mt-2 p-2 rounded-md bg-gray-100 border">
+            <p className="text-xs font-semibold">Campus Director Notes:</p>
+            <p className="text-xs">{request.campusDirectorNotes}</p>
+          </div>
+        )}
+
       </div>
 
       {/* The action buttons */}
-      <div className="flex gap-2 flex-wrap">
-        {/* Normal Approve/Reject */}
-        <Button variant="outline" size="sm" onClick={() => handleOpenModal('approved')}>
-          Approve
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => handleOpenModal('rejected')}>
-          Reject
-        </Button>
-        {/* Single Override button */}
+        <div className="flex gap-2 flex-wrap">
+          {/* Normal Approve/Reject */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleOpenModal('approved')}
+          >
+            Approve
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleOpenModal('rejected')}
+          >
+            Reject
+          </Button>
         <Button variant="secondary" size="sm" onClick={() => handleOpenModal('override-approved')}>
           Override
         </Button>
@@ -179,6 +207,13 @@ export function LeadPastorApprovalCard({
                 <strong>Request by:</strong> {request.requester?.full_name}
               </p>
               <p className="text-sm text-muted-foreground">{details}</p>
+
+              {request.campusDirectorNotes && (
+                <div className="mt-2 p-2 rounded-md bg-gray-100 border">
+                  <p className="text-xs font-semibold">Campus Director Notes:</p>
+                  <p className="text-xs">{request.campusDirectorNotes}</p>
+                </div>
+              )}
 
               {/* If user clicked 'override-approved', let's show a mini toggle: 
                   Approve or Reject override? 
