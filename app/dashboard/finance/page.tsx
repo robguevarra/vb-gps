@@ -1,77 +1,81 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { FilePlus } from 'lucide-react'
-import Link from 'next/link'
-import { generateMockDonations } from '@/utils/mockData'
+export const dynamic = 'force-dynamic'; // Ensures fresh data on every request
+
+import { createClient } from '@/utils/supabase/server';
+import { redirect } from 'next/navigation';
+import DonationModal from '../../../components/DonationModal';
+import RecentTransactionsTable from '@/components/RecentTransactionsTable';
+import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 
 export default async function FinanceDashboard() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login')
+    redirect('/login');
   }
 
-  // Mock data for finance dashboard
-  const mockDonations = generateMockDonations(10)
-  const monthlyTotal = mockDonations.reduce((acc, d) => acc + d.amount, 0)
+  console.log("[FinanceDashboard] Fetching donations for user:", user.id);
+
+  // Updated query: include donors(name, email, phone)
+  const { data: donorDonationsData, error } = await supabase
+    .from('donor_donations')
+    .select('id, amount, date, notes, donors(name, email, phone)')
+    .eq('source', 'offline')
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error("[FinanceDashboard] Error fetching donations:", error.message);
+  } else {
+    console.log("[FinanceDashboard] Retrieved donations:", donorDonationsData);
+  }
+
+  const formattedDonations = donorDonationsData?.map((d: any) => ({
+    id: d.id,
+    donor_name: Array.isArray(d.donors)
+      ? (d.donors[0]?.name || "Unknown")
+      : (d.donors?.name || "Unknown"),
+    donor_email: Array.isArray(d.donors)
+      ? (d.donors[0]?.email || "N/A")
+      : (d.donors?.email || "N/A"),
+    donor_phone: Array.isArray(d.donors)
+      ? (d.donors[0]?.phone || "N/A")
+      : (d.donors?.phone || "N/A"),
+    amount: d.amount,
+    date: d.date,
+    notes: d.notes || ""
+  })) || [];
+
+  // Fetch missionary profiles for DonationModal.
+  const { data: missionaryProfiles, error: missionError } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .eq('role', 'missionary');
+
+  if (missionError) {
+    console.error("[FinanceDashboard] Error fetching missionary profiles:", missionError.message);
+  } else {
+    console.log("[FinanceDashboard] Retrieved missionary profiles:", missionaryProfiles);
+  }
 
   return (
     <div className="min-h-screen bg-background">
+      <RealtimeSubscriptions tables={[
+        { name: 'donor_donations', filter: 'source=eq.offline', event: 'INSERT' },
+        { name: 'donations', filter: `missionary_id=eq.${user.id}`, event: 'INSERT' }
+      ]} />
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         <header className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Finance Dashboard
-            </h1>
-            <p className="text-lg text-muted-foreground mt-1">
-              Manage donations and financial records
-            </p>
+            <h1 className="text-3xl font-bold text-foreground">Finance Dashboard</h1>
+            <p className="text-lg text-muted-foreground mt-1">Manage manual donation entries</p>
           </div>
-          <Button asChild>
-            <Link href="/dashboard/finance/create-donation">
-              <FilePlus className="h-4 w-4 mr-2" />
-              Record Donation
-            </Link>
-          </Button>
+          <DonationModal missionaries={missionaryProfiles || []} />
         </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div className="p-6 bg-card rounded-lg shadow">
-              <h2 className="text-2xl font-semibold mb-4">Monthly Summary</h2>
-              <div className="space-y-2">
-                <p className="text-foreground">
-                  Total Donations: ${monthlyTotal.toLocaleString()}
-                </p>
-                <p className="text-muted-foreground">
-                  Last updated: {new Date().toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 bg-card rounded-lg shadow">
-            <h2 className="text-2xl font-semibold mb-4">Recent Transactions</h2>
-            <div className="space-y-4">
-              {mockDonations.map((donation) => (
-                <div key={donation.id} className="flex justify-between items-center p-3 bg-background rounded">
-                  <div>
-                    <p className="font-medium">{donation.donor_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(donation.date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <p className="font-semibold">
-                    ${donation.amount.toLocaleString()}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="p-6 bg-card rounded-lg shadow">
+          <h2 className="text-2xl font-semibold mb-4">Recent Transactions</h2>
+          <RecentTransactionsTable donations={formattedDonations} />
         </div>
       </div>
     </div>
-  )
-} 
+  );
+}

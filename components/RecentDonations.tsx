@@ -43,12 +43,18 @@ export default function RecentDonations({ donations, missionaryId }: RecentDonat
                   className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0"
                 >
                   <div>
-                    <button
-                      onClick={() => openModal(donation.donor_name)}
-                      className="font-semibold text-gray-800 dark:text-gray-200 hover:underline"
-                    >
-                      {donation.donor_name}
-                    </button>
+                    {donation.donor_name === 'Unknown' ? (
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">
+                        {donation.donor_name}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => openModal(donation.donor_name)}
+                        className="font-semibold text-gray-800 dark:text-gray-200 hover:underline"
+                      >
+                        {donation.donor_name}
+                      </button>
+                    )}
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {formatDate(donation.date)}
                     </p>

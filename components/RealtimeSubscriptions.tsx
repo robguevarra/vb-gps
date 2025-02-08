@@ -6,22 +6,40 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 
+interface TableSubscription {
+  name: string;
+  filter: string;
+  event: string;
+}
 
-export default function RealtimeSubscriptions() {
-  const router = useRouter()
-  const supabase = createClient()
+interface RealtimeSubscriptionsProps {
+  tables: TableSubscription[];
+}
+
+export default function RealtimeSubscriptions({ tables }: RealtimeSubscriptionsProps) {
+  const router = useRouter();
+  const supabase = createClient();
 
   useEffect(() => {
-    const channel = supabase
-      .channel('requests')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leave_requests' }, () => router.refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'surplus_requests' }, () => router.refresh())
-      .subscribe()
+    const channel = supabase.channel('realtime-subscriptions');
+
+    tables.forEach((table) => {
+      channel.on(
+        'postgres_changes' as any,
+        { event: table.event, schema: 'public', table: table.name, filter: table.filter },
+        (payload: any) => {
+          console.log(`Realtime update detected on table: ${table.name}`, payload);
+          router.refresh();
+        }
+      );
+    });
+
+    channel.subscribe();
 
     return () => {
-      channel.unsubscribe()
-    }
-  }, [router, supabase])
+      channel.unsubscribe();
+    };
+  }, [router, supabase, tables]);
 
-  return null
+  return null;
 } 

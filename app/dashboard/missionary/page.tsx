@@ -51,7 +51,7 @@ export default async function MissionaryDashboard(
     'UserIdParam vs Current User:',
     `Param: ${userIdParam}`,
     `User: ${user?.id}`,
-    `Is SuperAdmin: ${user.email === 'robneil@gmail.com'}`
+    `Is SuperAdmin: ${user?.email === 'robneil@gmail.com'}`
   );
 
   if (!user) {
@@ -101,13 +101,13 @@ export default async function MissionaryDashboard(
   // -------------------------------
   const { data: donationsData } = await supabase
     .from('donations')
-    .select('id, amount, created_at, donor_name')
+    .select('id, amount, created_at, donor_name, notes')
     .eq('missionary_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
 
   const { data: donorDonationsData } = await supabase
     .from('donor_donations')
-    .select('id, amount, date, donors(name)')
+    .select('id, amount, date, donors(name), notes')
     .eq('missionary_id', userIdParam || user.id)
     .order('date', { ascending: false });
 
@@ -115,7 +115,8 @@ export default async function MissionaryDashboard(
     id: record.id,
     amount: record.amount,
     created_at: record.date,
-    donor_name: record.donors?.name || 'Unknown'
+    donor_name: Array.isArray(record.donors) ? ((record.donors as any)[0]?.name || "Unknown") : ((record.donors as any)?.name || "Unknown"),
+    notes: record.notes || ""
   })) || [];
 
   const combinedDonations = [
@@ -304,6 +305,16 @@ export default async function MissionaryDashboard(
             name: 'surplus_requests',
             filter: `missionary_id=eq.${userIdParam || user.id}`,
             event: 'INSERT,UPDATE,DELETE'
+          },
+          {
+            name: 'donations',
+            filter: `missionary_id=eq.${userIdParam || user.id}`,
+            event: 'INSERT,UPDATE,DELETE'
+          },
+          {
+            name: 'donor_donations',
+            filter: `missionary_id=eq.${userIdParam || user.id}`,
+            event: 'INSERT,UPDATE,DELETE'
           }
         ]}
       />
@@ -326,7 +337,6 @@ export default async function MissionaryDashboard(
             <ProfileSelector 
               missionaries={allMissionaries || []}
               userId={typeof userIdParam === "string" ? userIdParam : undefined}
-              required
             />
           </div>
         )}
@@ -348,7 +358,6 @@ export default async function MissionaryDashboard(
               <SurplusRequestModal 
                 surplusBalance={profileData.surplus_balance}
                 missionaryId={userIdParam}
-                validateMissionary={isSuperAdmin}
               />
             </div>
             <DashboardCards
@@ -363,8 +372,9 @@ export default async function MissionaryDashboard(
                 donor_name: d.donor_name,
                 amount: d.amount,
                 date: new Date(d.created_at).toLocaleDateString(),
+                notes: d.notes || ""
               }))}
-              missionaryId={userIdParam || user.id} // <-- new prop passed here
+              missionaryId={userIdParam || user.id}
             />
           </TabsContent>
 
