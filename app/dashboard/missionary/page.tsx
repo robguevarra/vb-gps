@@ -292,7 +292,7 @@ export default async function MissionaryDashboard(
   console.log('[Dashboard] Modal IDs:', `Leave: ${userIdParam || user.id}`, `Surplus: ${userIdParam || user.id}`);
 
   return (
-    <div className="min-h-screen bg-background" key={userIdParam || user.id}>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
       <RealtimeSubscriptions 
         tables={[
           { 
@@ -307,32 +307,32 @@ export default async function MissionaryDashboard(
           }
         ]}
       />
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
-        <div className="flex justify-between items-start">
-          <header className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">
-              {profileData.full_name || user.email}
-            </h1>
-            <div className="flex items-center gap-4 text-muted-foreground">
-              <p className="bg-accent px-3 py-1 rounded-full text-sm">
-                {profileData.role.replace(/_/g, ' ')}
-                {profileData.role === 'campus_director' && ' (Director)'}
-              </p>
-              <p className="text-sm">•</p>
-              <p className="text-sm">{churchName}</p>
-            </div>
-          </header>
-          {isSuperAdmin && (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+            {profileData.full_name || user.email}
+          </h1>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {profileData.role.replace(/_/g, " ")}
+              {profileData.role === "campus_director" && " (Director)"}
+            </p>
+            <span className="text-sm text-gray-400">•</span>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{churchName}</p>
+          </div>
+        </header>
+        {isSuperAdmin && (
+          <div className="mb-8">
             <ProfileSelector 
               missionaries={allMissionaries || []}
-              userId={typeof userIdParam === 'string' ? userIdParam : undefined}
+              userId={typeof userIdParam === "string" ? userIdParam : undefined}
               required
             />
-          )}
-        </div>
+          </div>
+        )}
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 lg:w-1/2">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="history">Request History</TabsTrigger>
             {isCampusDirector && <TabsTrigger value="approvals">Approvals</TabsTrigger>}
