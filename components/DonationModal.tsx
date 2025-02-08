@@ -1,6 +1,8 @@
+//components/DonationModal.tsx
 "use client";
 
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation"; // <-- Import for router.refresh()
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +29,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [donorSelected, setDonorSelected] = useState(false);
   const [notes, setNotes] = useState("");
+  const router = useRouter(); // <-- We'll call router.refresh() after success
 
   const handleDonorNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -88,7 +91,10 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
       });
       if (response.ok) {
         console.log("[DonationModal] Donation recorded successfully");
-        // Reset form fields on success.
+        // Refresh SSR data
+        router.refresh(); // <-- TRIGGER RE-FETCH OF SERVER DATA
+
+        // Reset form fields on success
         setOpen(false);
         setDonorName("");
         setDonorEmail("");

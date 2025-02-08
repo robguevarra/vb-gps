@@ -1,10 +1,12 @@
+//app/dashboard/finance/page.tsx
+
 export const dynamic = 'force-dynamic'; // Ensures fresh data on every request
 
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 import DonationModal from '../../../components/DonationModal';
 import RecentTransactionsTable from '@/components/RecentTransactionsTable';
-import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
+// REMOVED: import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 
 export default async function FinanceDashboard() {
   const supabase = await createClient();
@@ -14,7 +16,6 @@ export default async function FinanceDashboard() {
     redirect('/login');
   }
 
-  console.log("[FinanceDashboard] Fetching donations for user:", user.id);
 
   // Updated query: include donors(name, email, phone)
   const { data: donorDonationsData, error } = await supabase
@@ -25,9 +26,7 @@ export default async function FinanceDashboard() {
 
   if (error) {
     console.error("[FinanceDashboard] Error fetching donations:", error.message);
-  } else {
-    console.log("[FinanceDashboard] Retrieved donations:", donorDonationsData);
-  }
+  } 
 
   const formattedDonations = donorDonationsData?.map((d: any) => ({
     id: d.id,
@@ -53,16 +52,19 @@ export default async function FinanceDashboard() {
 
   if (missionError) {
     console.error("[FinanceDashboard] Error fetching missionary profiles:", missionError.message);
-  } else {
-    console.log("[FinanceDashboard] Retrieved missionary profiles:", missionaryProfiles);
-  }
+  } 
 
   return (
     <div className="min-h-screen bg-background">
-      <RealtimeSubscriptions tables={[
-        { name: 'donor_donations', filter: 'source=eq.offline', event: 'INSERT' },
-        { name: 'donations', filter: `missionary_id=eq.${user.id}`, event: 'INSERT' }
-      ]} />
+      {/*
+        REMOVED RealtimeSubscriptions:
+          <RealtimeSubscriptions
+            tables={[
+              { name: 'donor_donations', filter: 'source=eq.offline', event: 'INSERT' },
+              { name: 'donations', filter: `missionary_id=eq.${user.id}`, event: 'INSERT' }
+            ]}
+          />
+      */}
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         <header className="flex justify-between items-center">
           <div>

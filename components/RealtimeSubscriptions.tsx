@@ -25,7 +25,7 @@ export default function RealtimeSubscriptions({ tables }: RealtimeSubscriptionsP
 
     tables.forEach((table) => {
       channel.on(
-        'postgres_changes' as any,
+        'postgres_changes',
         { event: table.event, schema: 'public', table: table.name, filter: table.filter },
         (payload: any) => {
           console.log(`Realtime update detected on table: ${table.name}`, payload);
