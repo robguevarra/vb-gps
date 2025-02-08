@@ -1,12 +1,10 @@
-// app/dashboard/lead-pastor/LeadPastorDashboardClient.tsx
+"use client"
 
-'use client'
-
-import { LeadPastorApprovalTab } from '@/components/LeadPastorApprovalTab'
+import LeadPastorApprovalTab from "@/components/LeadPastorApprovalTab"
 
 type LeaveApproval = {
   id: string
-  type: 'Vacation Leave' | 'Sick Leave'
+  type: "Vacation Leave" | "Sick Leave"
   startDate: string
   endDate: string
   reason: string
@@ -21,7 +19,7 @@ type LeaveApproval = {
 
 type SurplusApproval = {
   id: string
-  type: 'Surplus'
+  type: "Surplus"
   amount: number
   reason: string
   status: string
@@ -33,11 +31,12 @@ type SurplusApproval = {
   requester?: { full_name: string }
 }
 
-interface LeadPastorDashboardClientProps {
+type LeadPastorDashboardClientProps = {
   pendingLeaveApprovals: LeaveApproval[]
   approvedLeaveApprovals: LeaveApproval[]
   pendingSurplusApprovals: SurplusApproval[]
   approvedSurplusApprovals: SurplusApproval[]
+  selectedLeadPastorName: string
 }
 
 export default function LeadPastorDashboardClient({
@@ -45,9 +44,10 @@ export default function LeadPastorDashboardClient({
   approvedLeaveApprovals,
   pendingSurplusApprovals,
   approvedSurplusApprovals,
+  selectedLeadPastorName,
 }: LeadPastorDashboardClientProps) {
   return (
-    <div>
+    <div className="space-y-8">
       <LeadPastorApprovalTab
         pendingLeaveApprovals={pendingLeaveApprovals}
         approvedLeaveApprovals={approvedLeaveApprovals}
@@ -57,3 +57,4 @@ export default function LeadPastorDashboardClient({
     </div>
   )
 }
+
