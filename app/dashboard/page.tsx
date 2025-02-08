@@ -1,8 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import DashboardCards from '@/components/DashboardCards'
-import RecentDonations from '@/components/RecentDonations'
-import ProgressBar from '@/components/progress-bar'
 import { Button } from '@/components/ui/button'
 import { PlusCircle, FilePlus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

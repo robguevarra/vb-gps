@@ -364,6 +364,7 @@ export default async function MissionaryDashboard(
                 amount: d.amount,
                 date: new Date(d.created_at).toLocaleDateString(),
               }))}
+              missionaryId={userIdParam || user.id} // <-- new prop passed here
             />
           </TabsContent>
 
