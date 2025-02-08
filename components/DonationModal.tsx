@@ -29,6 +29,8 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [donorSelected, setDonorSelected] = useState(false);
   const [notes, setNotes] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter(); // <-- We'll call router.refresh() after success
 
   const handleDonorNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,8 +73,38 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
     setDonorSelected(true);
   };
 
+  const handleDonorNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Tab" && donorSuggestions.length > 0 && !donorSelected) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSuggestionClick(donorSuggestions[0]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+    if (!missionaryId) {
+      setFormError("Please select a missionary.");
+      return;
+    }
+    if (!donorName.trim()) {
+      setFormError("Please enter a donor name.");
+      return;
+    }
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      setFormError("Please enter a valid donation amount.");
+      return;
+    }
+    if (!date) {
+      setFormError("Please select a donation date.");
+      return;
+    }
+    if (donorEmail && !/^\S+@\S+\.\S+$/.test(donorEmail)) {
+      setFormError("Please enter a valid email address.");
+      return;
+    }
+    setIsSubmitting(true);
     const payload = {
       donor_name: donorName,
       donor_email: donorEmail,
@@ -92,7 +124,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
       if (response.ok) {
         console.log("[DonationModal] Donation recorded successfully");
         // Refresh SSR data
-        router.refresh(); // <-- TRIGGER RE-FETCH OF SERVER DATA
+        router.refresh();
 
         // Reset form fields on success
         setOpen(false);
@@ -107,9 +139,13 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
       } else {
         const errorData = await response.json();
         console.error("[DonationModal] Failed to record donation:", errorData.error);
+        setFormError(errorData.error || "Failed to record donation.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DonationModal] Error submitting donation:", error);
+      setFormError(error.message || "Unexpected error occurred.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -147,6 +183,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
               type="text"
               value={donorName}
               onChange={handleDonorNameChange}
+              onKeyDown={handleDonorNameKeyDown}
               placeholder="Type donor name, press Tab to complete"
               required
               className="mt-1 rounded-md border p-2"
@@ -226,7 +263,10 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
               className="mt-1 rounded-md border p-2"
             />
           </div>
-          <Button type="submit">Submit Donation</Button>
+          {formError && <div className="text-red-500 text-sm">{formError}</div>}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Submitting..." : "Submit Donation"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
