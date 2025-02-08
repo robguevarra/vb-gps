@@ -1,0 +1,26 @@
+Finance dashboard done. 
+
+to do:
+- finance dashboard - add a dropdown for kind of donation (bank transfer, cash, check, tithe, etc)
+- add column on donor_donations table for kind of donation
+- update recent transactions table to show kind of donation
+- update donation modal to show kind of donation
+- login as finance. Populate finance person on profiles table. 
+
+
+
+admin dashboard
+- create profiles
+-- local church
+-- lead pastor
+
+
+- create local churches
+- assign lead pastors
+
+- surplus computations
+- baka dapat may finance tab tapos andun lahat ng finance related stuff. 
+-- produce reports
+
+
+
