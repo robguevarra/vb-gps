@@ -9,6 +9,8 @@ import { LeaveRequestModal } from '@/components/LeaveRequestModal';
 import { SurplusRequestModal } from '@/components/SurplusRequestModal';
 import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 import { ApprovalTab } from '@/components/ApprovalTab';
+import { Sidebar } from '@/components/Sidebar'
+import { RequestHistoryTab } from '@/components/RequestHistoryTab'
 
 export const dynamic = 'force-dynamic';
 
@@ -37,29 +39,24 @@ export default async function MissionaryDashboard(
   props: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }
 ) {
   const searchParams = await props.searchParams;
+  const currentTab = searchParams.tab || 'overview';
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  console.log('Authenticated User:', user);
+  
 
   const userIdParam = typeof searchParams.userId === 'string'
     ? searchParams.userId
     : Array.isArray(searchParams.userId)
       ? searchParams.userId[0]
       : undefined;
-  console.log('Computed userIdParam:', userIdParam);
-  console.log(
-    'UserIdParam vs Current User:',
-    `Param: ${userIdParam}`,
-    `User: ${user?.id}`,
-    `Is SuperAdmin: ${user?.email === 'robneil@gmail.com'}`
-  );
+  
 
   if (!user) {
     redirect('/login');
   }
 
   const isSuperAdmin = user.email === 'robneil@gmail.com';
-  console.log('Is SuperAdmin:', isSuperAdmin);
+  
 
   const { data: allMissionaries } = isSuperAdmin 
     ? await supabase
@@ -94,7 +91,7 @@ export default async function MissionaryDashboard(
   if (!profileData) {
     redirect('/login');
   }
-  console.log('Profile Data to use:', profileData);
+
 
   // -------------------------------
   // Fetch Donation Data
@@ -133,49 +130,37 @@ export default async function MissionaryDashboard(
     .select('*')
     .eq('requester_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
-  console.log('Leave Requests Data:', leaveRequestsData);
+
+  const leaveRequests = leaveRequestsData?.map(r => ({
+    id: r.id,
+    type: 'Leave',
+    startDate: new Date(r.start_date).toLocaleDateString(),
+    endDate: new Date(r.end_date).toLocaleDateString(),
+    reason: r.reason,
+    status: r.status,
+    date: new Date(r.created_at).toLocaleDateString(),
+  })) || [];
 
   const { data: surplusRequestsData } = await supabase
     .from('surplus_requests')
     .select('*')
     .eq('missionary_id', userIdParam || user.id)
     .order('created_at', { ascending: false });
-  console.log('Surplus Requests Data:', surplusRequestsData);
 
-  const currentDonations = combinedDonations?.reduce((acc, d) => acc + d.amount, 0) || 0;
-  const pendingRequests = [
-    ...(leaveRequestsData?.filter(r => r.status === 'pending') || []),
-    ...(surplusRequestsData?.filter(r => r.status === 'pending') || [])
-  ].length;
-  console.log('Pending Requests Count:', pendingRequests);
-
-  // Map for Request History (static display)
-  const leaveRequests: LeaveRequest[] = leaveRequestsData?.map(r => {
-    const status = r.lead_pastor_approval === 'override' ? 'approved' :
-                   r.campus_director_approval === 'rejected' ? 'rejected' :
-                   r.lead_pastor_approval === 'approved' ? 'approved' :
-                   r.status;
-    return {
-      id: r.id.toString(),
-      type: r.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
-      startDate: r.start_date,
-      endDate: r.end_date,
-      reason: r.reason,
-      status,
-      date: new Date(r.created_at).toLocaleDateString(),
-      requester: null,
-    };
-  }) || [];
-
-  const surplusRequests: SurplusRequest[] = surplusRequestsData?.map(r => ({
+  const surplusRequests = surplusRequestsData?.map(r => ({
     id: r.id,
     type: 'Surplus',
     amount: r.amount_requested,
     reason: r.reason,
     status: r.status,
     date: new Date(r.created_at).toLocaleDateString(),
-    requester: null,
   })) || [];
+
+  const currentDonations = combinedDonations?.reduce((acc, d) => acc + d.amount, 0) || 0;
+  const pendingRequests = [
+    ...(leaveRequestsData?.filter(r => r.status === 'pending') || []),
+    ...(surplusRequestsData?.filter(r => r.status === 'pending') || [])
+  ].length;
 
   // -------------------------------
   // Approvals for Campus Directors (only pending and approved)
@@ -290,8 +275,7 @@ export default async function MissionaryDashboard(
     })) || [];
   }
 
-  console.log('[Dashboard] Modal IDs:', `Leave: ${userIdParam || user.id}`, `Surplus: ${userIdParam || user.id}`);
-
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
       <RealtimeSubscriptions 
@@ -318,102 +302,80 @@ export default async function MissionaryDashboard(
           }
         ]}
       />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <header className="mb-8">
-          <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
-            {profileData.full_name || user.email}
-          </h1>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {profileData.role.replace(/_/g, " ")}
-              {profileData.role === "campus_director" && " (Director)"}
-            </p>
-            <span className="text-sm text-gray-400">•</span>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{churchName}</p>
-          </div>
-        </header>
-        {isSuperAdmin && (
-          <div className="mb-8">
-            <ProfileSelector 
-              missionaries={allMissionaries || []}
-              userId={typeof userIdParam === "string" ? userIdParam : undefined}
-            />
-          </div>
-        )}
+      
+      <div className="flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Sidebar isCampusDirector={profileData?.role === 'campus_director'} />
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="history">Request History</TabsTrigger>
-            {isCampusDirector && <TabsTrigger value="approvals">Approvals</TabsTrigger>}
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-8">
-            {/* Request creation buttons */}
-            <div className="flex gap-4">
-              <LeaveRequestModal 
-                missionaryId={userIdParam || user.id}
-                validateMissionary={isSuperAdmin}
-              />
-              <SurplusRequestModal 
-                surplusBalance={profileData.surplus_balance}
-                missionaryId={userIdParam}
-              />
+        <div className="flex-1">
+          <header className="mb-8">
+            <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+              {profileData.full_name || user.email}
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {profileData.role.replace(/_/g, " ")}
+                {profileData.role === "campus_director" && " (Director)"}
+              </p>
+              <span className="text-sm text-gray-400">•</span>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{churchName}</p>
             </div>
-            <DashboardCards
-              monthlyGoal={profileData.monthly_goal || 0}
-              currentDonations={currentDonations}
-              pendingRequests={pendingRequests}
-              surplusBalance={profileData.surplus_balance}
-            />
-            <RecentDonations
-              donations={combinedDonations.map(d => ({
-                id: d.id,
-                donor_name: d.donor_name,
-                amount: d.amount,
-                date: new Date(d.created_at).toLocaleDateString(),
-                notes: d.notes || ""
-              }))}
-              missionaryId={userIdParam || user.id}
-            />
-          </TabsContent>
+          </header>
 
-          <TabsContent value="history" className="space-y-8">
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold">Request History</h2>
-              <div className="space-y-4">
-                {([...leaveRequests, ...surplusRequests] as (LeaveRequest | SurplusRequest)[]).map((request) => (
-                  <div key={`${request.type}-${request.id}`} className="p-4 bg-background rounded-lg border">
-                    <div className="flex flex-col">
-                      <p className="font-medium">{request.type} Request</p>
-                      <p className="text-sm text-muted-foreground mt-1">{request.date}</p>
-                      <p className="text-sm mt-2">
-                        {request.type !== 'Surplus'
-                          ? `Dates: ${(request as LeaveRequest).startDate} - ${(request as LeaveRequest).endDate}. Reason: ${request.reason}`
-                          : `Requested Amount: ₱${(request as SurplusRequest).amount.toLocaleString()}. Reason: ${request.reason}`
-                        }
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Status: {request.status}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+          {currentTab === 'overview' && (
+            <div className="space-y-8">
+              {/* Overview content */}
+              <div className="flex gap-4">
+                <LeaveRequestModal 
+                  missionaryId={userIdParam || user.id}
+                  validateMissionary={isSuperAdmin}
+                />
+                <SurplusRequestModal 
+                  surplusBalance={profileData.surplus_balance}
+                  missionaryId={userIdParam}
+                />
               </div>
+              <DashboardCards
+                monthlyGoal={profileData.monthly_goal || 0}
+                currentDonations={currentDonations}
+                pendingRequests={pendingRequests}
+                surplusBalance={profileData.surplus_balance}
+              />
+              <RecentDonations
+                donations={combinedDonations.map(d => ({
+                  id: d.id,
+                  donor_name: d.donor_name,
+                  amount: d.amount,
+                  date: new Date(d.created_at).toLocaleDateString(),
+                  notes: d.notes || ""
+                }))}
+                missionaryId={userIdParam || user.id}
+              />
             </div>
-          </TabsContent>
+          )}
 
-          {isCampusDirector && (
-            <TabsContent value="approvals" className="space-y-8">
+          {currentTab === 'history' && (
+            <div className="space-y-8">
+              <h2 className="text-2xl font-semibold">Request History</h2>
+              <RequestHistoryTab
+                pendingLeaveRequests={leaveRequests.filter(r => r.status === 'pending')}
+                approvedLeaveRequests={leaveRequests.filter(r => r.status === 'approved')}
+                pendingSurplusRequests={surplusRequests.filter(r => r.status === 'pending')}
+                approvedSurplusRequests={surplusRequests.filter(r => r.status === 'approved')}
+              />
+            </div>
+          )}
+
+          {isCampusDirector && currentTab === 'approvals' && (
+            <div className="space-y-8">
               <ApprovalTab
                 pendingLeaveApprovals={pendingLeaveApprovals}
                 approvedLeaveApprovals={approvedLeaveApprovals}
                 pendingSurplusApprovals={pendingSurplusApprovals}
                 approvedSurplusApprovals={approvedSurplusApprovals}
               />
-            </TabsContent>
+            </div>
           )}
-        </Tabs>
+        </div>
       </div>
     </div>
   );

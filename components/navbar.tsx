@@ -1,62 +1,106 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { createClient } from '@/utils/supabase/client'
-import { usePathname } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { useEffect, useState } from 'react';
-import { 
-  PlusCircle, FilePlus, Download, Settings, Bell, LifeBuoy, BookOpen, Users,
-  Target, HandCoins, Clock, PiggyBank 
-} from 'lucide-react'
+import { useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import ProfileSelector from '@/components/ProfileSelector'
+import { Button } from '@/components/ui/button'
 
-function Navbar() {
+export default function Navbar() {
+  const router = useRouter();
   const pathname = usePathname();
+  const [selectedDashboard, setSelectedDashboard] = useState("");
+  const [userRole, setUserRole] = useState<string | null>(null);
   const supabase = createClient();
-  const [profile, setProfile] = useState(null);
+  const [missionaries, setMissionaries] = useState<any[]>([])
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
-  const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
-      window.location.href = '/login';
-    } else {
-      console.error('Error signing out:', error.message);
+  useEffect(() => {
+    const fetchUserAndData = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      const role = user?.user_metadata?.role || null
+      setUserRole(role)
+      
+      // Check both email and role for superadmin status
+      const superAdmin = user?.email === 'robneil@gmail.com' || role === 'superadmin'
+      setIsSuperAdmin(superAdmin)
+
+      if (superAdmin) {
+        const { data: missionariesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('role', 'superadmin')
+        setMissionaries(missionariesData || [])
+      }
+    }
+    fetchUserAndData()
+  }, [])
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setSelectedDashboard(value);
+    if (value) {
+      router.push(value);
     }
   };
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        setProfile(profileData);
-      }
-    };
-
-    fetchProfile();
-  }, [supabase]);
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+    // Force full page reload to clear any state
+    window.location.href = '/login'
+  }
 
   return (
-    <nav className="bg-background border-b">
-      <div className="max-w-7xl mx-auto px-4 py-2 flex justify-between items-center">
-        <Link href="/dashboard" className="text-lg font-semibold">
-          Dashboard
-        </Link>
-        <div className="space-x-4">
-          <Button variant="ghost" onClick={handleSignOut}>
-            Sign Out
-          </Button>
+    <nav className="w-full bg-gray-100 dark:bg-gray-900 shadow-lg p-4 flex items-center justify-between">
+      <div className="flex items-center gap-8">
+        <div className="text-xl font-bold text-gray-800 dark:text-gray-200">
+          Staff Portal
         </div>
+        
+        {/* Dashboard selector for superadmin */}
+        {isSuperAdmin && (
+          <div className="hidden md:block">
+            <select
+              value={selectedDashboard}
+              onChange={handleChange}
+              className="p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200"
+            >
+              <option value="">Select Dashboard</option>
+              <option value="/dashboard/missionary">Missionary Dashboard</option>
+              <option value="/dashboard/finance">Finance Dashboard</option>
+              <option value="/dashboard/campus-director">Campus Director Dashboard</option>
+              <option value="/dashboard/lead-pastor">Lead Pastor Dashboard</option>
+              <option value="/dashboard/superadmin">Superadmin Dashboard</option>
+              <option value="/dashboard/manual-remittance">Manual Remittance</option>
+              <option value="/dashboard/reports">Reports</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4">
+        {/* Profile selector for superadmin */}
+        {isSuperAdmin && pathname?.startsWith('/dashboard/missionary') && (
+          <div className="hidden md:block">
+            <ProfileSelector 
+              missionaries={missionaries}
+              userId={typeof window !== 'undefined' 
+                ? new URLSearchParams(window.location.search).get('userId') || undefined 
+                : undefined}
+            />
+          </div>
+        )}
+
+        {/* Sign Out button */}
+        <Button 
+          variant="ghost"
+          onClick={handleSignOut}
+          className="text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-800"
+        >
+          Sign Out
+        </Button>
       </div>
     </nav>
   );
-}
-
-export default Navbar;
+} 

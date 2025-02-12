@@ -10,13 +10,17 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+interface ProfileSelectorProps {
+  missionaries: any[]
+  userId?: string
+  className?: string
+}
+
 export default function ProfileSelector({
   missionaries,
   userId: initialUserId,
-}: {
-  missionaries: any[]
-  userId?: string
-}) {
+  className
+}: ProfileSelectorProps) {
   const router = useRouter()
   const [selected, setSelected] = useState(initialUserId || 'clear')
 
@@ -43,8 +47,8 @@ export default function ProfileSelector({
   }
 
   return (
-    <Select value={selected} onValueChange={handleValueChange}>
-      <SelectTrigger className="w-[300px]">
+    <Select value={selected} onValueChange={handleValueChange} className={className}>
+      <SelectTrigger className="w-[200px]">
         <SelectValue placeholder="Select missionary" />
       </SelectTrigger>
       <SelectContent>
