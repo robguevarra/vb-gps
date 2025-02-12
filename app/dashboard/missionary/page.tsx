@@ -11,6 +11,7 @@ import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 import { ApprovalTab } from '@/components/ApprovalTab';
 import { Sidebar } from '@/components/Sidebar'
 import { RequestHistoryTab } from '@/components/RequestHistoryTab'
+import { ManualRemittanceModal } from '@/components/ManualRemittanceModal'
 
 export const dynamic = 'force-dynamic';
 
@@ -275,7 +276,15 @@ export default async function MissionaryDashboard(
     })) || [];
   }
 
-  
+  const { data: donorsData } = await supabase
+    .from('donor_donations')
+    .select('donors(id, name)')
+    .eq('missionary_id', userIdParam || user.id)
+
+  const uniqueDonors = Array.from(new Set(
+    donorsData?.map(d => JSON.stringify(d.donors)) || []
+  )).map(str => JSON.parse(str))
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
       <RealtimeSubscriptions 
@@ -372,6 +381,15 @@ export default async function MissionaryDashboard(
                 approvedLeaveApprovals={approvedLeaveApprovals}
                 pendingSurplusApprovals={pendingSurplusApprovals}
                 approvedSurplusApprovals={approvedSurplusApprovals}
+              />
+            </div>
+          )}
+
+          {currentTab === 'manual-remittance' && (
+            <div className="space-y-8">
+              <ManualRemittanceModal 
+                missionaryId={userIdParam || user.id}
+                donors={uniqueDonors}
               />
             </div>
           )}
