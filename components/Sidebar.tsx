@@ -1,10 +1,10 @@
-'use client'
+"use client"
 
-import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { Menu } from 'lucide-react'
+import Link from "next/link"
+import { usePathname, useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Menu } from "lucide-react"
 
 interface SidebarProps {
   isCampusDirector?: boolean
@@ -13,13 +13,13 @@ interface SidebarProps {
 export function Sidebar({ isCampusDirector = false }: SidebarProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const currentTab = searchParams.get('tab') || 'overview'
+  const currentTab = searchParams.get("tab") || "overview"
 
   const navItems = [
-    { name: 'Overview', href: '?tab=overview' },
-    { name: 'Request History', href: '?tab=history' },
-    { name: 'Manual Remittance', href: '?tab=manual-remittance' },
-    ...(isCampusDirector ? [{ name: 'Approvals', href: '?tab=approvals' }] : [])
+    { name: "Overview", href: "?tab=overview" },
+    { name: "Request History", href: "?tab=history" },
+    { name: "Manual Remittance", href: "?tab=manual-remittance" },
+    ...(isCampusDirector ? [{ name: "Approvals", href: "?tab=approvals" }] : []),
   ]
 
   return (
@@ -35,10 +35,10 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
           <nav className="grid gap-2 text-lg font-medium">
             {navItems.map((item) => {
               const params = new URLSearchParams(searchParams.toString())
-              const newParams = new URLSearchParams(item.href.split('?')[1] || '')
+              const newParams = new URLSearchParams(item.href.split("?")[1] || "")
 
               params.forEach((value, key) => {
-                if (key !== 'tab' && !newParams.has(key)) {
+                if (key !== "tab" && !newParams.has(key)) {
                   newParams.set(key, value)
                 }
               })
@@ -48,9 +48,9 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
                   key={item.name}
                   href={`${pathname}?${newParams.toString()}`}
                   className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${
-                    currentTab === item.href.split('=')[1] 
-                      ? 'bg-muted text-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                    currentTab === item.href.split("=")[1]
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {item.name}
@@ -66,10 +66,10 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const params = new URLSearchParams(searchParams.toString())
-            const newParams = new URLSearchParams(item.href.split('?')[1] || '')
+            const newParams = new URLSearchParams(item.href.split("?")[1] || "")
 
             params.forEach((value, key) => {
-              if (key !== 'tab' && !newParams.has(key)) {
+              if (key !== "tab" && !newParams.has(key)) {
                 newParams.set(key, value)
               }
             })
@@ -79,9 +79,7 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
                 key={item.name}
                 href={`${pathname}?${newParams.toString()}`}
                 className={`px-4 py-2 rounded-lg ${
-                  currentTab === item.href.split('=')[1]
-                    ? 'bg-muted font-semibold'
-                    : 'hover:bg-accent'
+                  currentTab === item.href.split("=")[1] ? "bg-muted font-semibold" : "hover:bg-accent"
                 }`}
               >
                 {item.name}
@@ -92,4 +90,5 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
       </div>
     </>
   )
-} 
+}
+
