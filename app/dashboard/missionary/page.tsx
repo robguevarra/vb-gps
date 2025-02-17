@@ -11,7 +11,7 @@ import RealtimeSubscriptions from '@/components/RealtimeSubscriptions';
 import { ApprovalTab } from '@/components/ApprovalTab';
 import { Sidebar } from '@/components/Sidebar'
 import { RequestHistoryTab } from '@/components/RequestHistoryTab'
-import { ManualRemittanceModal } from '@/components/ManualRemittanceModal'
+import { ManualRemittanceWizard } from '@/components/ManualRemittanceWizard'
 
 export const dynamic = 'force-dynamic';
 
@@ -387,7 +387,7 @@ export default async function MissionaryDashboard(
 
           {currentTab === 'manual-remittance' && (
             <div className="space-y-8">
-              <ManualRemittanceModal 
+              <ManualRemittanceWizard 
                 missionaryId={userIdParam || user.id}
                 donors={uniqueDonors}
               />

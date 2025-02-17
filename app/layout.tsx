@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import '../styles/globals.css'
 import { cn } from '@/lib/utils'
 import Navbar from '@/components/navbar'
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -24,6 +25,7 @@ export default function RootLayout({
       )}>
         <Navbar />
         <main className="container mx-auto p-4">{children}</main>
+        <Toaster />
       </body>
     </html>
   )
