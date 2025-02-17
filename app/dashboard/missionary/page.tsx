@@ -12,6 +12,7 @@ import { ApprovalTab } from '@/components/ApprovalTab';
 import { Sidebar } from '@/components/Sidebar'
 import { RequestHistoryTab } from '@/components/RequestHistoryTab'
 import { ManualRemittanceWizard } from '@/components/ManualRemittanceWizard'
+import { ReportsTab } from '@/components/ReportsTab'
 
 export const dynamic = 'force-dynamic';
 
@@ -285,6 +286,36 @@ export default async function MissionaryDashboard(
     donorsData?.map(d => JSON.stringify(d.donors)) || []
   )).map(str => JSON.parse(str))
 
+  // ----------------------------------------------------------------------
+  // Fetch data for the Reports tab
+  // ----------------------------------------------------------------------
+  const THIRTEEN_MONTHS_AGO = new Date();
+  THIRTEEN_MONTHS_AGO.setMonth(THIRTEEN_MONTHS_AGO.getMonth() - 13);
+
+  // 1) Grab all donor donations within the last 13 months
+  const { data: last13MonthDonationsData, error: last13Error } = await supabase
+    .from('donor_donations')
+    .select('id, amount, date, donor_id, donors!inner(id, name)')
+    .eq('missionary_id', userIdParam || user.id)
+    .gte('date', THIRTEEN_MONTHS_AGO.toISOString())
+    .order('date', { ascending: true })  // oldest to newest
+
+  // 2) Grab all-time unique donors along with their total giving
+  //    This is just one example; you might do more advanced aggregation.
+  const { data: allTimeDonorsData, error: allTimeError } = await supabase
+    .from('donor_donations')
+    .select('donor_id, donors!inner(id, name), amount, date')
+    .eq('missionary_id', userIdParam || user.id)
+    .order('date', { ascending: true })
+
+  // You might handle errors or pass them through to the UI.
+  if (last13Error) {
+    console.error('Error fetching last 13 months data:', last13Error.message);
+  }
+  if (allTimeError) {
+    console.error('Error fetching all-time donors:', allTimeError.message);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
       <RealtimeSubscriptions 
@@ -390,6 +421,16 @@ export default async function MissionaryDashboard(
               <ManualRemittanceWizard 
                 missionaryId={userIdParam || user.id}
                 donors={uniqueDonors}
+              />
+            </div>
+          )}
+
+          {currentTab === 'reports' && (
+            <div className="space-y-8">
+              <ReportsTab
+                missionaryId={userIdParam || user.id}
+                last13MonthDonations={last13MonthDonationsData || []}
+                allTimeDonors={allTimeDonorsData || []}
               />
             </div>
           )}

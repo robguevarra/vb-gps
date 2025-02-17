@@ -20,6 +20,7 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
     { name: "Request History", href: "?tab=history" },
     { name: "Manual Remittance", href: "?tab=manual-remittance" },
     ...(isCampusDirector ? [{ name: "Approvals", href: "?tab=approvals" }] : []),
+    { name: "Reports", href: "?tab=reports" },
   ]
 
   return (
