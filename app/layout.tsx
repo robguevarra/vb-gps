@@ -18,13 +18,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <body className={cn(
-        'min-h-screen bg-background font-sans antialiased',
+        'bg-background font-sans antialiased min-h-screen',
         inter.className
       )}>
         <Navbar />
-        <main className="container mx-auto p-4">{children}</main>
+        <div className="pt-16 lg:pl-64">
+          <main className="max-w-screen-xl mx-auto w-full p-4">
+            {children}
+          </main>
+        </div>
         <Toaster />
       </body>
     </html>

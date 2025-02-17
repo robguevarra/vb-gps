@@ -62,9 +62,9 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
         </SheetContent>
       </Sheet>
 
-      {/* Desktop sidebar */}
-      <div className="hidden lg:block w-64">
-        <nav className="flex flex-col gap-1">
+      {/* Desktop: pinned sidebar */}
+      <div className="hidden lg:flex lg:flex-col lg:fixed lg:top-16 lg:left-0 lg:w-64 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:bg-white lg:dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
+        <nav className="flex flex-col gap-1 p-4">
           {navItems.map((item) => {
             const params = new URLSearchParams(searchParams.toString())
             const newParams = new URLSearchParams(item.href.split("?")[1] || "")
@@ -79,7 +79,7 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
               <Link
                 key={item.name}
                 href={`${pathname}?${newParams.toString()}`}
-                className={`px-4 py-2 rounded-lg ${
+                className={`block px-4 py-2 rounded-lg ${
                   currentTab === item.href.split("=")[1] ? "bg-muted font-semibold" : "hover:bg-accent"
                 }`}
               >

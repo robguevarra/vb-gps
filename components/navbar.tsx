@@ -52,7 +52,7 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="w-full bg-gray-100 dark:bg-gray-900 shadow-lg p-4 flex items-center justify-between">
+    <nav className="fixed top-0 left-0 right-0 h-16 z-40 bg-background shadow flex items-center px-4 py-2">
       <div className="flex items-center gap-8">
         <div className="text-xl font-bold text-gray-800 dark:text-gray-200">
           Staff Portal
@@ -72,8 +72,6 @@ export default function Navbar() {
               <option value="/dashboard/campus-director">Campus Director Dashboard</option>
               <option value="/dashboard/lead-pastor">Lead Pastor Dashboard</option>
               <option value="/dashboard/superadmin">Superadmin Dashboard</option>
-              <option value="/dashboard/manual-remittance">Manual Remittance</option>
-              <option value="/dashboard/reports">Reports</option>
             </select>
           </div>
         )}

@@ -55,8 +55,8 @@ export function ReportsTab({
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="h-[400px]">
-              <table className="w-full border-t border-gray-100 dark:border-gray-800 text-sm">
+            <ScrollArea className="h-[400px] w-full overflow-x-auto">
+              <table className="min-w-[1000px] border-t border-gray-100 dark:border-gray-800 text-sm">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="py-3 px-4 font-medium text-left">Partner</th>
@@ -102,9 +102,9 @@ export function ReportsTab({
               Summaries of each partner&apos;s total giving
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[400px]">
-              <table className="w-full border-t border-gray-100 dark:border-gray-800 text-sm">
+          <CardContent className="p-0 w-full overflow-x-auto">
+            <ScrollArea className="h-[400px] w-full">
+              <table className="min-w-[800px] border-t border-gray-100 dark:border-gray-800 text-sm">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left py-3 px-4 font-medium">Partner</th>
