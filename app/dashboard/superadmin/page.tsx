@@ -7,6 +7,7 @@ import SuperAdminSidebar from "@/components/SuperAdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import ChurchesList from "@/components/ChurchesList";
+import UsersList from "@/components/UsersList";
 
 export default async function SuperAdminDashboard({
   searchParams,
@@ -18,13 +19,12 @@ export default async function SuperAdminDashboard({
     typeof resolvedSearchParams.tab === "string"
       ? resolvedSearchParams.tab
       : "churches";
-  console.log("Current Tab:", currentTab);
-
+  
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  console.log("Authenticated User:", user);
+  
 
   if (!user) {
     redirect("/login");
@@ -44,9 +44,9 @@ export default async function SuperAdminDashboard({
   if (profileError) {
     console.error("Error fetching profile data:", profileError.message);
   }
-  console.log("Profile Data:", profileData);
 
-  // Fetch churches without embedded join.
+
+  // Fetch churches for the Churches tab.
   const { data: churches, error: churchesError } = await supabase
     .from("local_churches")
     .select("id, name, lead_pastor_id")
@@ -54,8 +54,9 @@ export default async function SuperAdminDashboard({
   if (churchesError) {
     console.error("Error fetching churches:", churchesError.message);
   }
-  console.log("Fetched Churches:", churches);
 
+
+  // Fetch lead pastors for the Churches modal.
   const { data: leadPastors, error: leadPastorsError } = await supabase
     .from("profiles")
     .select("id, full_name")
@@ -63,7 +64,36 @@ export default async function SuperAdminDashboard({
   if (leadPastorsError) {
     console.error("Error fetching lead pastors:", leadPastorsError.message);
   }
-  console.log("Fetched Lead Pastors:", leadPastors);
+
+
+  // Fetch profiles for users (excluding superadmins).
+  const { data: profilesData, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, full_name, role, local_church_id")
+    .neq("role", "superadmin")
+    .order("full_name", { ascending: true });
+  if (profilesError) {
+    console.error("Error fetching profiles:", profilesError.message);
+  }
+
+
+  // Fetch auth users (to get emails) using the admin API.
+  const { data: authUsersData, error: authUsersError } = await supabase.auth.admin.listUsers();
+  if (authUsersError) {
+    console.error("Error fetching auth users:", authUsersError.message);
+  }
+
+  // Merge profiles with auth users to include email.
+  let users = [];
+  if (profilesData && authUsersData && authUsersData.users) {
+    users = profilesData.map((profile) => {
+      const authUser = authUsersData.users.find((u) => u.id === profile.id);
+      return {
+        ...profile,
+        email: authUser ? authUser.email : "N/A",
+      };
+    });
+  }
 
   let content;
   if (currentTab === "churches") {
@@ -75,15 +105,10 @@ export default async function SuperAdminDashboard({
     );
   } else if (currentTab === "users") {
     content = (
-      <Card>
-        <CardHeader className="flex justify-between items-center">
-          <CardTitle>User Management</CardTitle>
-          <Button variant="outline">Add User</Button>
-        </CardHeader>
-        <CardContent>
-          <p>User management content here...</p>
-        </CardContent>
-      </Card>
+      <UsersList
+        users={users || []}
+        churches={churches || []}
+      />
     );
   } else if (currentTab === "reports") {
     content = (
