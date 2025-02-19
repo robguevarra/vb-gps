@@ -1,38 +1,41 @@
-"use client"
+// components/Sidebar.tsx
+"use client";
 
-import Link from "next/link"
-import { usePathname, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Menu } from "lucide-react"
-import { createClient } from '@/utils/supabase/client'
-import { useState, useEffect } from "react"
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Menu } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { useState, useEffect } from "react";
 
 interface SidebarProps {
-  isCampusDirector?: boolean
+  isCampusDirector?: boolean;
 }
 
 export function Sidebar({ isCampusDirector = false }: SidebarProps) {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const currentTab = searchParams.get("tab") || "overview"
-  const supabase = createClient()
-  const [userRole, setUserRole] = useState('')
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get("tab") || "overview";
+  const supabase = createClient();
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-        setUserRole(profile?.role || '')
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        setUserRole(profile?.role || "");
       }
-    }
-    fetchUser()
-  }, [])
+    };
+    fetchUser();
+  }, [supabase]);
 
   const navItems = [
     { name: "Overview", href: "?tab=overview" },
@@ -40,10 +43,11 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
     { name: "Manual Remittance", href: "?tab=manual-remittance" },
     ...(isCampusDirector ? [{ name: "Approvals", href: "?tab=approvals" }] : []),
     { name: "Reports", href: "?tab=reports" },
-  ]
+  ];
 
   return (
     <>
+      {/* Mobile: collapsible sidebar via a Sheet */}
       <Sheet>
         <SheetTrigger asChild className="lg:hidden">
           <Button variant="outline" size="icon" className="shrink-0">
@@ -51,18 +55,18 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
             <span className="sr-only">Toggle navigation menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex flex-col">
+        <SheetContent side="left" className="flex flex-col p-4">
           <nav className="grid gap-2 text-lg font-medium">
             {navItems.map((item) => {
-              const params = new URLSearchParams(searchParams.toString())
-              const newParams = new URLSearchParams(item.href.split("?")[1] || "")
-
+              const params = new URLSearchParams(searchParams.toString());
+              const newParams = new URLSearchParams(
+                item.href.split("?")[1] || ""
+              );
               params.forEach((value, key) => {
                 if (key !== "tab" && !newParams.has(key)) {
-                  newParams.set(key, value)
+                  newParams.set(key, value);
                 }
-              })
-
+              });
               return (
                 <Link
                   key={item.name}
@@ -75,58 +79,58 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
                 >
                   {item.name}
                 </Link>
-              )
+              );
             })}
           </nav>
         </SheetContent>
       </Sheet>
 
-      {/* Desktop: pinned sidebar */}
-      <div className="hidden lg:flex lg:flex-col lg:fixed lg:top-16 lg:left-0 lg:w-64 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:bg-white lg:dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
+      {/* Desktop: pinned/fixed sidebar on large screens */}
+      <div
+        className="
+          hidden
+          lg:flex
+          lg:flex-col
+          lg:fixed
+          lg:top-16
+          lg:left-0
+          lg:w-64
+          lg:h-[calc(100vh-4rem)]
+          lg:overflow-y-auto
+          lg:bg-white
+          lg:dark:bg-gray-900
+          border-r
+          border-gray-200
+          dark:border-gray-700
+        "
+      >
         <nav className="flex flex-col gap-1 p-4">
           {navItems.map((item) => {
-            const params = new URLSearchParams(searchParams.toString())
-            const newParams = new URLSearchParams(item.href.split("?")[1] || "")
-
+            const params = new URLSearchParams(searchParams.toString());
+            const newParams = new URLSearchParams(
+              item.href.split("?")[1] || ""
+            );
             params.forEach((value, key) => {
               if (key !== "tab" && !newParams.has(key)) {
-                newParams.set(key, value)
+                newParams.set(key, value);
               }
-            })
-
+            });
             return (
               <Link
                 key={item.name}
                 href={`${pathname}?${newParams.toString()}`}
                 className={`block px-4 py-2 rounded-lg ${
-                  currentTab === item.href.split("=")[1] ? "bg-muted font-semibold" : "hover:bg-accent"
+                  currentTab === item.href.split("=")[1]
+                    ? "bg-muted font-semibold"
+                    : "hover:bg-accent"
                 }`}
               >
                 {item.name}
               </Link>
-            )
+            );
           })}
         </nav>
       </div>
-
-      {userRole === 'superadmin' ? (
-        <select 
-          onChange={(e) => window.location.href = e.target.value}
-          className="dashboard-selector"
-        >
-          <option value="/dashboard">Super Admin</option>
-          <option value="/dashboard/finance">Finance</option>
-          <option value="/dashboard/lead-pastor">Lead Pastor</option>
-          <option value="/dashboard/missionary">Missionary</option>
-        </select>
-      ) : (
-        <div className="dashboard-title">
-          {userRole === 'finance_officer' && 'Finance Dashboard'}
-          {userRole === 'lead_pastor' && 'Lead Pastor Dashboard'}
-          {(userRole === 'missionary' || userRole === 'campus_director') && 'Missionary Dashboard'}
-        </div>
-      )}
     </>
-  )
+  );
 }
-

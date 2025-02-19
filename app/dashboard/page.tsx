@@ -1,35 +1,61 @@
-import { createClient } from '@/utils/supabase/server'
-import { redirect } from 'next/navigation'
-import DashboardCards from '@/components/DashboardCards'
-import RecentDonations from '@/components/RecentDonations'
-import ProgressBar from '@/components/progress-bar'
-import { Button } from '@/components/ui/button'
-import { PlusCircle, FilePlus } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { generateMockDonations, mockProfile } from '@/utils/mockData'
-import Link from 'next/link'
+// app/dashboard/page.tsx
+import { createClient } from '@/utils/supabase/server';
+import { redirect } from 'next/navigation';
+import DashboardCards from '@/components/DashboardCards';
+import RecentDonations from '@/components/RecentDonations';
+import ProgressBar from '@/components/progress-bar';
+import { Button } from '@/components/ui/button';
+import { PlusCircle, FilePlus } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { generateMockDonations, mockProfile } from '@/utils/mockData';
+import Link from 'next/link';
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export default async function SuperAdminDashboard() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login')
+    redirect('/login');
   }
 
-  // Rename this variable to avoid conflict
+  // Get profile data
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, full_name, local_church_id, monthly_goal, surplus_balance')
+    .eq('id', user.id)
+    .single();
+
+  // Role-based immediate redirection
+  if (profile?.role) {
+    switch (profile.role.toLowerCase()) {
+      case 'finance_officer':
+        redirect('/dashboard/finance');
+      case 'lead_pastor':
+        redirect('/dashboard/lead-pastor');
+      case 'missionary':
+      case 'campus_director':
+        redirect('/dashboard/missionary');
+      case 'superadmin':
+        break; // Superadmin stays here
+      default:
+        redirect('/login');
+    }
+  }
+
+  // For demo purposes (mock data)
   const userProfile = {
-    ...mockProfile, // Now referencing the imported mockProfile
-    role: 'missionary', 
-    local_church: 'Sample Local Church'
-  }
+    ...mockProfile,
+    role: 'superadmin',
+    local_church: 'All Churches'
+  };
 
-  const mockDonations = generateMockDonations(5)
-  const pendingRequests = 2 // Mock pending requests count
-  const currentDonations = mockDonations.reduce((acc, d) => acc + d.amount, 0)
+  const mockDonations = generateMockDonations(5);
+  const pendingRequests = 2; // Mock pending requests count
+  const currentDonations = mockDonations.reduce((acc, d) => acc + d.amount, 0);
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Include SuperAdminSidebar and Navbar via your layout if desired */}
       <div className="max-w-7xl mx-auto p-6 space-y-8">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
           <div>
@@ -41,7 +67,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           <div className="flex gap-4">
-            {/* Role-based quick actions */}
+            {/* Role-based quick actions (if needed for superadmin you may hide these) */}
             {userProfile.role === 'finance_officer' && (
               <Button asChild>
                 <Link href="/dashboard/finance/create-donation">
@@ -50,7 +76,6 @@ export default async function DashboardPage() {
                 </Link>
               </Button>
             )}
-            
             {(userProfile.role === 'missionary' || userProfile.role === 'campus_director') && (
               <Button variant="outline" asChild>
                 <Link href="/dashboard/requests/new">
@@ -71,7 +96,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Track donations, manage requests, and view surplus
+                  Track donations, manage requests, and view surplus.
                 </p>
               </CardContent>
             </Link>
@@ -84,20 +109,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Record offline donations and manage financial records
-                </p>
-              </CardContent>
-            </Link>
-          </Card>
-
-          <Card className="hover:bg-accent transition-colors">
-            <Link href="/dashboard/campus-director">
-              <CardHeader>
-                <CardTitle className="text-lg">Campus Director</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Approve requests and oversee missionaries
+                  Record offline donations and manage financial records.
                 </p>
               </CardContent>
             </Link>
@@ -110,7 +122,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Final approvals and church oversight
+                  Final approvals and church oversight.
                 </p>
               </CardContent>
             </Link>
@@ -123,7 +135,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  System configuration and reporting
+                  System configuration and reporting.
                 </p>
               </CardContent>
             </Link>
@@ -149,5 +161,5 @@ export default async function DashboardPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

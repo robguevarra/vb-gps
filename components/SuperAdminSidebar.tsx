@@ -23,7 +23,6 @@ export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
 
   return (
     <>
-      {/* Mobile: collapsible sidebar via a Sheet */}
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="lg:hidden">
@@ -31,8 +30,8 @@ export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
             <span className="sr-only">Toggle navigation menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex flex-col">
-          <nav className="grid gap-2 text-lg font-medium p-4">
+        <SheetContent side="left" className="flex flex-col p-4">
+          <nav className="grid gap-2 text-lg font-medium">
             {navItems.map((item) => (
               <Link
                 key={item.name}
@@ -50,7 +49,6 @@ export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
         </SheetContent>
       </Sheet>
 
-      {/* Desktop: pinned sidebar */}
       <div className="hidden lg:flex lg:flex-col lg:fixed lg:top-16 lg:left-0 lg:w-64 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:bg-white lg:dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
         <nav className="flex flex-col gap-1 p-4">
           {navItems.map((item) => (

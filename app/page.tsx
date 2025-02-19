@@ -11,7 +11,7 @@ export default async function HomePage() {
 
   return (
     <div>
-      <h1>Welcome to the Missionary Staff Portal</h1>
+      <h1>Welcome to the Missionary Staff Portal KEKEKE</h1>
       {/* Add more content or components here as needed */}
     </div>
   );
