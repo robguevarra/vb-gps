@@ -47,8 +47,12 @@ export function PartnersTable({
   }, [donations, missionaries]);
 
   // ---------------- New states for date-range & missionary filters ----------------
-  const [fromDate, setFromDate] = useState<string>("");
-  const [toDate, setToDate] = useState<string>("");
+  const [fromDate, setFromDate] = useState<string>(
+    new Date(2010, 0, 1).toISOString().split('T')[0] // Jan 1, 2010
+  );
+  const [toDate, setToDate] = useState<string>(
+    new Date().toISOString().split('T')[0] // Today
+  );
   const [selectedMissionary, setSelectedMissionary] = useState<string>("all");
 
   // ---------------- Filter donations by range & missionary ----------------
@@ -70,33 +74,37 @@ export function PartnersTable({
     });
   }, [donations, fromDate, toDate, selectedMissionary]);
 
-  // ---------------- Convert filtered donations -> partner rows ----------------
-  const partnerRows = useMemo<PartnerRow[]>(() => {
-    // Build a map donor_id => total
-    const partnerMap: Record<number, { name: string; email: string; phone: string; total: number }> = {};
+  // Inside the filteredDonations useEffect:
+  useEffect(() => {
+    console.log('Donations with donor info:', 
+      filteredDonations.filter(d => d.donor_id && d.donors).length,
+      '/',
+      filteredDonations.length
+    );
+  }, [filteredDonations]);
 
+  // ---------------- Convert filtered donations -> partner rows ----------------
+  const partnerRows = useMemo(() => {
+    const map: Record<number, PartnerRow> = {};
+    
     filteredDonations.forEach((don) => {
+      // Add null check for donor relationship
+      if (!don.donor_id || !don.donors) return;
+      
       const donorId = don.donor_id;
-      if (!donorId || !don.donors) return; // skip if missing donor info
-      if (!partnerMap[donorId]) {
-        partnerMap[donorId] = {
-          name: don.donors.name,
-          email: don.donors.email,
-          phone: don.donors.phone,
-          total: 0,
+      if (!map[donorId]) {
+        map[donorId] = {
+          id: donorId,
+          name: don.donors.name || 'Unknown',
+          email: don.donors.email || '',
+          phone: don.donors.phone || '',
+          totalGiven: 0,
         };
       }
-      partnerMap[donorId].total += don.amount;
+      map[donorId].totalGiven += don.amount;
     });
-
-    // Convert map to array
-    return Object.entries(partnerMap).map(([idStr, info]) => ({
-      id: Number(idStr),
-      name: info.name,
-      email: info.email,
-      phone: info.phone,
-      totalGiven: info.total,
-    }));
+    
+    return Object.values(map);
   }, [filteredDonations]);
 
   // ---------------- Final filter: partnerFilter (Name/Email/Phone) ----------------

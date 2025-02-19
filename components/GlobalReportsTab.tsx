@@ -160,26 +160,36 @@ export default function GlobalReportsTab() {
       if (churchesError) throw churchesError;
 
       // 3) Donations (last 13 months)
-      const thirteenMonthsAgo = new Date();
-      thirteenMonthsAgo.setMonth(thirteenMonthsAgo.getMonth() - 13);
-      const { data: donationsData, error: donationsError } = await supabase
-        .from("donor_donations")
-        .select("id, missionary_id, donor_id, date, amount, status, source, notes, donors(id, name, email, phone)")
-        .gte("date", thirteenMonthsAgo.toISOString());
-      if (donationsError) throw donationsError;
+      let allDonations: DonorDonation[] = [];
+      let from = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("donor_donations")
+          .select("id, missionary_id, donor_id, date, amount, status, source, notes, donors(id, name, email, phone)")
+          .order("id", { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (!data?.length) break;
+
+        allDonations = [...allDonations, ...data];
+        from += pageSize;
+      }
+
+      setDonations(allDonations);
 
       // Store raw data
       const mData = missionaryData || [];
       const cData = churchesData || [];
-      const dData = donationsData || [];
 
       setMissionaries(mData);
       setChurches(cData);
-      setDonations(dData);
 
       // Build a donationMap => missionary_id => { 'YYYY-MM' => sum }
       const dMap: DonationMap = {};
-      dData.forEach((don) => {
+      allDonations.forEach((don) => {
         if (!dMap[don.missionary_id]) {
           dMap[don.missionary_id] = {};
         }
@@ -204,7 +214,7 @@ export default function GlobalReportsTab() {
 
       // Build a "partners" array from donor info
       const partnerMap: Record<number, { name: string; email: string; phone: string; total: number }> = {};
-      dData.forEach((dd) => {
+      allDonations.forEach((dd) => {
         if (dd.donor_id && dd.donors) {
           const donorId = dd.donor_id;
           if (!partnerMap[donorId]) {
@@ -247,6 +257,8 @@ export default function GlobalReportsTab() {
       }
       keyArr.reverse();
       setThirteenMonthKeys(keyArr);
+
+      console.log("Raw donations data:", allDonations);
 
       setIsLoading(false);
     } catch (err: any) {
