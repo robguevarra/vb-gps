@@ -99,7 +99,7 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
 
       toast({
         title: "✅ Staff Member Created",
-        description: "New staff account has been successfully created",
+        description: "New staff account created with default password: hgmd2024",
       });
       onOpenChange(false);
       setTimeout(() => {

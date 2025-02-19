@@ -55,6 +55,9 @@ export default function EditUserModal({
     church: '',
     monthlyGoal: ''
   });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [emailConfirmation, setEmailConfirmation] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const roleOptions = ["missionary", "campus_director", "lead_pastor", "finance_officer"];
 
@@ -233,6 +236,52 @@ export default function EditUserModal({
     }, 2000);
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm("Are you absolutely sure you want to delete this user? This action cannot be undone.")) return;
+    
+    // Final confirmation - user must type email
+    if (emailConfirmation !== user.email) {
+      toast({
+        title: "Deletion aborted",
+        description: "Email confirmation does not match",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      const response = await fetch('/api/users/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) throw new Error(result.error || "Failed to delete user");
+
+      toast({
+        title: "✅ User Deleted",
+        description: "User account and profile have been permanently removed",
+      });
+      onOpenChange(false);
+      window.location.reload();
+
+    } catch (err: any) {
+      console.error("Deletion error:", err);
+      toast({
+        title: "Deletion failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmOpen(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -307,16 +356,67 @@ export default function EditUserModal({
               {errors.monthlyGoal && <p className="text-red-600 text-sm">{errors.monthlyGoal}</p>}
             </div>
           )}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cancel
+          <div className="flex justify-between items-center">
+            <Button 
+              variant="destructive" 
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+              Delete User
             </Button>
-            <Button onClick={handleSave} disabled={loading}>
-              {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
-              Save
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={loading}>
+                {loading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                Save
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Delete confirmation modal */}
+        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm User Deletion</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-red-600">
+                Warning: This will permanently delete the user account and all associated data.
+              </p>
+              <div>
+                <Label>
+                  Type the user's email to confirm:{" "}
+                  <span className="font-mono">{user.email}</span>
+                </Label>
+                <Input
+                  value={emailConfirmation}
+                  onChange={(e) => setEmailConfirmation(e.target.value)}
+                  placeholder="Enter email to confirm"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDelete}
+                  disabled={emailConfirmation !== user.email || isDeleting}
+                >
+                  {isDeleting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
+                  Permanently Delete
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setDeleteConfirmOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

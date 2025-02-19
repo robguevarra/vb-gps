@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu } from "lucide-react"
+import { createClient } from '@/utils/supabase/client'
+import { useState, useEffect } from "react"
 
 interface SidebarProps {
   isCampusDirector?: boolean
@@ -14,6 +16,23 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const currentTab = searchParams.get("tab") || "overview"
+  const supabase = createClient()
+  const [userRole, setUserRole] = useState('')
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        setUserRole(profile?.role || '')
+      }
+    }
+    fetchUser()
+  }, [])
 
   const navItems = [
     { name: "Overview", href: "?tab=overview" },
@@ -89,6 +108,24 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
           })}
         </nav>
       </div>
+
+      {userRole === 'superadmin' ? (
+        <select 
+          onChange={(e) => window.location.href = e.target.value}
+          className="dashboard-selector"
+        >
+          <option value="/dashboard">Super Admin</option>
+          <option value="/dashboard/finance">Finance</option>
+          <option value="/dashboard/lead-pastor">Lead Pastor</option>
+          <option value="/dashboard/missionary">Missionary</option>
+        </select>
+      ) : (
+        <div className="dashboard-title">
+          {userRole === 'finance_officer' && 'Finance Dashboard'}
+          {userRole === 'lead_pastor' && 'Lead Pastor Dashboard'}
+          {(userRole === 'missionary' || userRole === 'campus_director') && 'Missionary Dashboard'}
+        </div>
+      )}
     </>
   )
 }

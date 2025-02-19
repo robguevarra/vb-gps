@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     // Create auth user
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
-      password: Math.random().toString(36).slice(-8),
+      password: "hgmd2024",
       email_confirm: true
     });
 
