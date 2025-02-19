@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ReportsTabs } from "@/components/reports/ReportsTabs";
+import { TopMetricsCards } from "@/components/reports/TopMetricsCards";
+import { MissionariesTable } from "@/components/reports/MissionariesTable";
+import { ChurchesTable } from "@/components/reports/ChurchesTable";
+import { PartnersTable } from "@/components/reports/PartnersTable";
 
 //
 // --------------------------- TYPES ---------------------------
@@ -116,6 +121,9 @@ export default function GlobalReportsTab() {
 
   // Add these new states:
   const [thirteenMonthKeys, setThirteenMonthKeys] = useState<string[]>([]);
+
+  // Add a new piece of state for the sub-tab:
+  const [subTab, setSubTab] = useState<"missionaries" | "churches" | "partners">("missionaries");
 
   // On mount, load data
   useEffect(() => {
@@ -409,358 +417,6 @@ export default function GlobalReportsTab() {
   //
   // -------------- Rendering the UI -----------
   //
-  function renderTopCards() {
-    return (
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm">Total Donations (This Month)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              ${formatNumber(totalDonationsThisMonth)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm">Current Total %</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {formatNumber(currentPercentAllMissionaries)}%
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm">Last Month's Total %</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {formatNumber(lastMonthPercentAllMissionaries)}%
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm">Below 80% Last Month</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {countBelow80LastMonth}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // ---- All Missionaries Table ----
-  const filteredMissionaries = missionaries.filter((m) =>
-    m.full_name.toLowerCase().includes(missionaryFilter.toLowerCase())
-  );
-  const totalMissionaryPages = Math.ceil(filteredMissionaries.length / pageSize);
-  const startM = (missionaryPage - 1) * pageSize;
-  const endM = startM + pageSize;
-  const pagedMissionaries = filteredMissionaries.slice(startM, endM);
-
-  function renderMissionariesTable() {
-    return (
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">All Missionaries</h2>
-        <div className="flex items-center gap-2 mb-2">
-          <input
-            type="text"
-            className="border px-2 py-1 text-sm rounded"
-            placeholder="Filter by name..."
-            value={missionaryFilter}
-            onChange={(e) => {
-              setMissionaryFilter(e.target.value);
-              setMissionaryPage(1);
-            }}
-          />
-        </div>
-
-        <div className="overflow-x-auto border rounded-md">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-2 border-b">Name</th>
-                <th className="px-4 py-2 border-b">Role</th>
-                <th className="px-4 py-2 border-b">Monthly Goal</th>
-                <th className="px-4 py-2 border-b">Current %</th>
-                <th className="px-4 py-2 border-b">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedMissionaries.map((m) => {
-                const ratio = getCurrentMonthRatio(m);
-                return (
-                  <tr key={m.id}>
-                    <td className="px-4 py-2 border-b">{m.full_name}</td>
-                    <td className="px-4 py-2 border-b">{m.role}</td>
-                    <td className="px-4 py-2 border-b">${m.monthly_goal}</td>
-                    <td className="px-4 py-2 border-b">{formatNumber(ratio)}%</td>
-                    <td className="px-4 py-2 border-b">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openMissionaryModal(m)}
-                        >
-                          Last 6 Months
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openFullMissionaryReport(m)}
-                        >
-                          Full Report
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {pagedMissionaries.length === 0 && (
-                <tr>
-                  <td className="px-4 py-2 border-b" colSpan={5}>
-                    No results found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={missionaryPage <= 1}
-            onClick={() => setMissionaryPage(missionaryPage - 1)}
-          >
-            Prev
-          </Button>
-          <span className="text-sm">
-            Page {missionaryPage} of {Math.max(totalMissionaryPages, 1)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={missionaryPage >= totalMissionaryPages}
-            onClick={() => setMissionaryPage(missionaryPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- All Churches Table ----
-  const filteredChurches = churches.filter((ch) =>
-    ch.name.toLowerCase().includes(churchFilter.toLowerCase())
-  );
-  const totalChurchPages = Math.ceil(filteredChurches.length / pageSize);
-  const startC = (churchPage - 1) * pageSize;
-  const endC = startC + pageSize;
-  const pagedChurches = filteredChurches.slice(startC, endC);
-
-  function renderChurchesTable() {
-    return (
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">All Churches</h2>
-
-        <div className="flex items-center gap-2 mb-2">
-          <input
-            type="text"
-            className="border px-2 py-1 text-sm rounded"
-            placeholder="Filter by church name..."
-            value={churchFilter}
-            onChange={(e) => {
-              setChurchFilter(e.target.value);
-              setChurchPage(1);
-            }}
-          />
-        </div>
-
-        <div className="overflow-x-auto border rounded-md">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-2 border-b">Church</th>
-                <th className="px-4 py-2 border-b">Monthly Goal (Sum)</th>
-                <th className="px-4 py-2 border-b">Current %</th>
-                <th className="px-4 py-2 border-b">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedChurches.map((ch) => {
-                const now = new Date();
-                const y = now.getFullYear();
-                const mo = now.getMonth();
-                const donation = getDonationForChurch(ch.id, y, mo);
-                const goal = getChurchMonthlyGoal(ch.id);
-                const ratio = goal > 0 ? (donation / goal) * 100 : 0;
-                return (
-                  <tr key={ch.id}>
-                    <td className="px-4 py-2 border-b">{ch.name}</td>
-                    <td className="px-4 py-2 border-b">
-                      ${formatNumber(goal)}
-                    </td>
-                    <td className="px-4 py-2 border-b">
-                      {formatNumber(ratio)}%
-                    </td>
-                    <td className="px-4 py-2 border-b">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openChurchModal(ch)}
-                      >
-                        View Details
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {pagedChurches.length === 0 && (
-                <tr>
-                  <td className="px-4 py-2 border-b" colSpan={4}>
-                    No results found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={churchPage <= 1}
-            onClick={() => setChurchPage(churchPage - 1)}
-          >
-            Prev
-          </Button>
-          <span className="text-sm">
-            Page {churchPage} of {Math.max(totalChurchPages, 1)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={churchPage >= totalChurchPages}
-            onClick={() => setChurchPage(churchPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- All Partners Table ----
-  const filteredPartners = partners.filter((p) => {
-    const txt = (p.name + p.email + p.phone).toLowerCase();
-    return txt.includes(partnerFilter.toLowerCase());
-  });
-  const totalPartnerPages = Math.ceil(filteredPartners.length / pageSize);
-  const startP = (partnerPage - 1) * pageSize;
-  const endP = startP + pageSize;
-  const pagedPartners = filteredPartners.slice(startP, endP);
-
-  function renderPartnersTable() {
-    return (
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">All Partners</h2>
-        <div className="flex items-center gap-2 mb-2">
-          <input
-            type="text"
-            className="border px-2 py-1 text-sm rounded"
-            placeholder="Filter by name or email..."
-            value={partnerFilter}
-            onChange={(e) => {
-              setPartnerFilter(e.target.value);
-              setPartnerPage(1);
-            }}
-          />
-        </div>
-
-        <div className="overflow-x-auto border rounded-md">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-2 border-b">Name</th>
-                <th className="px-4 py-2 border-b">Email</th>
-                <th className="px-4 py-2 border-b">Phone</th>
-                <th className="px-4 py-2 border-b">Total Given</th>
-                <th className="px-4 py-2 border-b">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedPartners.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-4 py-2 border-b">{p.name}</td>
-                  <td className="px-4 py-2 border-b">{p.email}</td>
-                  <td className="px-4 py-2 border-b">{p.phone}</td>
-                  <td className="px-4 py-2 border-b">
-                    ${formatNumber(p.totalGiven)}
-                  </td>
-                  <td className="px-4 py-2 border-b">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openPartnerModal(p)}
-                    >
-                      View Details
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-
-              {pagedPartners.length === 0 && (
-                <tr>
-                  <td className="px-4 py-2 border-b" colSpan={5}>
-                    No matching partners.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={partnerPage <= 1}
-            onClick={() => setPartnerPage(partnerPage - 1)}
-          >
-            Prev
-          </Button>
-          <span className="text-sm">
-            Page {partnerPage} of {Math.max(totalPartnerPages, 1)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={partnerPage >= totalPartnerPages}
-            onClick={() => setPartnerPage(partnerPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  //
-  // -------------- Main render ---------------
-  //
   return (
     <Card className="border shadow-sm">
       <CardHeader>
@@ -779,15 +435,64 @@ export default function GlobalReportsTab() {
 
         {!isLoading && !error && (
           <>
-            {renderTopCards()}
+            {/* Keep the top cards, but now it's just one component */}
+            <TopMetricsCards
+              totalDonationsThisMonth={totalDonationsThisMonth}
+              currentPercentAllMissionaries={currentPercentAllMissionaries}
+              lastMonthPercentAllMissionaries={lastMonthPercentAllMissionaries}
+              countBelow80LastMonth={countBelow80LastMonth}
+              formatNumber={formatNumber}
+            />
 
             <Separator className="my-6" />
 
-            {renderMissionariesTable()}
+            {/* Simple sub-tab UI */}
+            <ReportsTabs currentTab={subTab} setCurrentTab={setSubTab} />
 
-            {renderChurchesTable()}
+            {/* Render the sub-component for whichever subTab is active */}
+            {subTab === "missionaries" && (
+              <MissionariesTable
+                missionaries={missionaries}
+                missionaryFilter={missionaryFilter}
+                setMissionaryFilter={setMissionaryFilter}
+                missionaryPage={missionaryPage}
+                setMissionaryPage={setMissionaryPage}
+                pageSize={pageSize}
+                openMissionaryModal={openMissionaryModal}
+                openFullMissionaryReport={openFullMissionaryReport}
+                getCurrentMonthRatio={getCurrentMonthRatio}
+                formatNumber={formatNumber}
+              />
+            )}
 
-            {renderPartnersTable()}
+            {subTab === "churches" && (
+              <ChurchesTable
+                churches={churches}
+                missionaries={missionaries}
+                churchFilter={churchFilter}
+                setChurchFilter={setChurchFilter}
+                churchPage={churchPage}
+                setChurchPage={setChurchPage}
+                pageSize={pageSize}
+                openChurchModal={openChurchModal}
+                getDonationForChurch={getDonationForChurch}
+                getChurchMonthlyGoal={getChurchMonthlyGoal}
+                formatNumber={formatNumber}
+              />
+            )}
+
+            {subTab === "partners" && (
+              <PartnersTable
+                partners={partners}
+                partnerFilter={partnerFilter}
+                setPartnerFilter={setPartnerFilter}
+                partnerPage={partnerPage}
+                setPartnerPage={setPartnerPage}
+                pageSize={pageSize}
+                openPartnerModal={openPartnerModal}
+                formatNumber={formatNumber}
+              />
+            )}
           </>
         )}
       </CardContent>
@@ -817,9 +522,9 @@ export default function GlobalReportsTab() {
         donations={donations}
         donationMap={donationMap}
         thirteenMonthKeys={thirteenMonthKeys}
+        formatNumber={formatNumber}
         partnerPage={partnerPage}
         setPartnerPage={setPartnerPage}
-        formatNumber={formatNumber}
       />
 
       <PartnerDetailsModal
