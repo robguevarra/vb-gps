@@ -5,9 +5,11 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import SuperAdminSidebar from "@/components/SuperAdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import ChurchesList from "@/components/ChurchesList";
 import UsersList from "@/components/UsersList";
+
+// Import our new reports tab component
+import GlobalReportsTab from "@/components/GlobalReportsTab";
 
 export default async function SuperAdminDashboard({
   searchParams,
@@ -25,7 +27,6 @@ export default async function SuperAdminDashboard({
     data: { user },
   } = await supabase.auth.getUser();
   
-
   if (!user) {
     redirect("/login");
   }
@@ -36,6 +37,7 @@ export default async function SuperAdminDashboard({
     redirect("/login");
   }
 
+  // Fetch current user's profile
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
     .select("*")
@@ -45,8 +47,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profile data:", profileError.message);
   }
 
-
-  // Fetch churches for the Churches tab.
+  // Fetch churches
   const { data: churches, error: churchesError } = await supabase
     .from("local_churches")
     .select("id, name, lead_pastor_id")
@@ -55,8 +56,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching churches:", churchesError.message);
   }
 
-
-  // Fetch lead pastors for the Churches modal.
+  // Fetch lead pastors
   const { data: leadPastors, error: leadPastorsError } = await supabase
     .from("profiles")
     .select("id, full_name")
@@ -65,8 +65,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching lead pastors:", leadPastorsError.message);
   }
 
-
-  // Fetch profiles for users (excluding superadmins).
+  // Fetch profiles for users (excluding superadmins)
   const { data: profilesData, error: profilesError } = await supabase
     .from("profiles")
     .select("id, full_name, role, local_church_id")
@@ -76,14 +75,14 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profiles:", profilesError.message);
   }
 
-
-  // Fetch auth users (to get emails) using the admin API.
-  const { data: authUsersData, error: authUsersError } = await supabase.auth.admin.listUsers();
+  // Fetch auth users to get emails
+  const { data: authUsersData, error: authUsersError } =
+    await supabase.auth.admin.listUsers();
   if (authUsersError) {
     console.error("Error fetching auth users:", authUsersError.message);
   }
 
-  // Merge profiles with auth users to include email.
+  // Merge profiles with auth users (for email)
   let users = [];
   if (profilesData && authUsersData && authUsersData.users) {
     users = profilesData.map((profile) => {
@@ -91,6 +90,9 @@ export default async function SuperAdminDashboard({
       return {
         ...profile,
         email: authUser ? authUser.email : "N/A",
+        user_metadata: {
+          email: authUser ? authUser.email : "N/A",
+        },
       };
     });
   }
@@ -111,16 +113,7 @@ export default async function SuperAdminDashboard({
       />
     );
   } else if (currentTab === "reports") {
-    content = (
-      <Card>
-        <CardHeader>
-          <CardTitle>Global Donation Report</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>Reports content here...</p>
-        </CardContent>
-      </Card>
-    );
+    content = <GlobalReportsTab />;
   } else if (currentTab === "settings") {
     content = (
       <Card>

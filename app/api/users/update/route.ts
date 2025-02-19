@@ -24,9 +24,8 @@ export async function POST(request: Request) {
 
     
     // Directly attempt to update the user without a prior lookup.
-    console.log("Directly updating user with ID:", id, "to new email:", email);
+
     const { data, error } = await supabase.auth.admin.updateUserById(id, { email });
-    console.log("Update response:", { data, error });
     
     if (error) {
       return NextResponse.json(

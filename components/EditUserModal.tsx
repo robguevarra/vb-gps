@@ -55,7 +55,7 @@ export default function EditUserModal({
       return;
     }
 
-    console.log("Saving update for user:", user.id, { fullName, email, role, churchId });
+
     setLoading(true);
     setError("");
 
@@ -83,7 +83,6 @@ export default function EditUserModal({
       .select("*")
       .eq("id", user.id);
 
-    console.log("Current profile fetch result:", { currentProfile, profileFetchError });
     if (profileFetchError) {
       console.error("Error fetching current profile:", profileFetchError);
       toast({ title: "Profile fetch failed", description: profileFetchError.message, variant: "destructive" });
@@ -106,8 +105,6 @@ export default function EditUserModal({
       local_church_id: churchId === "none" ? null : parseInt(churchId),
     };
 
-    console.log("Update data for profile:", updateData);
-    console.log("Attempting to update profile for user id:", user.id);
 
     // Attempt to update the profiles table and request returning data
     const { data, error: updateError } = await supabase
@@ -116,7 +113,6 @@ export default function EditUserModal({
       .eq("id", user.id)
       .select("*");
 
-    console.log("Supabase update result:", { data, updateError });
 
     // If no error but no data returned, do a fallback select.
     if (!updateError && (!data || data.length === 0)) {
@@ -126,7 +122,6 @@ export default function EditUserModal({
         .select("*")
         .eq("id", user.id)
         .single();
-      console.log("Fallback select result:", { fallbackData, fallbackError });
       if (fallbackError) {
         console.error("Fallback select error:", fallbackError);
         toast({
@@ -141,7 +136,7 @@ export default function EditUserModal({
       // If fallback data indicates the change took place, consider it a success.
       if (fallbackData && fallbackData.full_name === fullName) {
         toast({ title: "Profile updated successfully!" });
-        console.log("Fallback update successful for user:", user.id, fallbackData);
+
       } else {
         console.error("Fallback select did not show the updated data. Data:", fallbackData);
         toast({
@@ -165,7 +160,7 @@ export default function EditUserModal({
       return;
     } else {
       toast({ title: "Profile updated successfully!" });
-      console.log("Update successful for user:", user.id, data);
+      
     }
 
     setLoading(false);
