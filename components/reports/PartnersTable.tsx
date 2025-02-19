@@ -1,27 +1,37 @@
-import React from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { DonorDonation, Profile } from "@/types"; // or adjust your path
 
 interface PartnerRow {
   id: number;
   name: string;
   email: string;
   phone: string;
-  totalGiven: number;
+  totalGiven: number; // total in the current filter
 }
 
 interface PartnersTableProps {
-  partners: PartnerRow[];
+  // Remove the old 'partners' array
+  donations: DonorDonation[]; 
+  missionaries: Profile[];
+
+  // Filtering & pagination
   partnerFilter: string;
   setPartnerFilter: (val: string) => void;
   partnerPage: number;
   setPartnerPage: (page: number) => void;
   pageSize: number;
+
+  // We still need a callback to view partner details
   openPartnerModal: (p: PartnerRow) => void;
+
+  // For formatting currency
   formatNumber: (num: number) => string;
 }
 
 export function PartnersTable({
-  partners,
+  donations,
+  missionaries,
   partnerFilter,
   setPartnerFilter,
   partnerPage,
@@ -30,24 +40,145 @@ export function PartnersTable({
   openPartnerModal,
   formatNumber,
 }: PartnersTableProps) {
-  // Filter + paginate
-  const filtered = partners.filter((p) => {
-    const txt = (p.name + p.email + p.phone).toLowerCase();
-    return txt.includes(partnerFilter.toLowerCase());
-  });
-  const totalPages = Math.ceil(filtered.length / pageSize);
+  // Add an effect to log the incoming data
+  useEffect(() => {
+    console.log("[PartnersTable] donations:", donations);
+    console.log("[PartnersTable] missionaries:", missionaries);
+  }, [donations, missionaries]);
+
+  // ---------------- New states for date-range & missionary filters ----------------
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+  const [selectedMissionary, setSelectedMissionary] = useState<string>("all");
+
+  // ---------------- Filter donations by range & missionary ----------------
+  const filteredDonations = useMemo(() => {
+    // Convert fromDate/toDate strings to actual Dates (or undefined)
+    const from = fromDate ? new Date(fromDate) : undefined;
+    const to = toDate ? new Date(toDate) : undefined;
+
+    return donations.filter((don) => {
+      // 1) Check missionary filter
+      if (selectedMissionary !== "all" && don.missionary_id !== selectedMissionary) {
+        return false;
+      }
+      // 2) Check date range
+      const dDate = new Date(don.date);
+      if (from && dDate < from) return false;
+      if (to && dDate > to) return false;
+      return true;
+    });
+  }, [donations, fromDate, toDate, selectedMissionary]);
+
+  // ---------------- Convert filtered donations -> partner rows ----------------
+  const partnerRows = useMemo<PartnerRow[]>(() => {
+    // Build a map donor_id => total
+    const partnerMap: Record<number, { name: string; email: string; phone: string; total: number }> = {};
+
+    filteredDonations.forEach((don) => {
+      const donorId = don.donor_id;
+      if (!donorId || !don.donors) return; // skip if missing donor info
+      if (!partnerMap[donorId]) {
+        partnerMap[donorId] = {
+          name: don.donors.name,
+          email: don.donors.email,
+          phone: don.donors.phone,
+          total: 0,
+        };
+      }
+      partnerMap[donorId].total += don.amount;
+    });
+
+    // Convert map to array
+    return Object.entries(partnerMap).map(([idStr, info]) => ({
+      id: Number(idStr),
+      name: info.name,
+      email: info.email,
+      phone: info.phone,
+      totalGiven: info.total,
+    }));
+  }, [filteredDonations]);
+
+  // ---------------- Final filter: partnerFilter (Name/Email/Phone) ----------------
+  const finalPartners = useMemo(() => {
+    const lowerFilter = partnerFilter.toLowerCase();
+    return partnerRows.filter((p) => {
+      const txt = (p.name + p.email + p.phone).toLowerCase();
+      return txt.includes(lowerFilter);
+    });
+  }, [partnerRows, partnerFilter]);
+
+  // ---------------- Pagination ----------------
+  const totalPages = Math.ceil(finalPartners.length / pageSize);
   const startIdx = (partnerPage - 1) * pageSize;
   const endIdx = startIdx + pageSize;
-  const pageData = filtered.slice(startIdx, endIdx);
+  const pageData = finalPartners.slice(startIdx, endIdx);
 
+  // ---------------- Render ----------------
   return (
     <div className="mt-8">
       <h2 className="text-xl font-semibold mb-2">All Partners</h2>
-      <div className="flex items-center gap-2 mb-2">
+
+      {/* ---------- 1) Date Range Filters ---------- */}
+      <div className="flex items-center gap-4 mb-2 flex-wrap">
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            From Date
+          </label>
+          <input
+            type="date"
+            className="border px-2 py-1 text-sm rounded"
+            value={fromDate}
+            onChange={(e) => {
+              setFromDate(e.target.value);
+              setPartnerPage(1);
+            }}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            To Date
+          </label>
+          <input
+            type="date"
+            className="border px-2 py-1 text-sm rounded"
+            value={toDate}
+            onChange={(e) => {
+              setToDate(e.target.value);
+              setPartnerPage(1);
+            }}
+          />
+        </div>
+
+        {/* ---------- 2) Missionary Filter (dropdown) ---------- */}
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Filter by Missionary
+          </label>
+          <select
+            className="border px-2 py-1 text-sm rounded"
+            value={selectedMissionary}
+            onChange={(e) => {
+              setSelectedMissionary(e.target.value);
+              setPartnerPage(1);
+            }}
+          >
+            <option value="all">All Missionaries</option>
+            {missionaries.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* ---------- 3) Partner Name/Phone/Email Filter ---------- */}
+      <div className="flex items-center gap-2 mb-4">
         <input
           type="text"
           className="border px-2 py-1 text-sm rounded"
-          placeholder="Filter by name or email..."
+          placeholder="Search partner name, email, or phone..."
           value={partnerFilter}
           onChange={(e) => {
             setPartnerFilter(e.target.value);
@@ -56,6 +187,7 @@ export function PartnersTable({
         />
       </div>
 
+      {/* ---------- Table ---------- */}
       <div className="overflow-x-auto border rounded-md">
         <table className="min-w-full text-left text-sm">
           <thead className="bg-gray-50 dark:bg-gray-800">
@@ -98,7 +230,7 @@ export function PartnersTable({
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* ---------- Pagination ---------- */}
       <div className="mt-2 flex items-center gap-2">
         <Button
           variant="outline"
