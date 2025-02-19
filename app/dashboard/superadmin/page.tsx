@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import ChurchesList from "@/components/ChurchesList";
 import UsersList from "@/components/UsersList";
 
-// Import our new reports tab component
+// Import our new comprehensive reports tab
 import GlobalReportsTab from "@/components/GlobalReportsTab";
 
 export default async function SuperAdminDashboard({
@@ -47,7 +47,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profile data:", profileError.message);
   }
 
-  // Fetch churches
+  // Fetch churches for the Churches tab
   const { data: churches, error: churchesError } = await supabase
     .from("local_churches")
     .select("id, name, lead_pastor_id")
@@ -56,7 +56,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching churches:", churchesError.message);
   }
 
-  // Fetch lead pastors
+  // Fetch lead pastors for the Churches modal
   const { data: leadPastors, error: leadPastorsError } = await supabase
     .from("profiles")
     .select("id, full_name")
@@ -75,14 +75,14 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profiles:", profilesError.message);
   }
 
-  // Fetch auth users to get emails
+  // Fetch auth users (for emails)
   const { data: authUsersData, error: authUsersError } =
     await supabase.auth.admin.listUsers();
   if (authUsersError) {
     console.error("Error fetching auth users:", authUsersError.message);
   }
 
-  // Merge profiles with auth users (for email)
+  // Merge profiles with auth users to attach email
   let users = [];
   if (profilesData && authUsersData && authUsersData.users) {
     users = profilesData.map((profile) => {
@@ -97,6 +97,7 @@ export default async function SuperAdminDashboard({
     });
   }
 
+  // Decide which content to render
   let content;
   if (currentTab === "churches") {
     content = (
@@ -113,6 +114,7 @@ export default async function SuperAdminDashboard({
       />
     );
   } else if (currentTab === "reports") {
+    // Our big new tab
     content = <GlobalReportsTab />;
   } else if (currentTab === "settings") {
     content = (
