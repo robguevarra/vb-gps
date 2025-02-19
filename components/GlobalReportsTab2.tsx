@@ -6,10 +6,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 //
 // --------------------------- TYPES ---------------------------
+//
 interface Profile {
   id: string;
   full_name: string;
@@ -46,18 +46,8 @@ type DonationMap = Record<string, Record<string, number>>;
 // donationMap[missionary_id][YYYY-MM] = sum
 
 //
-// For "All Partners" table, we create a simpler shape
-// (We store totalGiven in the last 13 months, plus donor info)
-interface PartnerRow {
-  id: number;         // donor.id
-  name: string;
-  email: string;
-  phone: string;
-  totalGiven: number; // sum of amounts in last 13 months
-}
-
+// ----------------------- COMPONENT -----------------------
 //
-// -------------- COMPONENT -------------------
 export default function GlobalReportsTab() {
   const supabase = createClient();
 
@@ -70,7 +60,7 @@ export default function GlobalReportsTab() {
   const [churches, setChurches] = useState<Church[]>([]);
   const [donations, setDonations] = useState<DonorDonation[]>([]);
 
-  // Aggregates
+  // DonationMap => for each missionary, sum of amounts by "YYYY-MM"
   const [donationMap, setDonationMap] = useState<DonationMap>({});
 
   // Top-level metrics
@@ -78,9 +68,6 @@ export default function GlobalReportsTab() {
   const [currentPercentAllMissionaries, setCurrentPercentAllMissionaries] = useState(0);
   const [lastMonthPercentAllMissionaries, setLastMonthPercentAllMissionaries] = useState(0);
   const [countBelow80LastMonth, setCountBelow80LastMonth] = useState(0);
-
-  // Partners array
-  const [partners, setPartners] = useState<PartnerRow[]>([]);
 
   // Filtering + pagination for "All Missionaries"
   const [missionaryFilter, setMissionaryFilter] = useState("");
@@ -90,14 +77,10 @@ export default function GlobalReportsTab() {
   const [churchFilter, setChurchFilter] = useState("");
   const [churchPage, setChurchPage] = useState(1);
 
-  // Filtering + pagination for "All Partners"
-  const [partnerFilter, setPartnerFilter] = useState("");
-  const [partnerPage, setPartnerPage] = useState(1);
-
   // The number of rows per page
   const pageSize = 10;
 
-  // Currently selected missionary or church or partner for the modals
+  // Currently selected missionary or church for the modals
   const [selectedMissionary, setSelectedMissionary] = useState<Profile | null>(null);
   const [showMissionaryModal, setShowMissionaryModal] = useState(false);
 
@@ -107,24 +90,28 @@ export default function GlobalReportsTab() {
   // For "Full Missionary Report"
   const [showFullMissionaryReport, setShowFullMissionaryReport] = useState(false);
 
-  // For "Partner Details"
-  const [showPartnerModal, setShowPartnerModal] = useState(false);
-  const [selectedPartner, setSelectedPartner] = useState<PartnerRow | null>(null);
+  // For the big "partners vs months" table in the Full Missionary Report
+  // We'll track the partner page in top-level state to avoid Hook ordering issues
+  const [partnerPage, setPartnerPage] = useState(1);
 
-  // We'll store a map from missionary_id -> missionary_name for quick lookups
-  const [missionaryNameMap, setMissionaryNameMap] = useState<Record<string, string>>({});
-
-  // Add these new states:
+  // We'll also store the 13 month keys (YYYY-MM) once at the top
   const [thirteenMonthKeys, setThirteenMonthKeys] = useState<string[]>([]);
 
+  // ----------------------------------------------
   // On mount, load data
+  // ----------------------------------------------
   useEffect(() => {
     loadData();
   }, []);
 
-  // ----------------------------------------------
-  // Load data for last 13 months
-  // ----------------------------------------------
+  // If we switch missionaries in the Full Report, reset partner pagination
+  useEffect(() => {
+    setPartnerPage(1);
+  }, [selectedMissionary]);
+
+  //
+  // -------------- LOAD DATA ---------------------
+  //
   async function loadData() {
     try {
       setIsLoading(true);
@@ -134,6 +121,7 @@ export default function GlobalReportsTab() {
       const { data: missionaryData, error: missionaryError } = await supabase
         .from("profiles")
         .select("id, full_name, monthly_goal, local_church_id, role")
+        // If you want both missionaries + campus directors in same list
         .or("role.eq.missionary,role.eq.campus_director");
       if (missionaryError) throw missionaryError;
 
@@ -144,7 +132,7 @@ export default function GlobalReportsTab() {
         .order("name", { ascending: true });
       if (churchesError) throw churchesError;
 
-      // 3) Donations (last 13 months)
+      // 3) Last 13 months of donor_donations
       const thirteenMonthsAgo = new Date();
       thirteenMonthsAgo.setMonth(thirteenMonthsAgo.getMonth() - 13);
       const { data: donationsData, error: donationsError } = await supabase
@@ -154,69 +142,24 @@ export default function GlobalReportsTab() {
       if (donationsError) throw donationsError;
 
       // Store raw data
-      const mData = missionaryData || [];
-      const cData = churchesData || [];
-      const dData = donationsData || [];
+      setMissionaries(missionaryData || []);
+      setChurches(churchesData || []);
+      setDonations(donationsData || []);
 
-      setMissionaries(mData);
-      setChurches(cData);
-      setDonations(dData);
-
-      // Build a donationMap => missionary_id => { 'YYYY-MM' => sum }
+      // donationMap => missionary => { 'YYYY-MM' => sum }
       const dMap: DonationMap = {};
-      dData.forEach((don) => {
-        if (!dMap[don.missionary_id]) {
-          dMap[don.missionary_id] = {};
-        }
+      (donationsData || []).forEach((don) => {
+        const mId = don.missionary_id;
+        if (!dMap[mId]) dMap[mId] = {};
         const dateObj = new Date(don.date);
         const yy = dateObj.getFullYear();
         const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
         const key = `${yy}-${mm}`;
-        dMap[don.missionary_id][key] =
-          (dMap[don.missionary_id][key] || 0) + (don.amount || 0);
+        dMap[mId][key] = (dMap[mId][key] || 0) + don.amount;
       });
       setDonationMap(dMap);
 
-      // Build missionaryNameMap
-      const nameMap: Record<string, string> = {};
-      mData.forEach((m) => {
-        nameMap[m.id] = m.full_name;
-      });
-      setMissionaryNameMap(nameMap);
-
-      // Compute top-level metrics
-      computeTopMetrics(mData, dMap);
-
-      // Build a "partners" array from donor info
-      const partnerMap: Record<number, { name: string; email: string; phone: string; total: number }> = {};
-      dData.forEach((dd) => {
-        if (dd.donor_id && dd.donors) {
-          const donorId = dd.donor_id;
-          if (!partnerMap[donorId]) {
-            partnerMap[donorId] = {
-              name: dd.donors.name,
-              email: dd.donors.email,
-              phone: dd.donors.phone,
-              total: 0,
-            };
-          }
-          partnerMap[donorId].total += dd.amount || 0;
-        }
-      });
-      const partnerRows: PartnerRow[] = Object.keys(partnerMap).map((idStr) => {
-        const donorId = Number(idStr);
-        const rec = partnerMap[donorId];
-        return {
-          id: donorId,
-          name: rec.name,
-          email: rec.email,
-          phone: rec.phone,
-          totalGiven: rec.total,
-        };
-      });
-      setPartners(partnerRows);
-
-      // Build 13-month timeline keys (oldest first)
+      // Build 13-month timeline keys
       const keyArr: string[] = [];
       const now = new Date();
       let y = now.getFullYear();
@@ -230,20 +173,23 @@ export default function GlobalReportsTab() {
           y--;
         }
       }
-      keyArr.reverse();
+      keyArr.reverse(); // oldest first
       setThirteenMonthKeys(keyArr);
+
+      // Compute top-level metrics
+      computeTopMetrics(missionaryData || [], dMap);
 
       setIsLoading(false);
     } catch (err: any) {
-      console.error("loadData error:", err);
+      console.error("Error loading data:", err);
       setError(err.message || "Unknown error");
       setIsLoading(false);
     }
   }
 
-  // ----------------------------------------------
-  // Compute top-level metrics
-  // ----------------------------------------------
+  //
+  // -------------- COMPUTE METRICS --------------
+  //
   function computeTopMetrics(mData: Profile[], dMap: DonationMap) {
     // A) total donations this month
     const now = new Date();
@@ -260,7 +206,7 @@ export default function GlobalReportsTab() {
     });
     setTotalDonationsThisMonth(totalThisMonth);
 
-    // B) current total %
+    // B) current total % of all missionaries
     let currentMonthPercent = 0;
     if (sumOfGoals > 0) {
       currentMonthPercent = (totalThisMonth / sumOfGoals) * 100;
@@ -277,7 +223,8 @@ export default function GlobalReportsTab() {
     const lastMonthKey = `${lastMonthYear}-${String(lastMonthVal + 1).padStart(2, "0")}`;
     let totalLastMonth = 0;
     mData.forEach((m) => {
-      totalLastMonth += dMap[m.id]?.[lastMonthKey] || 0;
+      const donated = dMap[m.id]?.[lastMonthKey] || 0;
+      totalLastMonth += donated;
     });
     let lastMonthPercent = 0;
     if (sumOfGoals > 0) {
@@ -285,7 +232,7 @@ export default function GlobalReportsTab() {
     }
     setLastMonthPercentAllMissionaries(lastMonthPercent);
 
-    // D) # of missionaries <80% last month
+    // D) number of missionaries <80% last month
     let below80Count = 0;
     mData.forEach((m) => {
       const mg = m.monthly_goal || 0;
@@ -299,7 +246,7 @@ export default function GlobalReportsTab() {
   }
 
   //
-  // -------------- Helpers ---------------
+  // -------------- HELPERS ---------------
   //
   function formatNumber(num: number, fractionDigits = 2) {
     return num.toLocaleString(undefined, {
@@ -308,35 +255,14 @@ export default function GlobalReportsTab() {
     });
   }
 
-  // Summation for a church's missionaries in a given (year, month)
-  function getDonationForChurch(chId: number, year: number, month: number) {
-    let total = 0;
-    missionaries
-      .filter((m) => m.local_church_id === chId)
-      .forEach((m) => {
-        const key = `${year}-${String(month + 1).padStart(2, "0")}`;
-        total += donationMap[m.id]?.[key] || 0;
-      });
-    return total;
-  }
-  function getChurchMonthlyGoal(chId: number) {
-    let sum = 0;
-    missionaries
-      .filter((m) => m.local_church_id === chId)
-      .forEach((m) => {
-        sum += m.monthly_goal || 0;
-      });
-    return sum;
-  }
-
-  // For a single missionary in a given (year, month)
-  function getDonationForMissionary(mId: string, year: number, month: number) {
+  // For a single missionary in a given (year, monthIndex)
+  function getDonationForMissionary(mId: string, year: number, month: number): number {
     const key = `${year}-${String(month + 1).padStart(2, "0")}`;
     return donationMap[mId]?.[key] || 0;
   }
 
-  // Current-month ratio for a single missionary
-  function getCurrentMonthRatio(m: Profile) {
+  // For the current month ratio for a single missionary
+  function getCurrentMonthRatio(m: Profile): number {
     const now = new Date();
     const y = now.getFullYear();
     const mo = now.getMonth();
@@ -367,8 +293,28 @@ export default function GlobalReportsTab() {
     return out.reverse();
   }
 
+  // Summation for a church's missionaries in a given (year, month)
+  function getDonationForChurch(chId: number, year: number, month: number): number {
+    let total = 0;
+    missionaries
+      .filter((m) => m.local_church_id === chId)
+      .forEach((m) => {
+        total += getDonationForMissionary(m.id, year, month);
+      });
+    return total;
+  }
+  function getChurchMonthlyGoal(chId: number): number {
+    let sum = 0;
+    missionaries
+      .filter((m) => m.local_church_id === chId)
+      .forEach((m) => {
+        sum += m.monthly_goal || 0;
+      });
+    return sum;
+  }
+
   //
-  // -------------- Event Handlers -------------
+  // -------------- EVENT HANDLERS -------------
   //
   function openMissionaryModal(m: Profile) {
     setSelectedMissionary(m);
@@ -391,23 +337,15 @@ export default function GlobalReportsTab() {
   function openFullMissionaryReport(m: Profile) {
     setSelectedMissionary(m);
     setShowFullMissionaryReport(true);
+    // partnerPage is reset by the effect above
   }
   function closeFullReportModal() {
     setShowFullMissionaryReport(false);
     setSelectedMissionary(null);
   }
 
-  function openPartnerModal(p: PartnerRow) {
-    setSelectedPartner(p);
-    setShowPartnerModal(true);
-  }
-  function closePartnerModal() {
-    setShowPartnerModal(false);
-    setSelectedPartner(null);
-  }
-
   //
-  // -------------- Rendering the UI -----------
+  // -------------- RENDER UI --------------
   //
   function renderTopCards() {
     return (
@@ -422,6 +360,7 @@ export default function GlobalReportsTab() {
             </p>
           </CardContent>
         </Card>
+
         <Card className="border shadow-sm">
           <CardHeader>
             <CardTitle className="text-sm">Current Total %</CardTitle>
@@ -432,9 +371,10 @@ export default function GlobalReportsTab() {
             </p>
           </CardContent>
         </Card>
+
         <Card className="border shadow-sm">
           <CardHeader>
-            <CardTitle className="text-sm">Last Month's Total %</CardTitle>
+            <CardTitle className="text-sm">Last Month’s Total %</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
@@ -442,6 +382,7 @@ export default function GlobalReportsTab() {
             </p>
           </CardContent>
         </Card>
+
         <Card className="border shadow-sm">
           <CardHeader>
             <CardTitle className="text-sm">Below 80% Last Month</CardTitle>
@@ -456,7 +397,7 @@ export default function GlobalReportsTab() {
     );
   }
 
-  // ---- All Missionaries Table ----
+  // --------------------- All Missionaries Table ------------------
   const filteredMissionaries = missionaries.filter((m) =>
     m.full_name.toLowerCase().includes(missionaryFilter.toLowerCase())
   );
@@ -469,6 +410,8 @@ export default function GlobalReportsTab() {
     return (
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-2">All Missionaries</h2>
+
+        {/* Filter + input */}
         <div className="flex items-center gap-2 mb-2">
           <input
             type="text"
@@ -482,6 +425,7 @@ export default function GlobalReportsTab() {
           />
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto border rounded-md">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800">
@@ -504,18 +448,10 @@ export default function GlobalReportsTab() {
                     <td className="px-4 py-2 border-b">{formatNumber(ratio)}%</td>
                     <td className="px-4 py-2 border-b">
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openMissionaryModal(m)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => openMissionaryModal(m)}>
                           Last 6 Months
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openFullMissionaryReport(m)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => openFullMissionaryReport(m)}>
                           Full Report
                         </Button>
                       </div>
@@ -561,7 +497,7 @@ export default function GlobalReportsTab() {
     );
   }
 
-  // ---- All Churches Table ----
+  // --------------------- All Churches Table -----------------------
   const filteredChurches = churches.filter((ch) =>
     ch.name.toLowerCase().includes(churchFilter.toLowerCase())
   );
@@ -609,18 +545,10 @@ export default function GlobalReportsTab() {
                 return (
                   <tr key={ch.id}>
                     <td className="px-4 py-2 border-b">{ch.name}</td>
+                    <td className="px-4 py-2 border-b">${formatNumber(goal)}</td>
+                    <td className="px-4 py-2 border-b">{formatNumber(ratio)}%</td>
                     <td className="px-4 py-2 border-b">
-                      ${formatNumber(goal)}
-                    </td>
-                    <td className="px-4 py-2 border-b">
-                      {formatNumber(ratio)}%
-                    </td>
-                    <td className="px-4 py-2 border-b">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openChurchModal(ch)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => openChurchModal(ch)}>
                         View Details
                       </Button>
                     </td>
@@ -663,109 +591,15 @@ export default function GlobalReportsTab() {
     );
   }
 
-  // ---- All Partners Table ----
-  const filteredPartners = partners.filter((p) => {
-    const txt = (p.name + p.email + p.phone).toLowerCase();
-    return txt.includes(partnerFilter.toLowerCase());
-  });
-  const totalPartnerPages = Math.ceil(filteredPartners.length / pageSize);
-  const startP = (partnerPage - 1) * pageSize;
-  const endP = startP + pageSize;
-  const pagedPartners = filteredPartners.slice(startP, endP);
-
-  function renderPartnersTable() {
-    return (
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-2">All Partners</h2>
-        <div className="flex items-center gap-2 mb-2">
-          <input
-            type="text"
-            className="border px-2 py-1 text-sm rounded"
-            placeholder="Filter by name or email..."
-            value={partnerFilter}
-            onChange={(e) => {
-              setPartnerFilter(e.target.value);
-              setPartnerPage(1);
-            }}
-          />
-        </div>
-
-        <div className="overflow-x-auto border rounded-md">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th className="px-4 py-2 border-b">Name</th>
-                <th className="px-4 py-2 border-b">Email</th>
-                <th className="px-4 py-2 border-b">Phone</th>
-                <th className="px-4 py-2 border-b">Total Given</th>
-                <th className="px-4 py-2 border-b">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedPartners.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-4 py-2 border-b">{p.name}</td>
-                  <td className="px-4 py-2 border-b">{p.email}</td>
-                  <td className="px-4 py-2 border-b">{p.phone}</td>
-                  <td className="px-4 py-2 border-b">
-                    ${formatNumber(p.totalGiven)}
-                  </td>
-                  <td className="px-4 py-2 border-b">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openPartnerModal(p)}
-                    >
-                      View Details
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-
-              {pagedPartners.length === 0 && (
-                <tr>
-                  <td className="px-4 py-2 border-b" colSpan={5}>
-                    No matching partners.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-2 flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={partnerPage <= 1}
-            onClick={() => setPartnerPage(partnerPage - 1)}
-          >
-            Prev
-          </Button>
-          <span className="text-sm">
-            Page {partnerPage} of {Math.max(totalPartnerPages, 1)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={partnerPage >= totalPartnerPages}
-            onClick={() => setPartnerPage(partnerPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   //
-  // -------------- Main render ---------------
+  // --------------- RENDER ------------------
   //
   return (
     <Card className="border shadow-sm">
       <CardHeader>
         <CardTitle>Comprehensive Global Reports</CardTitle>
       </CardHeader>
+
       <CardContent>
         {isLoading && (
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
@@ -786,13 +620,15 @@ export default function GlobalReportsTab() {
             {renderMissionariesTable()}
 
             {renderChurchesTable()}
-
-            {renderPartnersTable()}
           </>
         )}
       </CardContent>
 
-      {/* Modals */}
+      {/* 
+        Child components for the modals, 
+        passing them the relevant props to avoid 
+        additional Hooks inside sub-rendering 
+      */}
       <MissionaryLast6Modal
         isOpen={showMissionaryModal}
         onClose={closeMissionaryModal}
@@ -817,28 +653,21 @@ export default function GlobalReportsTab() {
         donations={donations}
         donationMap={donationMap}
         thirteenMonthKeys={thirteenMonthKeys}
+        formatNumber={formatNumber}
         partnerPage={partnerPage}
         setPartnerPage={setPartnerPage}
-        formatNumber={formatNumber}
-      />
-
-      <PartnerDetailsModal
-        isOpen={showPartnerModal}
-        onClose={closePartnerModal}
-        partner={selectedPartner}
-        donations={donations}
-        missionaryNameMap={missionaryNameMap}
-        formatNumber={formatNumber}
       />
     </Card>
   );
 }
 
 //
-// -------------------- SUB-COMPONENTS (Modals) --------------------
+// ------------------- SUB-COMPONENTS (Modals) -------------------
 //
 
-// 1) MissionaryLast6Modal
+// ---- 1) MissionaryLast6Modal ----
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 function MissionaryLast6Modal({
   isOpen,
   onClose,
@@ -853,6 +682,7 @@ function MissionaryLast6Modal({
   formatNumber: (num: number, fractionDigits?: number) => string;
 }) {
   if (!missionary) return null;
+
   const data = getLastXMonthsRatios(missionary, 6);
 
   return (
@@ -884,7 +714,7 @@ function MissionaryLast6Modal({
   );
 }
 
-// 2) ChurchDetailsModal
+// ---- 2) ChurchDetailsModal ----
 function ChurchDetailsModal({
   isOpen,
   onClose,
@@ -902,15 +732,15 @@ function ChurchDetailsModal({
 }) {
   if (!selectedChurch) return null;
 
-  // We'll show last 3 months + current => 4 columns
+  // We'll show last 3 months + current => total 4 columns
   const now = new Date();
-  const columns: { label: string; year: number; month: number }[] = [];
+  const columns: { year: number; month: number; label: string }[] = [];
   for (let i = 0; i < 4; i++) {
     const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
     columns.unshift({
-      label: `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`,
       year: dt.getFullYear(),
       month: dt.getMonth(),
+      label: `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`,
     });
   }
 
@@ -932,34 +762,35 @@ function ChurchDetailsModal({
               <tr>
                 <th className="px-4 py-2 border-b">Missionary</th>
                 {columns.map((c) => (
-                  <th className="px-4 py-2 border-b" key={c.label}>
-                    {c.label}
-                  </th>
+                  <th key={c.label} className="px-4 py-2 border-b">{c.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {relevantMissionaries.map((m) => (
-                <tr key={m.id}>
-                  <td className="px-4 py-2 border-b">{m.full_name}</td>
-                  {columns.map((c) => {
-                    const donated = getDonationForMissionary(m.id, c.year, c.month);
-                    const mg = m.monthly_goal || 0;
-                    const ratio = mg > 0 ? (donated / mg) * 100 : 0;
-                    const below80 = ratio < 80;
-                    return (
-                      <td
-                        key={c.label}
-                        className={`px-4 py-2 border-b ${
-                          below80 ? "text-red-600 font-semibold" : ""
-                        }`}
-                      >
-                        {formatNumber(ratio)}%
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {relevantMissionaries.map((m) => {
+                return (
+                  <tr key={m.id}>
+                    <td className="px-4 py-2 border-b">{m.full_name}</td>
+                    {columns.map((c) => {
+                      const donated = getDonationForMissionary(m.id, c.year, c.month);
+                      const ratio = m.monthly_goal
+                        ? (donated / m.monthly_goal) * 100
+                        : 0;
+                      const below80 = ratio < 80;
+                      return (
+                        <td
+                          key={c.label}
+                          className={`px-4 py-2 border-b ${
+                            below80 ? "text-red-600 font-semibold" : ""
+                          }`}
+                        >
+                          {formatNumber(ratio)}%
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
               {relevantMissionaries.length === 0 && (
                 <tr>
                   <td className="px-4 py-2 border-b" colSpan={columns.length + 1}>
@@ -975,7 +806,7 @@ function ChurchDetailsModal({
   );
 }
 
-// 3) FullMissionaryReportModal
+// ---- 3) FullMissionaryReportModal ----
 function FullMissionaryReportModal({
   isOpen,
   onClose,
@@ -1004,7 +835,8 @@ function FullMissionaryReportModal({
     (d) => d.missionary_id === missionary.id
   );
 
-  // Build partnerMap => donor_id => { 'YYYY-MM' => sum }
+  // We want to build partner rows => each row is a single donor
+  // For each donor, we sum amounts by YYYY-MM
   const partnerMap: Record<number, Record<string, number>> = {};
   const donorInfoMap: Record<number, Donor> = {};
 
@@ -1025,7 +857,7 @@ function FullMissionaryReportModal({
     }
   });
 
-  // Convert partnerMap into an array of partner rows
+  // Build an array of partner rows
   type PartnerRow = {
     donorId: number;
     donorName: string;
@@ -1046,7 +878,7 @@ function FullMissionaryReportModal({
     };
   });
 
-  // Pagination for partner rows
+  // Pagination for partnerRows
   const pPageSize = 10;
   const totalPartners = partnerRows.length;
   const totalPartnerPages = Math.ceil(totalPartners / pPageSize);
@@ -1057,13 +889,14 @@ function FullMissionaryReportModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] w-full max-h-[80vh] overflow-auto">
-        <DialogHeader>
+        <div className="flex justify-between items-center">
           <DialogTitle>Full Report - {missionary.full_name}</DialogTitle>
-        </DialogHeader>
+        </div>
 
         <div className="mt-4 space-y-4">
           <p className="text-sm">
-            Below is a table of donor partners (rows) vs. the last 13 months (columns).
+            Below is a single table with each partner on the rows,
+            and the last 13 months on the columns.
           </p>
 
           <div className="overflow-x-auto border rounded-md">
@@ -1074,7 +907,9 @@ function FullMissionaryReportModal({
                   <th className="px-4 py-2 border-b">Email</th>
                   <th className="px-4 py-2 border-b">Phone</th>
                   {thirteenMonthKeys.map((key) => (
-                    <th key={key} className="px-4 py-2 border-b">{key}</th>
+                    <th key={key} className="px-4 py-2 border-b">
+                      {key}
+                    </th>
                   ))}
                   <th className="px-4 py-2 border-b">Total</th>
                 </tr>
@@ -1096,13 +931,12 @@ function FullMissionaryReportModal({
                           </td>
                         );
                       })}
-                      <td className="px-4 py-2 border-b font-semibold">
+                      <td className="px-4 py-2 border-b font-bold">
                         ${formatNumber(rowTotal)}
                       </td>
                     </tr>
                   );
                 })}
-
                 {pagedPartners.length === 0 && (
                   <tr>
                     <td
@@ -1117,7 +951,7 @@ function FullMissionaryReportModal({
             </table>
           </div>
 
-          {/* Pagination controls for partners (only if needed) */}
+          {/* Pagination for partners */}
           {partnerRows.length > pPageSize && (
             <div className="mt-2 flex items-center gap-2">
               <Button
@@ -1141,84 +975,6 @@ function FullMissionaryReportModal({
               </Button>
             </div>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// 4) PartnerDetailsModal
-function PartnerDetailsModal({
-  isOpen,
-  onClose,
-  partner,
-  donations,
-  missionaryNameMap,
-  formatNumber,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  partner: PartnerRow | null;
-  donations: DonorDonation[];
-  missionaryNameMap: Record<string, string>;
-  formatNumber: (num: number, fractionDigits?: number) => string;
-}) {
-  if (!partner) return null;
-
-  // Filter all donation entries for this partner
-  const partnerDonations = donations
-    .filter((d) => d.donor_id === partner.id)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl w-full max-h-[80vh] overflow-auto">
-        <DialogHeader>
-          <DialogTitle>
-            Partner History: {partner.name}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <table className="min-w-full text-left text-sm border">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 border-b">Date</th>
-                <th className="px-4 py-2 border-b">Missionary</th>
-                <th className="px-4 py-2 border-b">Amount</th>
-                <th className="px-4 py-2 border-b">Source</th>
-                <th className="px-4 py-2 border-b">Status</th>
-                <th className="px-4 py-2 border-b">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {partnerDonations.map((don) => {
-                const missionaryName = missionaryNameMap[don.missionary_id] || "Unknown";
-                return (
-                  <tr key={don.id}>
-                    <td className="px-4 py-2 border-b">
-                      {new Date(don.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-2 border-b">{missionaryName}</td>
-                    <td className="px-4 py-2 border-b">
-                      ${formatNumber(don.amount)}
-                    </td>
-                    <td className="px-4 py-2 border-b">{don.source}</td>
-                    <td className="px-4 py-2 border-b">{don.status}</td>
-                    <td className="px-4 py-2 border-b">
-                      {don.notes || ""}
-                    </td>
-                  </tr>
-                );
-              })}
-              {partnerDonations.length === 0 && (
-                <tr>
-                  <td className="px-4 py-2 border-b" colSpan={6}>
-                    No donations found for this partner.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </DialogContent>
     </Dialog>

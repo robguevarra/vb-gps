@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import ChurchesList from "@/components/ChurchesList";
 import UsersList from "@/components/UsersList";
 
-// Import our new comprehensive reports tab
+// The newly refactored GlobalReportsTab
 import GlobalReportsTab from "@/components/GlobalReportsTab";
 
 export default async function SuperAdminDashboard({
@@ -75,7 +75,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profiles:", profilesError.message);
   }
 
-  // Fetch auth users (for emails)
+  // Fetch auth users (to get emails)
   const { data: authUsersData, error: authUsersError } =
     await supabase.auth.admin.listUsers();
   if (authUsersError) {
@@ -114,7 +114,6 @@ export default async function SuperAdminDashboard({
       />
     );
   } else if (currentTab === "reports") {
-    // Our big new tab
     content = <GlobalReportsTab />;
   } else if (currentTab === "settings") {
     content = (
