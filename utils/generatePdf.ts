@@ -1,0 +1,1 @@
+doc.text(`Amount: ₱${amount.toFixed(2)}`, 10, 10); 

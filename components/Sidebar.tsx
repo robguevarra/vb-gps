@@ -21,7 +21,6 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
     { name: "Manual Remittance", href: "?tab=manual-remittance" },
     ...(isCampusDirector ? [{ name: "Approvals", href: "?tab=approvals" }] : []),
     { name: "Reports", href: "?tab=reports" },
-    { name: "Settings", href: "?tab=settings" }
   ]
 
   return (

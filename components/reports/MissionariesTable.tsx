@@ -70,7 +70,7 @@ export function MissionariesTable({
                 <tr key={m.id}>
                   <td className="px-4 py-2 border-b">{m.full_name}</td>
                   <td className="px-4 py-2 border-b">{m.role}</td>
-                  <td className="px-4 py-2 border-b">${m.monthly_goal}</td>
+                  <td className="px-4 py-2 border-b">₱{formatNumber(m.monthly_goal || 0)}</td>
                   <td className="px-4 py-2 border-b">{formatNumber(ratio)}%</td>
                   <td className="px-4 py-2 border-b">
                     <div className="flex gap-2">

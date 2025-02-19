@@ -50,7 +50,7 @@ export function SystemSettingsForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 max-w-2xl">
       <div className="space-y-2">
-        <Label>Default Monthly Goal (USD)</Label>
+        <Label>Default Monthly Goal (₱)</Label>
         <Input 
           type="number" 
           {...register('default_monthly_goal', { valueAsNumber: true })}
@@ -76,6 +76,11 @@ export function SystemSettingsForm() {
           {...register('leave_request_days', { valueAsNumber: true })}
           disabled={isLoading}
         />
+      </div>
+      
+      <div className="space-y-2">
+        <Label>Default Currency</Label>
+        <span className="text-sm">Philippine Peso (₱)</span>
       </div>
       
       <Button type="submit" disabled={isLoading}>

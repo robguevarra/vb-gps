@@ -24,7 +24,7 @@ export function TopMetricsCards({
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold">
-            ${formatNumber(totalDonationsThisMonth)}
+            ₱{formatNumber(totalDonationsThisMonth)}
           </p>
         </CardContent>
       </Card>

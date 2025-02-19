@@ -69,7 +69,7 @@ export default async function SuperAdminDashboard({
   // Fetch profiles for users (excluding superadmins)
   const { data: profilesData, error: profilesError } = await supabase
     .from("profiles")
-    .select("id, full_name, role, local_church_id")
+    .select("id, full_name, role, local_church_id, monthly_goal")
     .neq("role", "superadmin")
     .order("full_name", { ascending: true });
   if (profilesError) {
@@ -107,7 +107,7 @@ export default async function SuperAdminDashboard({
         leadPastors={leadPastors || []}
       />
     );
-  } else if (currentTab === "users") {
+  } else if (currentTab === "staff") {
     content = (
       <UsersList
         users={users || []}

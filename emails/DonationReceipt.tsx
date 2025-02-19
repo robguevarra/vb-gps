@@ -1,0 +1,1 @@
+<p>Amount: ₱{amount.toFixed(2)}</p> 

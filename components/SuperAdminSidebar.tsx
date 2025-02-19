@@ -11,7 +11,7 @@ interface SuperAdminSidebarProps {}
 
 const navItems = [
   { name: "Churches", href: "?tab=churches" },
-  { name: "Users", href: "?tab=users" },
+  { name: "Staff", href: "?tab=staff" },
   { name: "Reports", href: "?tab=reports" },
   { name: "Settings", href: "?tab=settings" },
 ];

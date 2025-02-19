@@ -5,12 +5,15 @@ import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import EditUserModal from "./EditUserModal";
+import AddStaffModal from "./AddStaffModal";
 
 interface User {
   id: string;
   full_name: string;
   role: string;
   local_church_id: number | null;
+  email: string;
+  monthly_goal?: number | null;
   user_metadata: {
     email?: string;
     [key: string]: any;
@@ -27,9 +30,10 @@ interface UsersListProps {
   churches: Church[];
 }
 
-export default function UsersList({ users, churches }: UsersListProps) {
+export default function StaffList({ users, churches }: UsersListProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   useEffect(() => {
     console.log("UsersList rendered with users:", users);
@@ -50,8 +54,10 @@ export default function UsersList({ users, churches }: UsersListProps) {
   return (
     <Card>
       <CardHeader className="flex justify-between items-center">
-        <CardTitle>User Management</CardTitle>
-        <Button variant="outline">Add User</Button>
+        <CardTitle>Staff Management</CardTitle>
+        <Button variant="outline" onClick={() => setAddModalOpen(true)}>
+          Add Staff Member
+        </Button>
       </CardHeader>
       <CardContent>
         {users.length > 0 ? (
@@ -63,6 +69,7 @@ export default function UsersList({ users, churches }: UsersListProps) {
                 <th className="px-4 py-2">Email</th>
                 <th className="px-4 py-2">Role</th>
                 <th className="px-4 py-2">Church</th>
+                <th className="px-4 py-2">Monthly Goal</th>
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
@@ -77,6 +84,12 @@ export default function UsersList({ users, churches }: UsersListProps) {
                   <td className="border px-4 py-2">{user.role}</td>
                   <td className="border px-4 py-2">{getChurchName(user.local_church_id)}</td>
                   <td className="border px-4 py-2">
+                    {user.role === 'missionary' ? 
+                      `₱${user.monthly_goal?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}` : 
+                      'N/A'
+                    }
+                  </td>
+                  <td className="border px-4 py-2">
                     <Button variant="outline" size="sm" onClick={() => handleEditClick(user)}>
                       Edit
                     </Button>
@@ -89,6 +102,12 @@ export default function UsersList({ users, churches }: UsersListProps) {
           <p>No users found.</p>
         )}
       </CardContent>
+
+      <AddStaffModal
+        open={addModalOpen}
+        onOpenChange={setAddModalOpen}
+        churches={churches}
+      />
 
       {selectedUser && (
         <EditUserModal

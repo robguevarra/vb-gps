@@ -817,12 +817,12 @@ function FullMissionaryReportModal({
                         rowTotal += val;
                         return (
                           <td key={monthKey} className="px-4 py-2 border-b">
-                            {val > 0 ? `$${formatNumber(val)}` : ""}
+                            ₱{formatNumber(val)}
                           </td>
                         );
                       })}
                       <td className="px-4 py-2 border-b font-semibold">
-                        ${formatNumber(rowTotal)}
+                        ₱{formatNumber(rowTotal)}
                       </td>
                     </tr>
                   );
@@ -909,7 +909,7 @@ function PartnerDetailsModal({
               <tr>
                 <th className="px-4 py-2 border-b">Date</th>
                 <th className="px-4 py-2 border-b">Missionary</th>
-                <th className="px-4 py-2 border-b">Amount</th>
+                <th className="px-4 py-2 border-b">Amount (₱)</th>
                 <th className="px-4 py-2 border-b">Source</th>
                 <th className="px-4 py-2 border-b">Status</th>
                 <th className="px-4 py-2 border-b">Notes</th>
@@ -925,7 +925,7 @@ function PartnerDetailsModal({
                     </td>
                     <td className="px-4 py-2 border-b">{missionaryName}</td>
                     <td className="px-4 py-2 border-b">
-                      ${formatNumber(don.amount)}
+                      ₱{formatNumber(don.amount)}
                     </td>
                     <td className="px-4 py-2 border-b">{don.source}</td>
                     <td className="px-4 py-2 border-b">{don.status}</td>

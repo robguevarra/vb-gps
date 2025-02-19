@@ -74,7 +74,7 @@ export function ChurchesTable({
               return (
                 <tr key={ch.id}>
                   <td className="px-4 py-2 border-b">{ch.name}</td>
-                  <td className="px-4 py-2 border-b">${formatNumber(goal)}</td>
+                  <td className="px-4 py-2 border-b">₱{formatNumber(goal)}</td>
                   <td className="px-4 py-2 border-b">{formatNumber(ratio)}%</td>
                   <td className="px-4 py-2 border-b">
                     <Button

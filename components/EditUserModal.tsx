@@ -17,6 +17,7 @@ interface User {
   role: string;
   local_church_id: number | null;
   email: string;
+  monthly_goal?: number;
 }
 
 interface Church {
@@ -45,6 +46,9 @@ export default function EditUserModal({
   const [churchId, setChurchId] = useState(user.local_church_id ? String(user.local_church_id) : "none");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [monthlyGoal, setMonthlyGoal] = useState(
+    user.role === 'missionary' ? user.monthly_goal || 0 : 0
+  );
 
   const roleOptions = ["missionary", "campus_director", "lead_pastor", "finance_officer"];
 
@@ -103,6 +107,7 @@ export default function EditUserModal({
       full_name: fullName,
       role,
       local_church_id: churchId === "none" ? null : parseInt(churchId),
+      monthly_goal: role === 'missionary' ? Number(monthlyGoal) : null
     };
 
 
@@ -228,6 +233,20 @@ export default function EditUserModal({
               </SelectContent>
             </Select>
           </div>
+          {role === 'missionary' && (
+            <div>
+              <Label htmlFor="monthlyGoal">Monthly Goal (₱)</Label>
+              <Input
+                id="monthlyGoal"
+                type="number"
+                value={monthlyGoal}
+                onChange={(e) => setMonthlyGoal(Number(e.target.value))}
+                min="0"
+                step="0.01"
+                placeholder="Enter amount in PHP"
+              />
+            </div>
+          )}
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
