@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { createClient as supabaseCreateClient } from '@supabase/supabase-js'
 
 interface Church {
   id: number;
@@ -22,7 +23,6 @@ interface AddStaffModalProps {
 }
 
 export default function AddStaffModal({ open, onOpenChange, churches }: AddStaffModalProps) {
-  const supabase = createClient();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("missionary");
@@ -37,51 +37,38 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
     setLoading(true);
     setError("");
 
-    // Basic validation
-    if (!fullName || !email) {
-      setError("Please fill in all required fields");
-      setLoading(false);
-      return;
-    }
-
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password: Math.random().toString(36).slice(-8), // Generate random password
-        email_confirm: true,
-        user_metadata: {
-          full_name: fullName,
+      const response = await fetch('/api/users/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName,
+          email,
           role,
-        }
+          churchId: churchId === "none" ? null : parseInt(churchId),
+          monthlyGoal
+        })
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("User creation failed");
-
-      // Create profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert([{
-          id: authData.user.id,
-          full_name: fullName,
-          role,
-          local_church_id: churchId === "none" ? null : parseInt(churchId),
-          monthly_goal: role === 'missionary' ? Number(monthlyGoal) : null
-        }]);
-
-      if (profileError) throw profileError;
+      const result = await response.json();
+      
+      if (!response.ok) throw new Error(result.error || "Failed to create user");
 
       toast({
-        title: "Staff member created successfully!",
-        description: "An invitation email has been sent to the new staff member.",
+        title: "Success",
+        description: "Staff member created successfully",
+        variant: "success",
       });
       onOpenChange(false);
-      window.location.reload();
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
 
     } catch (err: any) {
       console.error("Creation error:", err);
-      setError(err.message || "Failed to create staff member");
+      setError(err.message);
       toast({
         title: "Creation failed",
         description: err.message,

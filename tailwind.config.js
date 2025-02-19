@@ -31,8 +31,8 @@ module.exports = {
           foreground: "hsl(var(--secondary-foreground))",
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          DEFAULT: '#ef4444',
+          foreground: '#f8fafc',
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -50,6 +50,10 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: '#22c55e',
+          foreground: '#052e16',
+        }
       },
       borderRadius: {
         lg: "var(--radius)",

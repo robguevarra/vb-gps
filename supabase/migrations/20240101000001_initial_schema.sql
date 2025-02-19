@@ -138,4 +138,17 @@ CREATE POLICY select_surplus_requests ON surplus_requests
 FOR SELECT USING (
   missionary_id = auth.uid() OR
   (SELECT role FROM profiles WHERE id = auth.uid()) = 'superadmin'
+);
+
+-- Enable RLS on auth.users
+ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for superadmin access
+CREATE POLICY "Superadmins can manage users" ON auth.users
+FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM profiles
+    WHERE profiles.id = auth.uid()
+    AND profiles.role = 'superadmin'
+  )
 ); 
