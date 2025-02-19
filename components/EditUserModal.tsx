@@ -1,7 +1,7 @@
 // components/EditUserModal.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -49,8 +49,30 @@ export default function EditUserModal({
   const [monthlyGoal, setMonthlyGoal] = useState(
     user.role === 'missionary' ? user.monthly_goal || 0 : 0
   );
+  const [errors, setErrors] = useState({
+    fullName: '',
+    email: '',
+    church: '',
+    monthlyGoal: ''
+  });
 
   const roleOptions = ["missionary", "campus_director", "lead_pastor", "finance_officer"];
+
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name);
+      setEmail(user.email);
+      setRole(user.role);
+      setChurchId(user.local_church_id ? String(user.local_church_id) : "none");
+      setMonthlyGoal(user.role === 'missionary' ? user.monthly_goal || 0 : 0);
+      setErrors({
+        fullName: '',
+        email: '',
+        church: '',
+        monthlyGoal: ''
+      });
+    }
+  }, [user]);
 
   const handleSave = async () => {
     // Confirmation prompt before saving
@@ -59,9 +81,43 @@ export default function EditUserModal({
       return;
     }
 
-
     setLoading(true);
-    setError("");
+    
+    // Clear previous errors
+    const newErrors = {
+      fullName: '',
+      email: '',
+      church: '',
+      monthlyGoal: ''
+    };
+
+    // Validation checks
+    if (!fullName.trim()) {
+      newErrors.fullName = 'Full name is required';
+    }
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email.trim() && !emailRegex.test(email)) {
+      newErrors.email = 'Invalid email format';
+    }
+
+    const requiresChurch = ['missionary', 'campus_director'].includes(role);
+    if (requiresChurch && churchId === "none") {
+      newErrors.church = 'Church assignment is required for this role';
+    }
+
+    if (['missionary', 'campus_director'].includes(role) && (monthlyGoal <= 0 || isNaN(monthlyGoal))) {
+      newErrors.monthlyGoal = 'Monthly goal must be a positive number';
+    }
+
+    if (Object.values(newErrors).some(error => error !== '')) {
+      setErrors(newErrors);
+      setLoading(false);
+      return;
+    }
 
     // Update email if it has changed
     if (email !== originalEmail) {
@@ -107,7 +163,7 @@ export default function EditUserModal({
       full_name: fullName,
       role,
       local_church_id: churchId === "none" ? null : parseInt(churchId),
-      monthly_goal: role === 'missionary' ? Number(monthlyGoal) : null
+      monthly_goal: ['missionary', 'campus_director'].includes(role) ? Number(monthlyGoal) : null
     };
 
 
@@ -192,6 +248,7 @@ export default function EditUserModal({
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Enter full name"
             />
+            {errors.fullName && <p className="text-red-600 text-sm">{errors.fullName}</p>}
           </div>
           <div>
             <Label htmlFor="userEmail">Email</Label>
@@ -201,6 +258,7 @@ export default function EditUserModal({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter email"
             />
+            {errors.email && <p className="text-red-600 text-sm">{errors.email}</p>}
           </div>
           <div>
             <Label>Role</Label>
@@ -232,8 +290,9 @@ export default function EditUserModal({
                 ))}
               </SelectContent>
             </Select>
+            {errors.church && <p className="text-red-600 text-sm">{errors.church}</p>}
           </div>
-          {role === 'missionary' && (
+          {['missionary', 'campus_director'].includes(role) && (
             <div>
               <Label htmlFor="monthlyGoal">Monthly Goal (₱)</Label>
               <Input
@@ -245,9 +304,9 @@ export default function EditUserModal({
                 step="0.01"
                 placeholder="Enter amount in PHP"
               />
+              {errors.monthlyGoal && <p className="text-red-600 text-sm">{errors.monthlyGoal}</p>}
             </div>
           )}
-          {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel

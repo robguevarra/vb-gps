@@ -37,6 +37,47 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
     setLoading(true);
     setError("");
 
+    // Clear previous errors
+    const newErrors = {
+      fullName: '',
+      email: '',
+      church: '',
+      monthlyGoal: ''
+    };
+
+    // Required fields
+    if (!fullName.trim()) {
+      newErrors.fullName = 'Full name is required';
+    }
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    }
+    
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email.trim() && !emailRegex.test(email)) {
+      newErrors.email = 'Invalid email format';
+    }
+
+    // Church validation for certain roles
+    const requiresChurch = ['missionary', 'campus_director'].includes(role);
+    if (requiresChurch && churchId === "none") {
+      newErrors.church = 'Church assignment is required for this role';
+    }
+
+    // Monthly goal validation
+    if (['missionary', 'campus_director'].includes(role) && (monthlyGoal <= 0 || isNaN(monthlyGoal))) {
+      newErrors.monthlyGoal = 'Monthly goal must be a positive number';
+    }
+
+    // Check if any errors exist
+    const hasErrors = Object.values(newErrors).some(error => error !== '');
+    if (hasErrors) {
+      setError(newErrors);
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/users/create', {
         method: 'POST',
@@ -57,9 +98,8 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
       if (!response.ok) throw new Error(result.error || "Failed to create user");
 
       toast({
-        title: "Success",
-        description: "Staff member created successfully",
-        variant: "success",
+        title: "✅ Staff Member Created",
+        description: "New staff account has been successfully created",
       });
       onOpenChange(false);
       setTimeout(() => {
@@ -91,9 +131,13 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
             <Input
               id="fullName"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                setError(prev => ({...prev, fullName: ''}));
+              }}
               placeholder="Enter full name"
             />
+            {error.fullName && <p className="text-red-500 text-sm mt-1">{error.fullName}</p>}
           </div>
           <div>
             <Label htmlFor="email">Email *</Label>
@@ -101,9 +145,13 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setError(prev => ({...prev, email: ''}));
+              }}
               placeholder="Enter email"
             />
+            {error.email && <p className="text-red-500 text-sm mt-1">{error.email}</p>}
           </div>
           <div>
             <Label>Role *</Label>
@@ -122,7 +170,13 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
           </div>
           <div>
             <Label>Church Assignment</Label>
-            <Select value={churchId} onValueChange={setChurchId}>
+            <Select 
+              value={churchId} 
+              onValueChange={(value) => {
+                setChurchId(value);
+                setError(prev => ({...prev, church: ''}));
+              }}
+            >
               <SelectTrigger className="w-full mt-1">
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
@@ -135,22 +189,26 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
                 ))}
               </SelectContent>
             </Select>
+            {error.church && <p className="text-red-500 text-sm mt-1">{error.church}</p>}
           </div>
-          {role === 'missionary' && (
+          {['missionary', 'campus_director'].includes(role) && (
             <div>
               <Label htmlFor="monthlyGoal">Monthly Goal (₱)</Label>
               <Input
                 id="monthlyGoal"
                 type="number"
                 value={monthlyGoal}
-                onChange={(e) => setMonthlyGoal(Number(e.target.value))}
+                onChange={(e) => {
+                  setMonthlyGoal(Number(e.target.value));
+                  setError(prev => ({...prev, monthlyGoal: ''}));
+                }}
                 min="0"
                 step="0.01"
                 placeholder="Enter amount in PHP"
               />
+              {error.monthlyGoal && <p className="text-red-500 text-sm mt-1">{error.monthlyGoal}</p>}
             </div>
           )}
-          {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
               Cancel
