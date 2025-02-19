@@ -10,6 +10,7 @@ import UsersList from "@/components/UsersList";
 
 // The newly refactored GlobalReportsTab
 import GlobalReportsTab from "@/components/GlobalReportsTab";
+import { SettingsLayout } from "@/components/settings/SettingsLayout";
 
 export default async function SuperAdminDashboard({
   searchParams,
@@ -116,16 +117,7 @@ export default async function SuperAdminDashboard({
   } else if (currentTab === "reports") {
     content = <GlobalReportsTab />;
   } else if (currentTab === "settings") {
-    content = (
-      <Card>
-        <CardHeader>
-          <CardTitle>System Logs & Settings</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>Settings content here...</p>
-        </CardContent>
-      </Card>
-    );
+    content = <SettingsLayout />;
   } else {
     content = <p>Invalid section.</p>;
   }
