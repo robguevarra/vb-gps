@@ -1,0 +1,16 @@
+add surplus logic sa superadmin reports and to the whole data. 
+- trigger surplus compute or something
+
+try to fix approval logic for surplus and leave request. 
+- i think its trying to check who is assigned to the request, instead of just looking at the local church. 
+
+
+finance
+- recent transactions - lalabas lang dapat ng transactions ni finance mismo. 
+- record donations not working yet
+
+lead pastor
+- not seeing anything
+
+
+
