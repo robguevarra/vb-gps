@@ -81,10 +81,21 @@
 *New Update*
 - Changed the way we fetch roles. Implemented a user_roles table to store the roles of the users.
 - Finance route already working. Able to login with finance role and able to go straight to finance dashboard. 
+- All the other dashboards need editting to apply getUserRole.ts to fetch the correct roles. 
+- Recent Transactions Table should be able to see offline transactions made by finance officer only. 
+- Added a column on donor_donations table to record who made the transaction. 
+- api/donations route is working. Able to post data to the database. 
+- DonationModal is working. Able to post data to the database. 
+- api/donations updated to include comments. allows online donations.
+- ManualRemittanceWizard is working. Able to post data to the database. 
 
 
 # **Currently working on**\
-- All the other dashboards need editting to apply getUserRole.ts to fetch the correct roles. 
+errors on missionary dashboard when sidebar is hidden.
+errors on missionary dashboard in displaying recent donations. 
+
+
+
 
 Finance dashboard recent transactions:
 - should be able to see offline transactions made my finance officer. 
