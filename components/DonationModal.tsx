@@ -1,16 +1,17 @@
-//components/DonationModal.tsx
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation"; // <-- Import for router.refresh()
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation"; // For router.refresh()
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog";
+// Import createBrowserClient from @supabase/ssr.
+import { createBrowserClient } from "@supabase/ssr";
 
 interface DonationModalProps {
   missionaries: any[];
@@ -31,7 +32,33 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter(); // <-- We'll call router.refresh() after success
+  const router = useRouter();
+
+  // Create a browser client using the new @supabase/ssr package.
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  // State to hold the current user.
+  const [user, setUser] = useState<any>(null);
+
+  // Fetch the current session on mount.
+  useEffect(() => {
+    async function getSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      console.log("[DonationModal] Retrieved session:", session);
+      if (session && session.user) {
+        console.log("[DonationModal] User loaded:", session.user);
+        setUser(session.user);
+      } else {
+        console.warn("[DonationModal] No session or user found");
+      }
+    }
+    getSession();
+  }, [supabase]);
 
   const handleDonorNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -50,8 +77,8 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
         const res = await fetch(`/api/donors/suggestions?search=${encodeURIComponent(value)}`);
         if (res.ok) {
           const data = await res.json();
-          setDonorSuggestions(data.donors || []);
           console.log("[DonationModal] Fetched donor suggestions:", data.donors);
+          setDonorSuggestions(data.donors || []);
         } else {
           console.error("[DonationModal] Failed to fetch donor suggestions");
           setDonorSuggestions([]);
@@ -84,6 +111,14 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+
+    // Ensure the user session is loaded.
+    if (!user) {
+      setFormError("User session not loaded. Please try again.");
+      console.error("[DonationModal] Submission blocked: No user session");
+      return;
+    }
+
     if (!missionaryId) {
       setFormError("Please select a missionary.");
       return;
@@ -105,6 +140,8 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
       return;
     }
     setIsSubmitting(true);
+    
+    // Build the payload, ensuring recorded_by is set to the current user's ID.
     const payload = {
       donor_name: donorName,
       donor_email: donorEmail,
@@ -112,20 +149,22 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
       amount: parseFloat(amount),
       date,
       missionary_id: missionaryId,
-      notes
+      notes,
+      recorded_by: user.id,
     };
+
+    // Log the payload for diagnostic purposes.
     console.log("[DonationModal] Submitting donation with payload:", payload);
+
     try {
       const response = await fetch("/api/donations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
       if (response.ok) {
         console.log("[DonationModal] Donation recorded successfully");
-        // Refresh SSR data
         router.refresh();
-
         // Reset form fields on success
         setOpen(false);
         setDonorName("");
@@ -159,7 +198,11 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
           <DialogTitle>Record Donation</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex flex-col">
+          <div
+            className={`flex flex-col relative ${
+              donorName && !donorSelected ? "mb-40" : ""
+            }`}
+          >
             <label htmlFor="missionary">Select Missionary</label>
             <select
               id="missionary"
@@ -175,9 +218,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="flex flex-col relative">
-            <label htmlFor="donorName" className="text-sm font-medium">Donor Name</label>
+            <label htmlFor="donorName" className="text-sm font-medium mt-4">
+              Donor Name
+            </label>
             <input
               id="donorName"
               type="text"
@@ -199,7 +242,8 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
                       className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
                       onClick={() => handleSuggestionClick(donor)}
                     >
-                      {donor.name} {donor.email ? `(${donor.email})` : ""} <span className="text-xs text-gray-400">Press Tab to complete</span>
+                      {donor.name} {donor.email ? `(${donor.email})` : ""}{" "}
+                      <span className="text-xs text-gray-400">Press Tab to complete</span>
                     </div>
                   ))
                 ) : (
@@ -211,7 +255,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
             )}
           </div>
           <div className="flex flex-col">
-            <label htmlFor="donorEmail" className="text-sm font-medium">Donor Email (optional)</label>
+            <label htmlFor="donorEmail" className="text-sm font-medium">
+              Donor Email (optional)
+            </label>
             <input
               id="donorEmail"
               type="email"
@@ -221,7 +267,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
             />
           </div>
           <div className="flex flex-col">
-            <label htmlFor="donorPhone" className="text-sm font-medium">Donor Phone (optional)</label>
+            <label htmlFor="donorPhone" className="text-sm font-medium">
+              Donor Phone (optional)
+            </label>
             <input
               id="donorPhone"
               type="tel"
@@ -231,7 +279,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
             />
           </div>
           <div className="flex flex-col">
-            <label htmlFor="amount" className="text-sm font-medium">Amount</label>
+            <label htmlFor="amount" className="text-sm font-medium">
+              Amount
+            </label>
             <input
               id="amount"
               type="number"
@@ -243,7 +293,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
             />
           </div>
           <div className="flex flex-col">
-            <label htmlFor="date" className="text-sm font-medium">Date</label>
+            <label htmlFor="date" className="text-sm font-medium">
+              Date
+            </label>
             <input
               id="date"
               type="date"
@@ -254,7 +306,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
             />
           </div>
           <div className="flex flex-col">
-            <label htmlFor="notes" className="text-sm font-medium">Notes (optional)</label>
+            <label htmlFor="notes" className="text-sm font-medium">
+              Notes (optional)
+            </label>
             <textarea
               id="notes"
               value={notes}
@@ -264,7 +318,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
             />
           </div>
           {formError && <div className="text-red-500 text-sm">{formError}</div>}
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={isSubmitting || !user}>
             {isSubmitting ? "Submitting..." : "Submit Donation"}
           </Button>
         </form>
