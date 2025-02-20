@@ -1,4 +1,5 @@
 // app/dashboard/superadmin/page.tsx
+
 export const dynamic = "force-dynamic";
 
 import { createClient } from "@/utils/supabase/server";
@@ -7,10 +8,9 @@ import SuperAdminSidebar from "@/components/SuperAdminSidebar";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import ChurchesList from "@/components/ChurchesList";
 import UsersList from "@/components/UsersList";
-
-// The newly refactored GlobalReportsTab
 import GlobalReportsTab from "@/components/GlobalReportsTab";
 import { SettingsLayout } from "@/components/settings/SettingsLayout";
+import { getUserRole } from "@/utils/getUserRole";
 
 export default async function SuperAdminDashboard({
   searchParams,
@@ -32,13 +32,13 @@ export default async function SuperAdminDashboard({
     redirect("/login");
   }
 
-  const isSuperAdmin =
-    user.email === "robneil@gmail.com" || user.user_metadata?.role === "superadmin";
-  if (!isSuperAdmin) {
+  // Validate that the user is a superadmin via getUserRole.
+  const userRole = await getUserRole(user.id);
+  if (userRole !== "superadmin") {
     redirect("/login");
   }
 
-  // Fetch current user's profile
+  // Fetch current user's profile.
   const { data: profileData, error: profileError } = await supabase
     .from("profiles")
     .select("*")
@@ -48,7 +48,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profile data:", profileError.message);
   }
 
-  // Fetch churches for the Churches tab
+  // Fetch churches for the Churches tab.
   const { data: churches, error: churchesError } = await supabase
     .from("local_churches")
     .select("id, name, lead_pastor_id")
@@ -57,7 +57,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching churches:", churchesError.message);
   }
 
-  // Fetch lead pastors for the Churches modal
+  // Fetch lead pastors for the Churches modal.
   const { data: leadPastors, error: leadPastorsError } = await supabase
     .from("profiles")
     .select("id, full_name")
@@ -66,7 +66,7 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching lead pastors:", leadPastorsError.message);
   }
 
-  // Fetch profiles for users (excluding superadmins)
+  // Fetch profiles for users (excluding superadmins).
   const { data: profilesData, error: profilesError } = await supabase
     .from("profiles")
     .select("id, full_name, role, local_church_id, monthly_goal")
@@ -76,14 +76,14 @@ export default async function SuperAdminDashboard({
     console.error("Error fetching profiles:", profilesError.message);
   }
 
-  // Fetch auth users (to get emails)
+  // Fetch auth users (to get emails).
   const { data: authUsersData, error: authUsersError } =
     await supabase.auth.admin.listUsers();
   if (authUsersError) {
     console.error("Error fetching auth users:", authUsersError.message);
   }
 
-  // Merge profiles with auth users to attach email
+  // Merge profiles with auth users to attach emails.
   let users = [];
   if (profilesData && authUsersData && authUsersData.users) {
     users = profilesData.map((profile) => {
@@ -98,7 +98,7 @@ export default async function SuperAdminDashboard({
     });
   }
 
-  // Decide which content to render
+  // Decide which content to render based on currentTab.
   let content;
   if (currentTab === "churches") {
     content = (
@@ -133,9 +133,7 @@ export default async function SuperAdminDashboard({
             </h1>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {profileData?.role === "superadmin"
-                  ? "superadmin"
-                  : profileData?.role || "user"}
+                {userRole}
               </p>
             </div>
           </header>

@@ -130,12 +130,7 @@ export default function GlobalReportsTab() {
     loadData();
   }, []);
 
-  // Make sure we log after data is loaded or changed
-  useEffect(() => {
-    console.log("[GlobalReportsTab] donations:", donations);
-    console.log("[GlobalReportsTab] missionaries:", missionaries);
-    console.log("[GlobalReportsTab] subTab:", subTab);
-  }, [donations, missionaries, subTab]);
+
 
   // ----------------------------------------------
   // Load data for last 13 months
@@ -258,7 +253,7 @@ export default function GlobalReportsTab() {
       keyArr.reverse();
       setThirteenMonthKeys(keyArr);
 
-      console.log("Raw donations data:", allDonations);
+
 
       setIsLoading(false);
     } catch (err: any) {

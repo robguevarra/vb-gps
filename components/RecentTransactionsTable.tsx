@@ -20,9 +20,6 @@ interface RecentTransactionsTableProps {
 export default function RecentTransactionsTable({ donations }: RecentTransactionsTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    console.log("[RecentTransactionsTable] Rendered with donations:", donations);
-  }, [donations]);
 
   const filteredDonations = donations.filter(donation =>
     donation.donor_name.toLowerCase().includes(searchQuery.toLowerCase())

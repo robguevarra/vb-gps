@@ -35,12 +35,9 @@ export default function StaffList({ users, churches }: UsersListProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
 
-  useEffect(() => {
-    console.log("UsersList rendered with users:", users);
-  }, [users]);
+
 
   const handleEditClick = (user: User) => {
-    console.log("Editing user:", user);
     setSelectedUser(user);
     setModalOpen(true);
   };

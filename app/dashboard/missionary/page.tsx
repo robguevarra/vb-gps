@@ -1,4 +1,5 @@
 // app/dashboard/missionary/page.tsx
+
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import DashboardCards from "@/components/DashboardCards";
@@ -13,6 +14,7 @@ import { RequestHistoryTab } from "@/components/RequestHistoryTab";
 import { ManualRemittanceWizard } from "@/components/ManualRemittanceWizard";
 import { ReportsTab } from "@/components/ReportsTab";
 import { Sidebar } from "@/components/Sidebar";
+import { getUserRole } from "@/utils/getUserRole";
 
 export const dynamic = "force-dynamic";
 
@@ -61,10 +63,11 @@ export default async function MissionaryDashboard({
     redirect("/login");
   }
 
-  const isSuperAdmin =
-    user.email === "robneil@gmail.com" ||
-    user.user_metadata?.role === "superadmin";
+  // Retrieve the user's role from the user_roles table.
+  const userRole = await getUserRole(user.id);
+  const isSuperAdmin = userRole === "superadmin";
 
+  // Fetch profile data (either using provided userId or the logged-in user's id).
   const { data: fetchedProfileData } = await supabase
     .from("profiles")
     .select("*")
@@ -76,7 +79,7 @@ export default async function MissionaryDashboard({
     (isSuperAdmin
       ? {
           id: user.id,
-          full_name: user.user_metadata?.full_name || user.email,
+          full_name: user.email, // fallback if full name isn't provided
           role: "superadmin",
           local_church_id: null,
           monthly_goal: 0,

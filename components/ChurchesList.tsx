@@ -26,12 +26,8 @@ export default function ChurchesList({ churches, leadPastors }: ChurchesListProp
   const [selectedChurch, setSelectedChurch] = useState<Church | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  useEffect(() => {
-    console.log("ChurchesList rendered with churches:", churches);
-  }, [churches]);
 
   const handleEditClick = (church: Church) => {
-    console.log("Editing church:", church);
     setSelectedChurch(church);
     setModalOpen(true);
   };
