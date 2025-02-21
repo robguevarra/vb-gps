@@ -89,10 +89,50 @@
 - api/donations updated to include comments. allows online donations.
 - ManualRemittanceWizard is working. Able to post data to the database. 
 
+Recent Donations fix:
+- updated RLS on donor_donations table:
+    drop policy if exists "Allow select donation" on donor_donations;
+    
+    create policy "Access based on role and relationships"
+    on donor_donations
+    for select using (
+    exists (select 1 from user_roles where user_id = auth.uid() and role = 'superadmin')
+    or donor_donations.missionary_id = auth.uid()
+    or exists (
+        select 1 from profiles
+        where id = auth.uid()
+        and role = 'campus_director'
+        and donor_donations.missionary_id in (
+        select id from profiles
+        where campus_director_id = auth.uid()
+        )
+    )
+    or exists (
+        select 1 from profiles pastor
+        join profiles missionary
+        on missionary.local_church_id = pastor.local_church_id
+        where pastor.id = auth.uid()
+        and pastor.role = 'lead_pastor'
+        and donor_donations.missionary_id = missionary.id
+    )
+    or donor_donations.recorded_by = auth.uid()
+    );
+
+    create index idx_donor_donations_missionary on donor_donations(missionary_id);
+    create index idx_donor_donations_recorded_by on donor_donations(recorded_by);
+    create index idx_profiles_campus_director on profiles(campus_director_id);
+    create index idx_profiles_local_church on profiles(local_church_id);
+
+works now. 
+
+errors on missionary dashboard in displaying recent donations fixed. 
+
+changes from usd sign to php sign.
+
 
 # **Currently working on**\
 errors on missionary dashboard when sidebar is hidden.
-errors on missionary dashboard in displaying recent donations. 
+
 
 
 
@@ -129,3 +169,30 @@ Finance dashboard recent transactions:
     - Profiles
         - need to create the API for profiles so elementor can load the API data of missionaries and campus directors.
     
+supeadmin
+- list ng lahat ng pending
+- list ng lahat ng online donations
+- list ng lahat ng offline donations
+
+change DONORS to PARTNERS
+
+QR code for missionaries to give to partners
+
+profile customization
+
+MPD WORK stuff. 
+- partners na ma-eexpire (2 months reminder ng 1 year commitment about to expire)
+- partners na dormant / inactive (di nag bigay last 6 months)
+
+additional MPD leave
+
+campus director dapat may reports din
+to check missionary giving status
+
+lead pastor + campus director should have reports
+like missionariestable
+
+pastors shoud have delikado list
+delinquent list
+
+anything below 15k sagot ni bulacan
