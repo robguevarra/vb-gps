@@ -92,7 +92,7 @@
 Recent Donations fix:
 - updated RLS on donor_donations table:
     drop policy if exists "Allow select donation" on donor_donations;
-    
+
     create policy "Access based on role and relationships"
     on donor_donations
     for select using (
@@ -129,6 +129,35 @@ errors on missionary dashboard in displaying recent donations fixed.
 
 changes from usd sign to php sign.
 
+missionary dashboard improved:
+- added a new card for current partners and new partners this month. 
+
+**Current Implementation Summary**  
+We've implemented a partner tracking system for missionary dashboards that calculates:  
+1. **Active Partners**: Unique donors contributing in the current month  
+2. **New Partners**: First-time donors this month (no prior contributions)  
+Using Set operations on raw donation data from Supabase. The core logic lives in `app/dashboard/missionary/page.tsx`, with UI components in `components/DashboardCards.tsx` and `components/RecentDonations.tsx`.
+
+**Key Challenges & Solutions**  
+Initial attempts using Supabase's `distinct` and subqueries produced inaccurate counts due to:  
+- Date filtering edge cases (UTC vs local time)  
+- Null donor_id handling  
+- Complex NOT IN subquery limitations  
+The working solution uses manual deduplication via JavaScript Sets after fetching raw donation records, verified through debug logging of actual donor IDs.
+
+**Relevant Implementation Details**  
+- **Data Flow**: Fetches all donations → deduplicates via Set → calculates new partners through Set difference  
+- **Modified Files**:  
+  - `app/dashboard/missionary/page.tsx` (core logic)  
+  - UI components for cards/transactions  
+  - Global CSS for dashboard styling  
+- **Known Limitations**:  
+  - Current implementation requires full donation history scans  
+  - No caching layer for partner counts  
+  - Date calculations use client-side UTC  
+- **Validation**: Console logs raw donor IDs and query parameters for verification  
+- **Error Handling**: Catches Supabase errors explicitly and throws standardized errors  
+
 
 # **Currently working on**\
 errors on missionary dashboard when sidebar is hidden.
@@ -137,8 +166,6 @@ errors on missionary dashboard when sidebar is hidden.
 
 
 
-Finance dashboard recent transactions:
-- should be able to see offline transactions made my finance officer. 
 
 
 # **WHAT IS NEXT**
