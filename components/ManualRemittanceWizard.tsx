@@ -10,8 +10,9 @@ import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus } from "
 import { toast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
 
-interface ManualRemittanceWizardProps {
+export interface ManualRemittanceWizardProps {
   missionaryId: string
+  donors: Array<{ id: string; name: string }>
 }
 
 interface Donor {
@@ -19,7 +20,7 @@ interface Donor {
   name: string
 }
 
-export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardProps) {
+export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanceWizardProps) {
   const supabase = createClient()
   const [step, setStep] = useState<1 | 2>(1)
   const [totalAmount, setTotalAmount] = useState("")

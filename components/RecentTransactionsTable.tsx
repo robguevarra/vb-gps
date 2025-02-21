@@ -61,7 +61,7 @@ export default function RecentTransactionsTable({ donations }: RecentTransaction
                     {donation.donor_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${donation.amount.toLocaleString()}
+                    ₱{donation.amount.toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {new Date(donation.date).toLocaleDateString()}

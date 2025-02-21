@@ -9,8 +9,8 @@ interface ProgressBarProps {
     return (
       <div className="space-y-2">
         <div className="flex justify-between text-sm text-muted-foreground">
-          <span>Current: ${current.toLocaleString()}</span>
-          <span>Goal: ${goal.toLocaleString()}</span>
+          <span>Current: ₱{current.toLocaleString()}</span>
+          <span>Goal: ₱{goal.toLocaleString()}</span>
         </div>
         <div className="h-4 bg-secondary rounded-full overflow-hidden">
           <div

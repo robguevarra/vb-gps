@@ -63,7 +63,7 @@ export default function ProgressChart({
           label: (context: any) => {
             const label = context.dataset.label || ''
             const value = context.parsed.y || 0
-            return `${label}: $${value.toLocaleString()}`
+            return `${label}: ₱${value.toLocaleString()}`
           }
         }
       }
@@ -75,7 +75,7 @@ export default function ProgressChart({
           color: '#e5e7eb',
         },
         ticks: {
-          callback: (value: any) => `$${value.toLocaleString()}`,
+          callback: (value: any) => `₱${value.toLocaleString()}`,
         },
       },
       x: {

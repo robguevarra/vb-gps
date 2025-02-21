@@ -80,9 +80,10 @@ export function SurplusRequestModal({ surplusBalance, missionaryId }: SurplusReq
           <div className="space-y-2">
             <Label>Amount</Label>
             <Input
-              type="number"
+              placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              prefix="₱"
               min="1"
               max={surplusBalance}
               required

@@ -60,7 +60,7 @@ export default function RecentDonations({ donations, missionaryId }: RecentDonat
                     </p>
                   </div>
                   <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                    {formatCurrency(donation.amount)}
+                    ₱{donation.amount.toLocaleString()}
                   </p>
                 </div>
               ))

@@ -46,7 +46,9 @@
     "react-hook-form": "^7.54.2",
     "shadcn-ui": "^0.9.4",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "uuid": "^11.1.0",
+    "xendit-node": "^6.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -57,6 +59,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.1.6",
     "postcss": "^8.5.1",
+    "supabase": "^2.12.1",
     "tailwindcss": "^3.3.2",
     "typescript": "^5"
   }

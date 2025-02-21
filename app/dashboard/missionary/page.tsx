@@ -110,7 +110,7 @@ export default async function MissionaryDashboard({
 
   const { data: donorDonationsData } = await supabase
     .from("donor_donations")
-    .select("id, amount, date, donors(name), notes")
+    .select("id, amount, date, donor_id, donors!inner(id, name), notes")
     .eq("missionary_id", userIdParam || user.id)
     .order("date", { ascending: false });
 
@@ -118,9 +118,7 @@ export default async function MissionaryDashboard({
     id: record.id,
     amount: record.amount,
     created_at: record.date,
-    donor_name: Array.isArray(record.donors)
-      ? (record.donors as any)[0]?.name || "Unknown"
-      : (record.donors as any)?.name || "Unknown",
+    donor_name: record.donors ? (record.donors as any).name : "Unknown",
     notes: record.notes || "",
   })) || [];
 

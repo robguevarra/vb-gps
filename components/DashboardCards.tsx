@@ -17,7 +17,7 @@ export default function DashboardCards({
   const cards = [
     {
       title: "Monthly Goal",
-      value: `$${monthlyGoal.toLocaleString()}`,
+      value: `₱${monthlyGoal.toLocaleString()}`,
       icon: Target,
       description: "Target donation amount",
       color: "text-blue-600 dark:text-blue-400",
@@ -25,7 +25,7 @@ export default function DashboardCards({
     },
     {
       title: "Current Donations",
-      value: `$${currentDonations.toLocaleString()}`,
+      value: `₱${currentDonations.toLocaleString()}`,
       icon: DollarSign,
       description: "Total donations this month",
       color: "text-green-600 dark:text-green-400",
@@ -41,7 +41,7 @@ export default function DashboardCards({
     },
     {
       title: "Surplus Balance",
-      value: `$${surplusBalance.toLocaleString()}`,
+      value: `₱${surplusBalance.toLocaleString()}`,
       icon: PiggyBank,
       description: "Available for future use",
       color: "text-purple-600 dark:text-purple-400",
