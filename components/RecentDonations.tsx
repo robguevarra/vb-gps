@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { useState } from "react";
 import DonorHistoryModal from "./DonorHistoryModal";
+import { Inbox } from "lucide-react";
 
 interface Donation {
   id: string | number;
@@ -28,46 +29,34 @@ export default function RecentDonations({ donations, missionaryId }: RecentDonat
 
   return (
     <>
-      <Card className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
-            Recent Donations
-          </CardTitle>
+      <Card className="overflow-hidden">
+        <CardHeader className="bg-muted/10 px-6 py-4">
+          <CardTitle className="text-lg font-semibold">Recent Transactions</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="p-0">
+          <div className="divide-y divide-border">
             {donations.length > 0 ? (
               donations.map((donation) => (
                 <div
                   key={donation.id}
-                  className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0"
+                  className="flex items-center justify-between p-4 transition-colors hover:bg-muted/5"
                 >
-                  <div>
-                    {donation.donor_name === 'Unknown' ? (
-                      <span className="font-semibold text-gray-800 dark:text-gray-200">
-                        {donation.donor_name}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => openModal(donation.donor_name)}
-                        className="font-semibold text-gray-800 dark:text-gray-200 hover:underline"
-                      >
-                        {donation.donor_name}
-                      </button>
-                    )}
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="grid gap-1">
+                    <div className="font-medium">{donation.donor_name}</div>
+                    <div className="text-sm text-muted-foreground">
                       {formatDate(donation.date)}
-                    </p>
+                    </div>
                   </div>
-                  <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                  <div className="font-semibold text-emerald-600">
                     ₱{donation.amount.toLocaleString()}
-                  </p>
+                  </div>
                 </div>
               ))
             ) : (
-              <p className="text-gray-500 dark:text-gray-400">
-                No donations yet.
-              </p>
+              <div className="p-6 text-center text-muted-foreground">
+                <Inbox className="mx-auto h-8 w-8 mb-2" />
+                <p>No recent transactions</p>
+              </div>
             )}
           </div>
         </CardContent>

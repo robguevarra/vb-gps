@@ -35,4 +35,44 @@
 
 .rdp-day_today {
   @apply font-bold;
+}
+
+@layer base {
+  :root {
+    --blue: 217 91% 60%;
+    --emerald: 158 64% 52%;
+    --amber: 43 96% 56%;
+    --violet: 262 83% 58%;
+    --teal: 173 80% 40%;
+    --indigo: 262 83% 58%;
+    
+    /* ... other existing variables ... */
+  }
+  
+  .dark {
+    --blue: 217 91% 72%;
+    --emerald: 158 64% 68%;
+    --amber: 43 96% 72%;
+    --violet: 262 83% 72%;
+    --teal: 173 80% 50%;
+    --indigo: 262 83% 72%;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border bg-background p-6 shadow-sm transition-all;
+  }
+
+  .card-header {
+    @apply flex flex-col space-y-1.5 p-6;
+  }
+
+  .metric-title {
+    @apply text-sm font-medium text-muted-foreground tracking-tight;
+  }
+
+  .metric-value {
+    @apply text-2xl font-bold tracking-tight;
+  }
 } 

@@ -133,6 +133,71 @@ export default async function MissionaryDashboard({
     .slice(0, 5);
 
   // -------------------------------
+  // Fetch Partner Count Data
+  // -------------------------------
+  // Get UTC dates
+  const now = new Date();
+  const startOfCurrentMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    .toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get all unique donors for this missionary (current month)
+  const { data: currentDonors, error: currentError } = await supabase
+    .from('donor_donations')
+    .select('donor_id')
+    .eq('missionary_id', userIdParam || user.id)
+    .gte('date', startOfCurrentMonth)
+    .lte('date', today)
+    .not('donor_id', 'is', null);
+
+  // Get all unique donors before current month
+  const { data: previousDonors, error: previousError } = await supabase
+    .from('donor_donations')
+    .select('donor_id')
+    .eq('missionary_id', userIdParam || user.id)
+    .lt('date', startOfCurrentMonth)
+    .not('donor_id', 'is', null);
+
+  // Calculate counts manually
+  const currentDonorIds = new Set(currentDonors?.map(d => d.donor_id) || []);
+  const previousDonorIds = new Set(previousDonors?.map(d => d.donor_id) || []);
+
+  // Current partners = unique donors this month
+  const currentPartnersCount = currentDonorIds.size;
+
+  // New partners = donors in current month not in previous months
+  const newPartnersCount = Array.from(currentDonorIds).filter(
+    id => !previousDonorIds.has(id)
+  ).length;
+
+  // Handle errors
+  if (currentError || previousError) {
+    console.error('Partner count errors:', { currentError, previousError });
+    throw new Error('Failed to fetch partner counts');
+  }
+
+  // After fetching partner counts
+  console.log('Current Partners Query:', {
+    query: currentDonors,
+    params: {
+      missionary_id: userIdParam || user.id,
+      start_date: startOfCurrentMonth,
+      end_date: today
+    }
+  });
+
+  console.log('New Partners Query:', {
+    query: newPartnersCount,
+    params: {
+      missionary_id: userIdParam || user.id,
+      start_date: startOfCurrentMonth,
+      end_date: today,
+      currentPartnersCount: currentPartnersCount,
+      newPartnersCount: newPartnersCount
+    }
+  });
+
+  // -------------------------------
   // Fetch Request History Data
   // -------------------------------
   const { data: leaveRequestsData } = await supabase
@@ -370,7 +435,8 @@ export default async function MissionaryDashboard({
             <DashboardCards
               monthlyGoal={profileData.monthly_goal || 0}
               currentDonations={currentDonations}
-              pendingRequests={pendingRequests}
+              currentPartnersCount={currentPartnersCount}
+              newPartnersCount={newPartnersCount}
               surplusBalance={profileData.surplus_balance}
             />
             <RecentDonations
