@@ -10,7 +10,8 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addMonths, format } from "date-fns"; // helpful for date manipulations
+import { addMonths, format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { TrendingUp, TrendingDown, Minus, Calendar, Users } from "lucide-react";
 
 interface ReportsTabProps {
   missionaryId: string;
@@ -34,110 +35,179 @@ export function ReportsTab({
   last13MonthDonations,
   allTimeDonors,
 }: ReportsTabProps) {
-  // 1) Build a pivot table for the last 13 months
   const { columns, pivotRows } = pivotLast13Months(last13MonthDonations);
+  const currentMonthData = getCurrentMonthData(last13MonthDonations);
 
   return (
-    <Tabs defaultValue="last13" className="w-full space-y-4">
-      {/* Tabs Navigation */}
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="last13">Last 13 Months</TabsTrigger>
-        <TabsTrigger value="partners">Partners</TabsTrigger>
-      </TabsList>
+    <div className="w-full relative" style={{ zIndex: 0 }}>
+      <Tabs defaultValue="current" className="w-full space-y-6">
+        <TabsList className="flex flex-col sm:grid sm:grid-cols-3 gap-2 sm:gap-0">
+          <TabsTrigger value="current" className="flex items-center gap-2">
+            <Calendar className="h-4 w-4" />
+            Current Month
+          </TabsTrigger>
+          <TabsTrigger value="last13" className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Last 13 Months
+          </TabsTrigger>
+          <TabsTrigger value="partners" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            All Partners
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Last 13 Months (Pivot) */}
-      <TabsContent value="last13">
-        <Card className="rounded-lg shadow">
-          <CardHeader>
-            <CardTitle>Last 13 Months</CardTitle>
-            <CardDescription className="mt-1 text-sm text-muted-foreground">
-              Each donor&apos;s monthly giving over the past 13 months
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[400px] w-full overflow-x-auto">
-              <table className="min-w-[1000px] border-t border-gray-100 dark:border-gray-800 text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="py-3 px-4 font-medium text-left">Partner</th>
-                    {columns.map((col) => (
-                      <th
-                        key={col.key}
-                        className="py-3 px-2 font-medium text-right min-w-[72px]"
-                      >
-                        {col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="[&>tr:nth-child(even)]:bg-muted/10">
-                  {pivotRows.map((row) => (
-                    <tr
-                      key={`pivot-${row.donorId}`}
-                      className="hover:bg-accent transition-colors"
+        {/* Current Month View - Mobile Friendly */}
+        <TabsContent value="current">
+          <Card>
+            <CardHeader className="space-y-2">
+              <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span>{format(new Date(), "MMMM yyyy")}</span>
+                <Badge variant="secondary" className="text-lg w-fit">
+                  ₱{currentMonthData.totalAmount.toLocaleString()}
+                </Badge>
+              </CardTitle>
+              <CardDescription>
+                {currentMonthData.partners.length} active partners this month
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="relative p-0">
+              <div className="sticky top-0 z-10 bg-card border-b border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3">
+                  <div className="font-medium">Partner</div>
+                  <div className="font-medium text-right sm:text-left">Amount</div>
+                  <div className="hidden sm:block font-medium">Date</div>
+                </div>
+              </div>
+              <ScrollArea className="h-[400px]" type="always">
+                <div className="divide-y divide-border">
+                  {currentMonthData.donations.map((donation, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3 hover:bg-accent/50 transition-colors"
                     >
-                      <td className="py-2 px-4">
-                        {row.donorName || "Unknown Donor"}
-                      </td>
-                      {row.monthlyAmounts.map((amt, idx) => (
-                        <td key={idx} className="py-2 px-2 text-right">
-                          {amt > 0 ? `₱${amt.toLocaleString()}` : "-"}
-                        </td>
+                      <div className="truncate">{donation.donorName}</div>
+                      <div className="text-right sm:text-left">₱{donation.amount.toLocaleString()}</div>
+                      <div className="hidden sm:block">
+                        {format(new Date(donation.date), "MMM d, yyyy")}
+                      </div>
+                      {/* Mobile date display */}
+                      <div className="col-span-2 sm:hidden text-sm text-muted-foreground mt-1">
+                        {format(new Date(donation.date), "MMM d, yyyy")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Last 13 Months - Mobile Friendly */}
+        <TabsContent value="last13">
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Partner Giving</CardTitle>
+              <CardDescription>
+                Track partner giving patterns over the last 13 months
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="relative">
+                {/* Table Container */}
+                <div className="overflow-auto">
+                  <table className="w-full border-collapse min-w-[1000px]">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-card border-b border-border">
+                        <th className="text-left p-3 font-medium sticky left-0 bg-card border-r border-border">
+                          Partner
+                        </th>
+                        {columns.map((col) => (
+                          <th key={col.key} className="p-3 text-right font-medium min-w-[100px]">
+                            {col.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {pivotRows.map((row) => (
+                        <tr
+                          key={`pivot-${row.donorId}`}
+                          className="hover:bg-accent/50 transition-colors"
+                        >
+                          <td className="p-3 sticky left-0 bg-card border-r border-border">
+                            <div className="truncate max-w-[200px]">
+                              {row.donorName}
+                            </div>
+                          </td>
+                          {row.monthlyAmounts.map((amt, idx) => (
+                            <td
+                              key={idx}
+                              className={`p-3 text-right ${
+                                amt > 0 ? 'text-foreground' : 'text-muted-foreground'
+                              }`}
+                            >
+                              {amt > 0 ? `₱${amt.toLocaleString()}` : "—"}
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </TabsContent>
+                    </tbody>
+                  </table>
+                </div>
 
-      {/* All-Time Partners */}
-      <TabsContent value="partners">
-        <Card className="rounded-lg shadow">
-          <CardHeader>
-            <CardTitle>All-Time Partners</CardTitle>
-            <CardDescription className="mt-1 text-sm text-muted-foreground">
-              Summaries of each partner&apos;s total giving
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0 w-full overflow-x-auto">
-            <ScrollArea className="h-[400px] w-full">
-              <table className="min-w-[800px] border-t border-gray-100 dark:border-gray-800 text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-medium">Partner</th>
-                    <th className="text-right py-3 px-4 font-medium">
-                      Total Giving
-                    </th>
-                    <th className="text-right py-3 px-4 font-medium">
-                      Donations Count
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="[&>tr:nth-child(even)]:bg-muted/10">
+                {/* Mobile View - Alternative Display */}
+                <div className="block sm:hidden">
+                  <div className="p-4 text-center text-muted-foreground">
+                    Please rotate your device or use a larger screen to view the detailed monthly breakdown.
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* All Partners - Mobile Friendly */}
+        <TabsContent value="partners">
+          <Card>
+            <CardHeader>
+              <CardTitle>Partner History</CardTitle>
+              <CardDescription>
+                Complete giving history for all partners
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="relative p-0">
+              <div className="sticky top-0 z-10 bg-card border-b border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3">
+                  <div className="font-medium">Partner</div>
+                  <div className="font-medium text-right">Total</div>
+                  <div className="hidden sm:block font-medium text-right">Frequency</div>
+                </div>
+              </div>
+              <ScrollArea className="h-[500px]" type="always">
+                <div className="divide-y divide-border">
                   {aggregatePartners(allTimeDonors).map((partner) => (
-                    <tr
+                    <div
                       key={`alltime-${partner.donorId}`}
-                      className="hover:bg-accent transition-colors"
+                      className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3 hover:bg-accent/50 transition-colors"
                     >
-                      <td className="py-2 px-4">{partner.donorName}</td>
-                      <td className="py-2 px-4 text-right">
-                        ₱{partner.totalAmount.toLocaleString()}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        {partner.donationsCount}
-                      </td>
-                    </tr>
+                      <div className="truncate">{partner.donorName}</div>
+                      <div className="text-right">₱{partner.totalAmount.toLocaleString()}</div>
+                      <div className="hidden sm:block text-right">
+                        {partner.donationsCount} {partner.donationsCount === 1 ? 'time' : 'times'}
+                      </div>
+                      {/* Mobile frequency display */}
+                      <div className="col-span-2 sm:hidden text-sm text-muted-foreground mt-1 text-right">
+                        {partner.donationsCount} {partner.donationsCount === 1 ? 'time' : 'times'}
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
 
@@ -231,4 +301,46 @@ function aggregatePartners(allTimeDonors: ReportsTabProps["allTimeDonors"]) {
     totalAmount: details.totalAmount,
     donationsCount: details.donationsCount,
   }));
+}
+
+// Update getCurrentMonthData to return flat donation list
+function getCurrentMonthData(donations: ReportsTabProps["last13MonthDonations"]) {
+  const now = new Date();
+  const currentMonth = {
+    start: startOfMonth(now),
+    end: endOfMonth(now),
+  };
+
+  const currentMonthDonations = donations
+    .filter((donation) =>
+      isWithinInterval(new Date(donation.date), currentMonth)
+    )
+    .map(donation => ({
+      donorId: donation.donor_id,
+      donorName: donation.donors?.name ?? "Unknown Partner",
+      date: donation.date,
+      amount: donation.amount,
+    }))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const totalAmount = currentMonthDonations.reduce(
+    (sum, donation) => sum + donation.amount,
+    0
+  );
+
+  return {
+    totalAmount,
+    donations: currentMonthDonations,
+    partners: Array.from(
+      currentMonthDonations.reduce((map, donation) => {
+        const key = donation.donorId;
+        const existing = map.get(key) || { amount: 0, count: 0 };
+        map.set(key, {
+          amount: existing.amount + donation.amount,
+          count: existing.count + 1,
+        });
+        return map;
+      }, new Map())
+    ).length,
+  };
 } 

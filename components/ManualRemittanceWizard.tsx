@@ -10,17 +10,17 @@ import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus } from "
 import { toast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
 
-export interface ManualRemittanceWizardProps {
-  missionaryId: string
-  donors: Array<{ id: string; name: string }>
-}
-
-interface Donor {
+interface Partner {
   id: string
   name: string
 }
 
-export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanceWizardProps) {
+export interface ManualRemittanceWizardProps {
+  missionaryId: string
+  partners: Array<{ id: string; name: string }>
+}
+
+export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemittanceWizardProps) {
   const supabase = createClient()
   const [step, setStep] = useState<1 | 2>(1)
   const [totalAmount, setTotalAmount] = useState("")
@@ -30,8 +30,9 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [searchResults, setSearchResults] = useState<Donor[]>([])
+  const [searchResults, setSearchResults] = useState<Partner[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const [isCreatingPartner, setIsCreatingPartner] = useState(false)
 
   // Debounced Search
   const debouncedSearch = useCallback(
@@ -67,23 +68,40 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
     debouncedSearch(searchTerm)
   }, [searchTerm, debouncedSearch])
 
-  const handleCreateDonor = async (name: string) => {
-    setLoading(true)
+  const handleCreatePartner = async (name: string, index: number) => {
+    if (isCreatingPartner) return // Prevent multiple clicks
+    setIsCreatingPartner(true)
     try {
-      const { data: newDonor, error } = await supabase.from("donors").insert({ name }).select().single()
+      const { data: newPartner, error } = await supabase
+        .from("donors")
+        .insert({ name })
+        .select()
+        .single()
 
       if (error) throw error
 
-      setSearchResults((prevResults) => [...prevResults, newDonor])
-      return newDonor.id
+      // Update search results with new partner
+      setSearchResults((prevResults) => [...prevResults, newPartner])
+      
+      // Immediately select the new partner for this entry
+      handleSelectDonor(index, newPartner)
+      
+      // Clear search term since we've selected the partner
+      setSearchTerm("")
+      
+      return newPartner.id
     } catch (error) {
-      toast({ title: "Error creating donor", description: error.message, variant: "destructive" })
+      toast({ 
+        title: "Error creating partner", 
+        description: error.message, 
+        variant: "destructive" 
+      })
     } finally {
-      setLoading(false)
+      setIsCreatingPartner(false)
     }
   }
 
-  const handleSelectDonor = (index: number, donor: Donor) => {
+  const handleSelectDonor = (index: number, donor: Partner) => {
     const newEntries = [...donorEntries]
     newEntries[index] = { ...newEntries[index], donorId: donor.id, donorName: donor.name }
     setDonorEntries(newEntries)
@@ -174,7 +192,7 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
         <Progress value={step === 1 ? 50 : 100} className="w-full" />
 
         <p className="text-center text-muted-foreground">
-          {step === 1 ? "Enter total amount" : "Distribute donations to donors"}
+          {step === 1 ? "Enter total amount" : "Distribute donations to partners"}
         </p>
 
         <div className="relative">
@@ -204,7 +222,7 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
               </div>
 
               <Button size="lg" className="w-full" onClick={() => setStep(2)} disabled={!validateStep1()}>
-                Next: Assign Donors
+                Next: Assign Partners
               </Button>
             </div>
           )}
@@ -212,13 +230,18 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
           {step === 2 && (
             <div className="space-y-6">
               {donorEntries.map((entry, index) => (
-                <Card key={index} className="p-4">
+                <Card key={index} className="p-4 border-2 border-muted">
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <Label className="text-lg">Donor {index + 1}</Label>
+                      <Label className="text-lg font-medium">Partner {index + 1}</Label>
                       {index > 0 && (
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveDonorEntry(index)}>
-                          <Trash className="h-4 w-4 text-red-500" />
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleRemoveDonorEntry(index)}
+                          className="hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
@@ -227,7 +250,7 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="text"
-                        placeholder="Search for a donor..."
+                        placeholder="Search for a partner..."
                         value={entry.donorName || searchTerm}
                         onChange={(e) => {
                           if (!entry.donorId) {
@@ -235,33 +258,35 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
                           }
                         }}
                         disabled={!!entry.donorId}
-                        className="pl-8"
+                        className="pl-8 transition-all focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
 
                     {searchTerm.trim() && !entry.donorId && (
-                      <Card className="mt-2">
+                      <Card className="mt-2 border-2 border-muted">
                         <CardContent className="p-2">
-                          {searchLoading && (
-                            <div className="flex items-center justify-center p-2 text-muted-foreground">
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching...
+                          {searchLoading ? (
+                            <div className="flex items-center justify-center p-4 text-muted-foreground">
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                              Searching...
                             </div>
-                          )}
-                          {!searchLoading && searchResults.length > 0 && (
-                            <ul className="space-y-1">
-                              {searchResults.map((donor) => (
+                          ) : searchResults.length > 0 ? (
+                            <ul className="space-y-1 max-h-48 overflow-y-auto">
+                              {searchResults.map((partner) => (
                                 <li
-                                  key={donor.id}
-                                  className="p-2 hover:bg-accent rounded-md cursor-pointer transition-colors"
-                                  onClick={() => handleSelectDonor(index, donor)}
+                                  key={partner.id}
+                                  className="p-2 hover:bg-accent rounded-md cursor-pointer transition-colors flex items-center"
+                                  onClick={() => handleSelectDonor(index, partner)}
                                 >
-                                  {donor.name}
+                                  <span className="flex-1">{partner.name}</span>
+                                  <CheckCircle className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
                                 </li>
                               ))}
                             </ul>
-                          )}
-                          {!searchLoading && searchResults.length === 0 && (
-                            <div className="p-2 text-muted-foreground">No donors found.</div>
+                          ) : (
+                            <div className="p-4 text-center text-muted-foreground">
+                              No partners found
+                            </div>
                           )}
                         </CardContent>
                       </Card>
@@ -273,50 +298,78 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
                         variant="outline"
                         size="sm"
                         onClick={async () => {
-                          const newDonorId = await handleCreateDonor(searchTerm)
-                          if (newDonorId) {
-                            const newDonor = searchResults.find((d) => d.id === newDonorId)
-                            if (newDonor) {
-                              handleSelectDonor(index, newDonor)
-                            }
-                          }
+                          await handleCreatePartner(searchTerm, index)
                         }}
-                        disabled={!searchTerm.trim()}
+                        disabled={!searchTerm.trim() || isCreatingPartner}
                         className="w-full"
                       >
-                        <UserPlus className="mr-2 h-4 w-4" /> Create New Donor
+                        {isCreatingPartner ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating Partner...
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="mr-2 h-4 w-4" /> 
+                            Create New Partner
+                          </>
+                        )}
                       </Button>
                     )}
 
                     <div className="space-y-2">
                       <Label htmlFor={`amount-${index}`}>Amount</Label>
-                      <Input
-                        id={`amount-${index}`}
-                        type="number"
-                        value={entry.amount}
-                        onChange={(e) => {
-                          const newEntries = [...donorEntries]
-                          newEntries[index].amount = e.target.value
-                          setDonorEntries(newEntries)
-                        }}
-                        placeholder="0.00"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground">₱</span>
+                        <Input
+                          id={`amount-${index}`}
+                          type="number"
+                          value={entry.amount}
+                          onChange={(e) => {
+                            const newEntries = [...donorEntries]
+                            newEntries[index].amount = e.target.value
+                            setDonorEntries(newEntries)
+                          }}
+                          placeholder="0.00"
+                          className="pl-8"
+                        />
+                      </div>
                     </div>
                   </div>
                 </Card>
               ))}
 
-              <div className="flex gap-4">
-                <Button variant="outline" className="flex-1" onClick={handleAddDonorEntry}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Donor
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Button 
+                  variant="outline" 
+                  className="flex-1" 
+                  onClick={handleAddDonorEntry}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add Partner
                 </Button>
 
-                <Button size="lg" className="flex-1" onClick={handleSubmit} disabled={!validateStep2() || loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Remittance"}
+                <Button 
+                  size="lg" 
+                  className="flex-1" 
+                  onClick={handleSubmit} 
+                  disabled={!validateStep2() || loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Submit Remittance"
+                  )}
                 </Button>
               </div>
 
-              <Button variant="ghost" onClick={() => setStep(1)} className="w-full">
+              <Button 
+                variant="ghost" 
+                onClick={() => setStep(1)} 
+                className="w-full"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Total Amount
               </Button>
             </div>
@@ -324,20 +377,21 @@ export function ManualRemittanceWizard({ missionaryId, donors }: ManualRemittanc
         </div>
 
         {step === 2 && (
-          <Card className="bg-muted">
+          <Card className="bg-muted/50 border-2 border-muted">
             <CardContent className="p-4">
-              <div className="flex justify-between font-medium">
-                <span>Total Entered:</span>
-                <span>
-                  ₱
-                  {donorEntries
-                    .reduce((acc, entry) => acc + (Number.parseFloat(entry.amount) || 0), 0)
-                    .toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between mt-2">
-                <span>Declared Total:</span>
-                <span>₱{Number.parseFloat(totalAmount).toLocaleString()}</span>
+              <div className="space-y-2">
+                <div className="flex justify-between font-medium">
+                  <span>Total Entered:</span>
+                  <span className="text-primary">
+                    ₱{donorEntries
+                      .reduce((acc, entry) => acc + (Number.parseFloat(entry.amount) || 0), 0)
+                      .toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Declared Total:</span>
+                  <span>₱{Number.parseFloat(totalAmount).toLocaleString()}</span>
+                </div>
               </div>
             </CardContent>
           </Card>

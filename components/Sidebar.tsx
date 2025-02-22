@@ -4,7 +4,14 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger 
+} from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useState, useEffect } from "react";
@@ -19,6 +26,7 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
   const currentTab = searchParams.get("tab") || "overview";
   const supabase = createClient();
   const [userRole, setUserRole] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -48,34 +56,44 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
   return (
     <>
       {/* Mobile: collapsible sidebar via a Sheet */}
-      <Sheet>
-        <SheetTrigger asChild className="lg:hidden">
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetTrigger asChild className="fixed top-4 right-4 lg:hidden z-50">
           <Button variant="outline" size="icon" className="shrink-0">
             <Menu className="h-5 w-5" />
             <span className="sr-only">Toggle navigation menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex flex-col p-4">
-          <nav className="grid gap-2 text-lg font-medium">
+        <SheetContent side="left" className="w-[280px] sm:w-[340px]">
+          <SheetHeader>
+            <SheetTitle>Navigation</SheetTitle>
+            <SheetDescription>
+              Access different sections of your dashboard
+            </SheetDescription>
+          </SheetHeader>
+          <nav className="flex flex-col gap-2 mt-4">
             {navItems.map((item) => {
               const params = new URLSearchParams(searchParams.toString());
-              const newParams = new URLSearchParams(
-                item.href.split("?")[1] || ""
-              );
+              const newParams = new URLSearchParams(item.href.split("?")[1] || "");
               params.forEach((value, key) => {
                 if (key !== "tab" && !newParams.has(key)) {
                   newParams.set(key, value);
                 }
               });
+              const isActive = currentTab === item.href.split("=")[1];
+              
               return (
                 <Link
                   key={item.name}
                   href={`${pathname}?${newParams.toString()}`}
-                  className={`mx-[-0.65rem] flex items-center gap-4 rounded-xl px-3 py-2 ${
-                    currentTab === item.href.split("=")[1]
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  onClick={() => setIsOpen(false)}
+                  className={`
+                    flex items-center px-4 py-2.5 rounded-lg
+                    transition-all duration-200
+                    ${isActive 
+                      ? "bg-primary/10 text-primary font-medium" 
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }
+                  `}
                 >
                   {item.name}
                 </Link>
@@ -85,7 +103,7 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
         </SheetContent>
       </Sheet>
 
-      {/* Desktop: pinned/fixed sidebar on large screens */}
+      {/* Desktop: pinned/fixed sidebar */}
       <div
         className="
           hidden
@@ -102,28 +120,32 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
           border-r
           border-gray-200
           dark:border-gray-700
+          z-50
         "
       >
-        <nav className="flex flex-col gap-1 p-4">
+        <nav className="flex flex-col gap-2 p-6">
           {navItems.map((item) => {
             const params = new URLSearchParams(searchParams.toString());
-            const newParams = new URLSearchParams(
-              item.href.split("?")[1] || ""
-            );
+            const newParams = new URLSearchParams(item.href.split("?")[1] || "");
             params.forEach((value, key) => {
               if (key !== "tab" && !newParams.has(key)) {
                 newParams.set(key, value);
               }
             });
+            const isActive = currentTab === item.href.split("=")[1];
+            
             return (
               <Link
                 key={item.name}
                 href={`${pathname}?${newParams.toString()}`}
-                className={`block px-4 py-2 rounded-lg ${
-                  currentTab === item.href.split("=")[1]
-                    ? "bg-muted font-semibold"
-                    : "hover:bg-accent"
-                }`}
+                className={`
+                  flex items-center px-4 py-2.5 rounded-lg
+                  transition-all duration-200
+                  ${isActive 
+                    ? "bg-primary/10 text-primary font-medium" 
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }
+                `}
               >
                 {item.name}
               </Link>

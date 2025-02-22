@@ -19,6 +19,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
+      <head>
+        <meta name="lastpass-ignore" content="true" />
+      </head>
       <body
         className={cn(
           'bg-background font-sans antialiased min-h-screen',
