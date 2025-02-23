@@ -2,6 +2,8 @@
 
 import LeadPastorApprovalTab from "@/components/LeadPastorApprovalTab"
 import { ChurchReportsTab } from "@/components/ChurchReportsTab"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { ApprovedRequestsTab } from "@/components/ApprovedRequestsTab"
 
 type LeaveApproval = {
   id: string
@@ -54,28 +56,42 @@ export default function LeadPastorDashboardClient({
   currentTab,
 }: LeadPastorDashboardClientProps) {
   return (
-    <div className="space-y-8">
-      {currentTab === 'approvals' && (
-        <LeadPastorApprovalTab
-          pendingLeaveApprovals={pendingLeaveApprovals}
-          approvedLeaveApprovals={approvedLeaveApprovals}
-          pendingSurplusApprovals={pendingSurplusApprovals}
-          approvedSurplusApprovals={approvedSurplusApprovals}
-        />
-      )}
-      
-      {currentTab === 'reports' && (
-        <div className="space-y-6">
-          {churchIds.length > 0 ? (
-            <ChurchReportsTab churchIds={churchIds} />
-          ) : (
-            <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
-              No local churches assigned - cannot show staff reports
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <TooltipProvider>
+      <div className="space-y-8">
+        {currentTab === 'approvals' && (
+          <LeadPastorApprovalTab
+            pendingLeaveApprovals={pendingLeaveApprovals}
+            approvedLeaveApprovals={approvedLeaveApprovals}
+            pendingSurplusApprovals={pendingSurplusApprovals}
+            approvedSurplusApprovals={approvedSurplusApprovals}
+          />
+        )}
+        
+        {currentTab === 'approved-requests' && (
+          <ApprovedRequestsTab
+            approvedLeave={approvedLeaveApprovals}
+            approvedSurplus={approvedSurplusApprovals}
+            currentPage={1}
+            totalPages={1}
+            onPageChange={() => {}}
+            pageSize={10}
+            onPageSizeChange={() => {}}
+          />
+        )}
+        
+        {currentTab === 'reports' && (
+          <div className="space-y-6">
+            {churchIds.length > 0 ? (
+              <ChurchReportsTab churchIds={churchIds} />
+            ) : (
+              <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
+                No local churches assigned - cannot show staff reports
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
   )
 }
 

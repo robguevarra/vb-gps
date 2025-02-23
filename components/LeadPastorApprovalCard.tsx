@@ -2,17 +2,34 @@
 
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
+import { ChevronRight, Check, X, ArrowRightLeft, CalendarDays, FileText, User, Wallet, MoreVertical, CheckCircle2, XCircle, AlertCircle, Clock, Loader2 } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { format } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PaginationControls } from "@/components/PaginationControls"
+import { debounce } from "lodash"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { toast } from "@/hooks/use-toast"
 
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Calendar, DollarSign } from "lucide-react"
+type ApprovalStatus = 'approved' | 'pending' | 'rejected'
 
 type ApprovalRequest = {
   id: string
@@ -21,7 +38,7 @@ type ApprovalRequest = {
   endDate?: string
   amount?: number
   reason: string
-  status: string
+  status: ApprovalStatus
   date: string
   campusDirectorApproval: string
   campusDirectorNotes?: string
@@ -30,167 +47,317 @@ type ApprovalRequest = {
   requester?: { full_name: string }
 }
 
-const LeadPastorApprovalCard = ({
-  request,
-  requestType,
-  isApprovedTab,
-}: {
-  request: ApprovalRequest
-  requestType: "leave" | "surplus"
-  isApprovedTab: boolean
-}) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const [modalType, setModalType] = useState("")
-  const [notes, setNotes] = useState("")
+const statusStyles = {
+  approved: "bg-green-100 text-green-800",
+  pending: "bg-yellow-100 text-yellow-800",
+  rejected: "bg-red-100 text-red-800"
+}
+
+const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: ApprovalRequest, requestType: 'leave' | 'surplus', approvalStatus: 'pending' | 'approved' }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [localNotes, setLocalNotes] = useState(request.leadPastorNotes || '')
   const router = useRouter()
   const supabase = createClient()
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [pendingAction, setPendingAction] = useState<"approve" | "reject" | "override">()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleOpenModal = (action: string) => {
-    setModalType(action)
-    setNotes("")
-    setIsOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsOpen(false)
-    setNotes("")
-  }
-
-  const handleConfirm = async () => {
+  const handleStatusUpdate = async (newStatus: string) => {
+    setIsSubmitting(true)
     try {
-      const tableName = requestType === "leave" ? "leave_requests" : "surplus_requests"
-      const updateData = {
-        lead_pastor_approval: modalType,
-        lead_pastor_notes: notes,
-        status: modalType.includes("approved") ? "approved" : "rejected",
-      }
-
-      const { error } = await supabase.from(tableName).update(updateData).eq("id", request.id)
+      const tableName = requestType === 'leave' ? 'leave_requests' : 'surplus_requests'
+      const { error } = await supabase
+        .from(tableName)
+        .update({ 
+          lead_pastor_approval: newStatus,
+          status: newStatus === 'approved' ? 'approved' : 'rejected'
+        })
+        .eq('id', request.id)
 
       if (error) throw error
 
-      handleCloseModal()
+      toast({
+        title: "Success!",
+        description: `Request ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully`,
+        variant: "success"
+      })
       router.refresh()
     } catch (error) {
-      console.error("Error updating request status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update request status",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSubmitting(false)
+      setIsConfirming(false)
     }
   }
 
-  const getDetails = () => {
-    if (requestType === "leave") {
-      return `${request.startDate} - ${request.endDate}`
-    } else {
-      return `₱${request.amount?.toLocaleString()}`
-    }
+  const saveNotes = useMemo(() => {
+    return debounce(async (notes: string) => {
+      const { error } = await supabase
+        .from(requestType === 'leave' ? 'leave_requests' : 'surplus_requests')
+        .update({ lead_pastor_notes: notes })
+        .eq('id', request.id)
+
+      if (!error) {
+        router.refresh()
+      }
+    }, 500)
+  }, [request.id, requestType])
+
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newNotes = e.target.value
+    setLocalNotes(newNotes)
+    saveNotes(newNotes)
   }
+
+  useEffect(() => {
+    return () => saveNotes.cancel()
+  }, [saveNotes])
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <span className="font-medium text-sm">{request.requester?.full_name || "Unknown"}</span>
-          <Badge variant={request.status === "approved" ? "success" : "secondary"} className="text-xs">
-            {request.status}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="pb-2">
-        <div className="flex items-center text-sm text-gray-600 dark:text-gray-300 mb-2">
-          {requestType === "leave" ? <Calendar className="w-4 h-4 mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
-          {getDetails()}
-        </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{request.reason}</p>
-        {!isApprovedTab && (
-          <>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Campus Director:</span>
-              <Badge
-                variant={
-                  request.campusDirectorApproval === "approved"
-                    ? "success"
-                    : request.campusDirectorApproval === "rejected"
-                      ? "destructive"
-                      : "secondary"
-                }
-                className="text-xs"
-              >
-                {request.campusDirectorApproval === "approved"
-                  ? "Approved"
-                  : request.campusDirectorApproval === "rejected"
-                    ? "Rejected"
-                    : "Pending"}
-              </Badge>
+    <>
+      <TableRow 
+        className="hover:bg-gray-50 cursor-pointer group"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <TableCell className="px-3 py-3">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-9 w-9">
+              <AvatarFallback className="bg-blue-100 text-blue-800">
+                {request.requester?.full_name?.[0] || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1">
+              <p className="font-medium">{request.requester?.full_name || "Unknown"}</p>
+              <p className="text-sm text-muted-foreground">
+                {format(new Date(request.date), 'MMM dd, yyyy')}
+              </p>
             </div>
+            <ChevronRight className={cn(
+              "w-4 h-4 text-muted-foreground transform transition-transform",
+              isExpanded ? "rotate-90" : "rotate-0"
+            )} />
+          </div>
+        </TableCell>
+
+        <TableCell className="px-3 py-3">
+          <div className="flex items-center gap-2">
+            <Badge 
+              variant={request.campusDirectorApproval === 'approved' ? 'default' : 'destructive'}
+              className="capitalize"
+            >
+              {request.campusDirectorApproval || 'pending'}
+            </Badge>
             {request.campusDirectorNotes && (
-              <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded-md mb-2">
-                <p className="text-xs text-gray-600 dark:text-gray-300">
-                  <span className="font-semibold">Campus Director Notes:</span> {request.campusDirectorNotes}
+              <Tooltip>
+                <TooltipTrigger>
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">{request.campusDirectorNotes}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="px-3 py-3">
+          <div className="flex items-center gap-2">
+            {requestType === 'leave' ? (
+              <>
+                <CalendarDays className="w-4 h-4 text-blue-600" />
+                <span className="text-sm">
+                  {format(new Date(request.startDate || new Date()), 'MMM dd')} - 
+                  {format(new Date(request.endDate || new Date()), 'MMM dd')}
+                </span>
+              </>
+            ) : (
+              <>
+                <Wallet className="w-4 h-4 text-green-600" />
+                <span className="text-sm">₱{request.amount?.toLocaleString()}</span>
+              </>
+            )}
+          </div>
+        </TableCell>
+
+        <TableCell className="px-3 py-3">
+          <div className="flex gap-2 items-center">
+            <span className="text-muted-foreground text-sm">Click for details</span>
+            <div className="flex gap-2">
+              {approvalStatus === 'pending' && (
+                <>
+                  <Button 
+                    variant="default" 
+                    className="bg-green-600 hover:bg-green-700 text-white h-8"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPendingAction('approve')
+                      setIsConfirming(true)
+                    }}
+                  >
+                    <Check className="w-4 h-4 mr-1" />
+                    Approve
+                  </Button>
+
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPendingAction('reject')
+                      setIsConfirming(true)
+                    }}
+                    className="h-8"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Reject
+                  </Button>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setPendingAction('override')
+                          setIsConfirming(true)
+                        }}
+                        className="h-8 gap-1"
+                      >
+                        <ArrowRightLeft className="w-4 h-4" />
+                        <span>OVERRIDE</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Override campus director decision</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
+
+              <Dialog open={isConfirming} onOpenChange={setIsConfirming}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Confirm Action</DialogTitle>
+                    <DialogDescription>
+                      Are you sure you want to {pendingAction} this request?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsConfirming(false)}
+                      disabled={isSubmitting}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant={pendingAction === 'reject' ? 'destructive' : 'default'}
+                      onClick={() => handleStatusUpdate(pendingAction === 'approve' ? 'approved' : 'rejected')}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <span>Confirm {pendingAction}</span>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {isExpanded && (
+        <TableRow className="bg-blue-50">
+          <TableCell colSpan={4} className="p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-medium mb-2">Request Details</h4>
+                <p className="text-sm">{request.reason}</p>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium mb-2">Campus Director Notes</h4>
+                <p className="text-sm text-muted-foreground">
+                  {request.campusDirectorNotes || "No notes provided"}
                 </p>
               </div>
-            )}
-          </>
-        )}
-      </CardContent>
-      {!isApprovedTab && (
-        <CardFooter className="pt-2 flex justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleOpenModal("approved")}
-            className="bg-green-50 text-green-600 border-green-200 hover:bg-green-100 hover:text-green-700"
-          >
-            Approve
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleOpenModal("rejected")}
-            className="bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:text-red-700"
-          >
-            Reject
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleOpenModal("override-approved")}
-            className="bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:text-blue-700"
-          >
-            Override
-          </Button>
-        </CardFooter>
-      )}
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {modalType === "approved"
-                ? "Approve Request"
-                : modalType === "rejected"
-                  ? "Reject Request"
-                  : "Override Approval"}
-            </DialogTitle>
-          </DialogHeader>
-          <Label htmlFor="notes">Notes (Optional):</Label>
-          <Textarea
-            id="notes"
-            placeholder="Enter your notes here..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-          <div className="flex justify-end mt-4 gap-2">
-            <Button variant="secondary" onClick={handleCloseModal}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirm}>
-              {modalType === "approved" ? "Approve" : modalType === "rejected" ? "Reject" : "Override"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </Card>
+              <div className="col-span-2">
+                <h4 className="text-sm font-medium mb-2">Lead Pastor Notes</h4>
+                <textarea
+                  className="w-full p-2 border rounded-md text-sm"
+                  placeholder="Add your notes..."
+                  value={localNotes}
+                  onChange={handleNotesChange}
+                />
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   )
 }
 
-export { LeadPastorApprovalCard }
+export function ApprovalTable({
+  requests,
+  requestType,
+  approvalStatus,
+  currentPage,
+  totalPages,
+  onPageChange,
+  pageSize,
+  onPageSizeChange
+}: {
+  requests: ApprovalRequest[];
+  requestType: 'leave' | 'surplus';
+  approvalStatus: 'pending' | 'approved';
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  pageSize: number;
+  onPageSizeChange: (size: number) => void
+}) {
+  return (
+    <div className="border rounded-lg shadow-sm">
+      <Table>
+        <TableHeader className="bg-gray-50">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="px-3 py-3 text-sm">Missionary</TableHead>
+            <TableHead className="px-3 py-3 text-sm">Campus Director</TableHead>
+            <TableHead className="px-3 py-3 text-sm">Details</TableHead>
+            <TableHead className="px-3 py-3 text-sm">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {requests.map((request) => (
+            <ApprovalTableRow
+              key={request.id}
+              request={request}
+              requestType={requestType}
+              approvalStatus={approvalStatus}
+            />
+          ))}
+        </TableBody>
+      </Table>
+      
+      <PaginationControls
+        className="px-2 py-1 border-t"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+        pageSize={pageSize}
+        onPageSizeChange={onPageSizeChange}
+      />
+    </div>
+  )
+}
 
