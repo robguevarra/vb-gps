@@ -132,6 +132,26 @@ changes from usd sign to php sign.
 missionary dashboard improved:
 - added a new card for current partners and new partners this month. 
 
+
+**Current Implementation Summary**  
+We've restructured the lead pastor approval interface to separate pending and approved requests into distinct sidebar tabs. The "Pending Approvals" tab now exclusively shows actionable requests, while approved items moved to a new "Approved Requests" section. This involved removing dual status tabs (pending/approved) from the approval interface and creating a dedicated component for approved requests.
+
+**Technical Changes Made**  
+1. Updated `LeadPastorSidebar.tsx` with new navigation items  
+2. Created `ApprovedRequestsTab.tsx` for approved request display  
+3. Modified `LeadPastorApprovalTab.tsx` to only handle pending requests  
+4. Added state management for request type filtering (leave/surplus)  
+5. Fixed missing component imports (Button, Calendar, Wallet icons)  
+
+**Outstanding Issues & Next Steps**  
+- TypeScript errors persist in `LeadPastorApprovalCard.tsx` regarding Lodash types and className prop  
+- Missing `LeadPastorApprovalCard` import in approval tab components  
+- Pagination controls need proper integration with backend data  
+- UI requires testing for empty states and edge cases  
+- Audit all approval flow components for prop type consistency
+
+
+
 **Current Implementation Summary**  
 We've implemented a partner tracking system for missionary dashboards that calculates:  
 1. **Active Partners**: Unique donors contributing in the current month  
@@ -144,6 +164,8 @@ Initial attempts using Supabase's `distinct` and subqueries produced inaccurate 
 - Null donor_id handling  
 - Complex NOT IN subquery limitations  
 The working solution uses manual deduplication via JavaScript Sets after fetching raw donation records, verified through debug logging of actual donor IDs.
+
+
 
 **Relevant Implementation Details**  
 - **Data Flow**: Fetches all donations → deduplicates via Set → calculates new partners through Set difference  
@@ -158,19 +180,29 @@ The working solution uses manual deduplication via JavaScript Sets after fetchin
 - **Validation**: Console logs raw donor IDs and query parameters for verification  
 - **Error Handling**: Catches Supabase errors explicitly and throws standardized errors  
 
+change DONORS to PARTNERS
+finance recent donations working
+fixed manual remittance wizard add new partners bug
+added current month tab in reports for missionaries
 
-# **Currently working on**\
 errors on missionary dashboard when sidebar is hidden.
 
+Campus Missionary Dashbaord
+- changed "Reports" to "My reports"
+- added "Staff Reports" to campus directors
 
+Lead Pastor dashboard
+- added "Staff reports"
 
+Staff Reports are copied from Missionaries Table from superadmin. 
+
+# **Currently working on**
 
 
 
 
 # **WHAT IS NEXT**
-- Now we need to make sure all the dashboards are working as expected, sensitive to the role of the user, enable RLS for all the tables, and make sure the data is correct.
-
+- enable RLS for all.
 
 
 
@@ -178,30 +210,18 @@ errors on missionary dashboard when sidebar is hidden.
 - add surplus logic sa superadmin reports and to the whole data. 
 - trigger surplus compute or something
 
-
 - try to fix approval logic for surplus and leave request. 
 - i think its trying to check who is assigned to the request, instead of just looking at the local church. 
 
-
-- finance
-    - recent transactions - lalabas lang dapat ng transactions ni finance mismo. 
-    - record donations not working yet
-
-- lead pastor dashboard
-    - not seeing anything
- 
-- API 
-    - Donations
-        - need to create the API for donations via xendit. 
-    - Profiles
-        - need to create the API for profiles so elementor can load the API data of missionaries and campus directors.
     
-supeadmin
+superadmin
 - list ng lahat ng pending
 - list ng lahat ng online donations
 - list ng lahat ng offline donations
+- pending missionary manual remittance. 
+-- pag nag remit si missionary, dapat pending muna until confirmation ni xendit. 
+-- so dapat may status ung donor donations 
 
-change DONORS to PARTNERS
 
 QR code for missionaries to give to partners
 
@@ -212,6 +232,7 @@ MPD WORK stuff.
 - partners na dormant / inactive (di nag bigay last 6 months)
 
 additional MPD leave
+
 
 campus director dapat may reports din
 to check missionary giving status
