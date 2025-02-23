@@ -15,6 +15,7 @@ import { ManualRemittanceWizard } from "@/components/ManualRemittanceWizard";
 import { ReportsTab } from "@/components/ReportsTab";
 import { Sidebar } from "@/components/Sidebar";
 import { getUserRole } from "@/utils/getUserRole";
+import { ChurchReportsTab } from "@/components/ChurchReportsTab";
 
 export const dynamic = "force-dynamic";
 
@@ -507,6 +508,12 @@ export default async function MissionaryDashboard({
               last13MonthDonations={last13MonthDonationsData || []}
               allTimeDonors={allTimeDonorsData || []}
             />
+          </div>
+        )}
+
+        {currentTab === "staff-reports" && profileData.role === 'campus_director' && (
+          <div className="space-y-8">
+            <ChurchReportsTab churchIds={[profileData.local_church_id]} />
           </div>
         )}
       </div>

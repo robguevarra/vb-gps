@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import LeadPastorSelector from "@/components/LeadPastorSelector";
 import LeadPastorDashboardClient from "./LeadPastorDashboardClient";
 import { getUserRole } from "@/utils/getUserRole";
+import { ChurchReportsTab } from "@/components/ChurchReportsTab";
+import { LeadPastorSidebar } from "@/components/LeadPastorSidebar";
 
 export default async function LeadPastorDashboard({
   searchParams,
@@ -43,22 +45,30 @@ export default async function LeadPastorDashboard({
     console.error("Error fetching lead pastors", leadPastorsError);
   }
 
-  // Fetch local church name.
-  const { data: localChurch } = await supabase
-    .from("local_churches")
-    .select("name")
-    .eq("lead_pastor_id", selectedLeadPastorId)
-    .single();
+  // Fetch local churches.
+  const { data: localChurches, error: churchError } = await supabase
+    .from('local_churches')
+    .select('id, name')
+    .eq('lead_pastor_id', selectedLeadPastorId);
 
-  // Fetch pending and approved leave requests.
+  if (churchError) {
+    console.error('Local churches fetch error:', churchError);
+  }
+
+  // Get missionaries in the lead pastor's churches
+  const { data: churchMissionaries } = await supabase
+    .from('profiles')
+    .select('id')
+    .in('local_church_id', localChurches?.map(ch => ch.id) || []);
+
+  // Fetch pending leave requests for these missionaries
   const { data: pendingLeaveApprovalsData } = await supabase
     .from("leave_requests")
     .select(`
       *,
       requester:profiles(full_name)
     `)
-    .in("requester_id", leadPastors?.map(p => p.id) || [])
-    .eq("campus_director_approval", "none")
+    .in("requester_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
     .eq("status", "pending")
     .order("created_at", { ascending: false });
 
@@ -68,19 +78,18 @@ export default async function LeadPastorDashboard({
       *,
       requester:profiles(full_name)
     `)
-    .in("requester_id", leadPastors?.map(p => p.id) || [])
-    .eq("campus_director_approval", "approved")
+    .in("requester_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
+    .eq("status", "approved")
     .order("created_at", { ascending: false });
 
-  // Fetch pending and approved surplus requests.
+  // Fetch pending surplus requests for these missionaries
   const { data: pendingSurplusApprovalsData } = await supabase
     .from("surplus_requests")
     .select(`
       *,
       requester:profiles(full_name)
     `)
-    .in("missionary_id", leadPastors?.map(p => p.id) || [])
-    .eq("campus_director_approval", "none")
+    .in("missionary_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
     .eq("status", "pending")
     .order("created_at", { ascending: false });
 
@@ -90,8 +99,8 @@ export default async function LeadPastorDashboard({
       *,
       requester:profiles(full_name)
     `)
-    .in("missionary_id", leadPastors?.map(p => p.id) || [])
-    .eq("campus_director_approval", "approved")
+    .in("missionary_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
+    .eq("status", "approved")
     .order("created_at", { ascending: false });
 
   const transformLeave = (req: any) => ({
@@ -135,26 +144,48 @@ export default async function LeadPastorDashboard({
   const selectedLeadPastorName =
     leadPastors?.find((pastor) => pastor.id === selectedLeadPastorId)?.full_name || "Lead Pastor";
 
+  const currentTab = typeof resolvedSearchParams.tab === 'string' ? resolvedSearchParams.tab : 'approvals';
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="mb-8">
-        <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">{selectedLeadPastorName}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {localChurch?.name || "No local church assigned"}
-        </p>
-      </header>
+    <div className="min-h-screen bg-background">
+      <LeadPastorSidebar />
+      
+      <main className="lg:ml-64 p-6 space-y-6">
+        <header className="space-y-1">
+          <h1 className="text-3xl font-bold">{selectedLeadPastorName}</h1>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span>Assigned Churches:</span>
+            <div className="flex gap-1.5">
+              {localChurches?.length ? (
+                localChurches.map((ch) => (
+                  <span key={ch.id} className="badge badge-outline">
+                    {ch.name}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm italic">No churches assigned</span>
+              )}
+            </div>
+          </div>
+        </header>
 
-      <div className="mb-8">
-        <LeadPastorSelector leadPastors={leadPastors || []} userId={selectedLeadPastorId} />
-      </div>
+        {userRole === 'superadmin' && (
+          <div className="bg-accent/50 p-4 rounded-lg">
+            <LeadPastorSelector leadPastors={leadPastors || []} userId={selectedLeadPastorId} />
+          </div>
+        )}
 
-      <LeadPastorDashboardClient
-        pendingLeaveApprovals={transformedPendingLeaveApprovals}
-        approvedLeaveApprovals={transformedApprovedLeaveApprovals}
-        selectedLeadPastorName={selectedLeadPastorName}
-        pendingSurplusApprovals={transformedPendingSurplusApprovals}
-        approvedSurplusApprovals={transformedApprovedSurplusApprovals}
-      />
+        <section className="space-y-8">
+          <LeadPastorDashboardClient
+            pendingLeaveApprovals={transformedPendingLeaveApprovals}
+            approvedLeaveApprovals={transformedApprovedLeaveApprovals}
+            pendingSurplusApprovals={transformedPendingSurplusApprovals}
+            approvedSurplusApprovals={transformedApprovedSurplusApprovals}
+            churchIds={localChurches?.map(ch => ch.id) || []}
+            currentTab={currentTab}
+          />
+        </section>
+      </main>
     </div>
   );
 }

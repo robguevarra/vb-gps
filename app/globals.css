@@ -1,4 +1,7 @@
 @import 'react-day-picker/dist/style.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Or if using Tailwind, add these base styles */
 .rdp {
@@ -74,5 +77,13 @@
 
   .metric-value {
     @apply text-2xl font-bold tracking-tight;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-outline {
+    @apply border border-border bg-transparent text-foreground;
   }
 } 

@@ -71,7 +71,17 @@ export function MissionariesTable({
                   <td className="px-4 py-2 border-b">{m.full_name}</td>
                   <td className="px-4 py-2 border-b">{m.role}</td>
                   <td className="px-4 py-2 border-b">₱{formatNumber(m.monthly_goal || 0)}</td>
-                  <td className="px-4 py-2 border-b">{formatNumber(ratio)}%</td>
+                  <td className="px-4 py-2 border-b">
+                    <div className="flex items-center gap-2">
+                      <span>{formatNumber(ratio)}%</span>
+                      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-primary" 
+                          style={{ width: `${Math.min(ratio, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-2 border-b">
                     <div className="flex gap-2">
                       <Button

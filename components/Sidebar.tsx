@@ -50,7 +50,9 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
     { name: "Request History", href: "?tab=history" },
     { name: "Manual Remittance", href: "?tab=manual-remittance" },
     ...(isCampusDirector ? [{ name: "Approvals", href: "?tab=approvals" }] : []),
-    { name: "Reports", href: "?tab=reports" },
+    { name: "My Reports", href: "?tab=reports" },
+    ...(isCampusDirector ? [{ name: "Staff Reports", href: "?tab=staff-reports" }] : []),
+    ...(userRole === 'superadmin' ? [{ name: "Church Settings", href: "?tab=settings" }] : []),
   ];
 
   return (
