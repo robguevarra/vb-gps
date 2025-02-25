@@ -42,7 +42,7 @@ export interface Profile {
   role: 'missionary' | 'finance_officer' | 'campus_director' | 'lead_pastor' | 'superadmin'
   monthly_goal: number
   surplus_balance: number
-  local_church_id?: string
+  local_church_id: number | null
   campus_director_id?: string
   created_at: string
 }
@@ -59,4 +59,23 @@ export interface ApprovalAction {
   decision: 'approved' | 'rejected' | 'override'
   decided_by: string
   decided_at: string
+}
+
+export interface Donor {
+  id: number
+  name: string
+  email: string
+  phone: string
+}
+
+export interface DonorDonation {
+  id: number
+  missionary_id: string
+  donor_id: number | null
+  date: string
+  amount: number
+  source: string
+  status: string
+  notes: string | null
+  donors?: Donor | null
 } 

@@ -125,6 +125,15 @@ function pivotLast13Months(donations: ReportsTabProps["last13MonthDonations"]) {
   return { columns, pivotRows };
 }
 
+interface ReportsTabsProps {
+  currentTab: "missionaries" | "churches" | "partners";
+  setCurrentTab: (tab: "missionaries" | "churches" | "partners") => void;
+}
+
+export function ReportsTabs({ currentTab, setCurrentTab }: ReportsTabsProps) {
+  // ... component implementation
+}
+
 export function ReportsTab({
   missionaryId,
   last13MonthDonations,

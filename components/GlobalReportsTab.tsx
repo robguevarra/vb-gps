@@ -21,6 +21,8 @@ interface Profile {
   monthly_goal: number;
   local_church_id: number | null;
   role: string;
+  surplus_balance: number;
+  created_at: string;
 }
 
 interface Church {
@@ -125,66 +127,75 @@ export default function GlobalReportsTab() {
   // Add a new piece of state for the sub-tab:
   const [subTab, setSubTab] = useState<"missionaries" | "churches" | "partners">("missionaries");
 
+  const [loadingProgress, setLoadingProgress] = useState<string>("");
+
   // On mount, load data
   useEffect(() => {
     loadData();
   }, []);
 
-
-
-  // ----------------------------------------------
-  // Load data for last 13 months
-  // ----------------------------------------------
   async function loadData() {
     try {
       setIsLoading(true);
       setError(null);
 
-      // 1) Missionaries
-      const { data: missionaryData, error: missionaryError } = await supabase
-        .from("profiles")
-        .select("id, full_name, monthly_goal, local_church_id, role")
-        .or("role.eq.missionary,role.eq.campus_director");
-      if (missionaryError) throw missionaryError;
+      // 1) Get missionaries and churches first (these are smaller datasets)
+      const [missionaryResult, churchResult] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, monthly_goal, local_church_id, role, surplus_balance, created_at")
+          .or("role.eq.missionary,role.eq.campus_director"),
+        supabase
+          .from("local_churches")
+          .select("id, name")
+          .order("name")
+      ]);
 
-      // 2) Churches
-      const { data: churchesData, error: churchesError } = await supabase
-        .from("local_churches")
-        .select("id, name")
-        .order("name", { ascending: true });
-      if (churchesError) throw churchesError;
+      if (missionaryResult.error) throw missionaryResult.error;
+      if (churchResult.error) throw churchResult.error;
 
-      // 3) Donations (last 13 months)
-      let allDonations: DonorDonation[] = [];
-      let from = 0;
-      const pageSize = 1000;
+      // 2) First get all unique donors
+      const { data: uniqueDonors, error: donorsError } = await supabase
+        .from('donors')
+        .select('id, name, email, phone')
+        .order('name');
 
-      while (true) {
-        const { data, error } = await supabase
-          .from("donor_donations")
-          .select("id, missionary_id, donor_id, date, amount, status, source, notes, donors(id, name, email, phone)")
-          .order("id", { ascending: false })
-          .range(from, from + pageSize - 1);
+      if (donorsError) throw donorsError;
+      console.log('Total unique donors:', uniqueDonors?.length);
 
-        if (error) throw error;
-        if (!data?.length) break;
+      // 3) Get ALL donations without date filter
+      const { data: donationDetails, error: detailsError } = await supabase
+        .from("donor_donations")
+        .select(`
+          id,
+          missionary_id,
+          donor_id,
+          date,
+          amount,
+          status,
+          source,
+          notes
+        `)
+        .order('date', { ascending: false });
 
-        allDonations = [...allDonations, ...data];
-        from += pageSize;
-      }
+      if (detailsError) throw detailsError;
+      console.log('Total donations fetched:', donationDetails?.length);
 
-      setDonations(allDonations);
+      // 4) Combine donations with donor info
+      const donorsMap = new Map(uniqueDonors.map(d => [d.id, d]));
+      const enrichedDonations = donationDetails.map(don => ({
+        ...don,
+        donors: don.donor_id ? donorsMap.get(don.donor_id) : null
+      }));
 
-      // Store raw data
-      const mData = missionaryData || [];
-      const cData = churchesData || [];
+      // Set state
+      setMissionaries(missionaryResult.data || []);
+      setChurches(churchResult.data || []);
+      setDonations(enrichedDonations);
 
-      setMissionaries(mData);
-      setChurches(cData);
-
-      // Build a donationMap => missionary_id => { 'YYYY-MM' => sum }
+      // Build donation map
       const dMap: DonationMap = {};
-      allDonations.forEach((don) => {
+      enrichedDonations.forEach((don) => {
         if (!dMap[don.missionary_id]) {
           dMap[don.missionary_id] = {};
         }
@@ -192,68 +203,33 @@ export default function GlobalReportsTab() {
         const yy = dateObj.getFullYear();
         const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
         const key = `${yy}-${mm}`;
-        dMap[don.missionary_id][key] =
-          (dMap[don.missionary_id][key] || 0) + (don.amount || 0);
+        dMap[don.missionary_id][key] = (dMap[don.missionary_id][key] || 0) + (don.amount || 0);
       });
       setDonationMap(dMap);
 
-      // Build missionaryNameMap
+      // Calculate top metrics manually since the stored procedure isn't ready
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      
+      let totalThisMonth = 0;
+      let sumOfGoals = 0;
+      let below80Count = 0;
+
+      missionaryResult.data?.forEach((m) => {
+        const monthlyDonations = dMap[m.id]?.[currentMonth] || 0;
+        totalThisMonth += monthlyDonations;
+        sumOfGoals += m.monthly_goal || 0;
+      });
+
+      setTotalDonationsThisMonth(totalThisMonth);
+      setCurrentPercentAllMissionaries(sumOfGoals > 0 ? (totalThisMonth / sumOfGoals) * 100 : 0);
+
+      // Build missionary name map
       const nameMap: Record<string, string> = {};
-      mData.forEach((m) => {
+      missionaryResult.data?.forEach((m) => {
         nameMap[m.id] = m.full_name;
       });
       setMissionaryNameMap(nameMap);
-
-      // Compute top-level metrics
-      computeTopMetrics(mData, dMap);
-
-      // Build a "partners" array from donor info
-      const partnerMap: Record<number, { name: string; email: string; phone: string; total: number }> = {};
-      allDonations.forEach((dd) => {
-        if (dd.donor_id && dd.donors) {
-          const donorId = dd.donor_id;
-          if (!partnerMap[donorId]) {
-            partnerMap[donorId] = {
-              name: dd.donors.name,
-              email: dd.donors.email,
-              phone: dd.donors.phone,
-              total: 0,
-            };
-          }
-          partnerMap[donorId].total += dd.amount || 0;
-        }
-      });
-      const partnerRows: PartnerRow[] = Object.keys(partnerMap).map((idStr) => {
-        const donorId = Number(idStr);
-        const rec = partnerMap[donorId];
-        return {
-          id: donorId,
-          name: rec.name,
-          email: rec.email,
-          phone: rec.phone,
-          totalGiven: rec.total,
-        };
-      });
-      setPartners(partnerRows);
-
-      // Build 13-month timeline keys (oldest first)
-      const keyArr: string[] = [];
-      const now = new Date();
-      let y = now.getFullYear();
-      let mo = now.getMonth();
-      for (let i = 0; i < 13; i++) {
-        const kk = `${y}-${String(mo + 1).padStart(2, "0")}`;
-        keyArr.push(kk);
-        mo--;
-        if (mo < 0) {
-          mo = 11;
-          y--;
-        }
-      }
-      keyArr.reverse();
-      setThirteenMonthKeys(keyArr);
-
-
 
       setIsLoading(false);
     } catch (err: any) {

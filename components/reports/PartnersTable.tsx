@@ -46,6 +46,24 @@ export function PartnersTable({
     console.log("[PartnersTable] missionaries:", missionaries);
   }, [donations, missionaries]);
 
+  // Add this logging at the start of the component
+  useEffect(() => {
+    // Get unique donors from donations
+    const uniqueDonors = new Set(
+      donations
+        .filter(d => d.donor_id && d.donors)
+        .map(d => d.donor_id)
+    );
+    
+    console.log('Unique donors in donations:', uniqueDonors.size);
+    console.log('Total donations:', donations.length);
+    console.log('Donations with donor info:', 
+      donations.filter(d => d.donor_id && d.donors).length,
+      '/',
+      donations.length
+    );
+  }, [donations]);
+
   // ---------------- New states for date-range & missionary filters ----------------
   const [fromDate, setFromDate] = useState<string>(
     new Date(2010, 0, 1).toISOString().split('T')[0] // Jan 1, 2010
@@ -67,9 +85,11 @@ export function PartnersTable({
         return false;
       }
       // 2) Check date range
-      const dDate = new Date(don.date);
-      if (from && dDate < from) return false;
-      if (to && dDate > to) return false;
+      if (don.date) {  // Add null check
+        const dDate = new Date(don.date);
+        if (from && dDate < from) return false;
+        if (to && dDate > to) return false;
+      }
       return true;
     });
   }, [donations, fromDate, toDate, selectedMissionary]);
