@@ -8,32 +8,6 @@ import DonationModal from "../../../components/DonationModal";
 import RecentTransactionsTable from "@/components/RecentTransactionsTable";
 import { getUserRole } from "@/utils/getUserRole";
 
-interface DonorDonation {
-  id: string;
-  amount: number;
-  date: string;
-  notes: string | null;
-  donors: {
-    name: string;
-    email: string | null;
-    phone: string | null;
-  } | Array<{
-    name: string;
-    email: string | null;
-    phone: string | null;
-  }>;
-}
-
-interface FormattedDonation {
-  id: string;
-  donor_name: string;
-  donor_email: string;
-  donor_phone: string;
-  amount: number;
-  date: string;
-  notes: string;
-}
-
 export default async function FinanceDashboard() {
   // Initialize Supabase client
   const supabase = await createClient();
@@ -94,7 +68,7 @@ export default async function FinanceDashboard() {
   }
 
   // Format donations data for the Recent Transactions Table.
-  const formattedDonations: FormattedDonation[] = donorDonationsData?.map((d: DonorDonation) => ({
+  const formattedDonations = donorDonationsData?.map((d: any) => ({
     id: d.id,
     donor_name: Array.isArray(d.donors)
       ? (d.donors[0]?.name || "Unknown")

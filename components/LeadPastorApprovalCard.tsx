@@ -8,11 +8,15 @@ import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { ChevronRight, Check, X, ArrowRightLeft, CalendarDays, FileText, Wallet, Loader2 } from "lucide-react"
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip"
+import { ChevronRight, Check, X, ArrowRightLeft, CalendarDays, FileText, User, Wallet, MoreVertical, CheckCircle2, XCircle, AlertCircle, Clock, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { format } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PaginationControls } from "@/components/PaginationControls"
 import { debounce } from "lodash"
 import {
   Dialog,
@@ -21,9 +25,33 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
-import { ApprovalRequest } from "@/types/approval"
+
+type ApprovalStatus = 'approved' | 'pending' | 'rejected'
+
+type ApprovalRequest = {
+  id: string
+  type: string
+  startDate?: string
+  endDate?: string
+  amount?: number
+  reason: string
+  status: ApprovalStatus
+  date: string
+  campusDirectorApproval: string
+  campusDirectorNotes?: string
+  leadPastorApproval: string
+  leadPastorNotes?: string
+  requester?: { full_name: string }
+}
+
+const statusStyles = {
+  approved: "bg-green-100 text-green-800",
+  pending: "bg-yellow-100 text-yellow-800",
+  rejected: "bg-red-100 text-red-800"
+}
 
 const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: ApprovalRequest, requestType: 'leave' | 'surplus', approvalStatus: 'pending' | 'approved' }) => {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -38,7 +66,7 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
     setIsSubmitting(true)
     try {
       const tableName = requestType === 'leave' ? 'leave_requests' : 'surplus_requests'
-      const { error: updateError } = await supabase
+      const { error } = await supabase
         .from(tableName)
         .update({ 
           lead_pastor_approval: newStatus,
@@ -46,14 +74,7 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
         })
         .eq('id', request.id)
 
-      if (updateError) {
-        toast({
-          title: "Error",
-          description: updateError.message || "Failed to update request status",
-          variant: "destructive"
-        })
-        return
-      }
+      if (error) throw error
 
       toast({
         title: "Success!",
@@ -61,11 +82,10 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
         variant: "success"
       })
       router.refresh()
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
+    } catch (error) {
       toast({
         title: "Error",
-        description: errorMessage,
+        description: "Failed to update request status",
         variant: "destructive"
       })
     } finally {
@@ -85,7 +105,7 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
         router.refresh()
       }
     }, 500)
-  }, [request.id, requestType, router, supabase])
+  }, [request.id, requestType])
 
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newNotes = e.target.value
@@ -228,19 +248,23 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <Button
-                      variant="outline"
+                    <Button 
+                      variant="outline" 
                       onClick={() => setIsConfirming(false)}
+                      disabled={isSubmitting}
                     >
                       Cancel
                     </Button>
                     <Button
-                      variant={pendingAction === 'approve' ? 'default' : 'destructive'}
+                      variant={pendingAction === 'reject' ? 'destructive' : 'default'}
                       onClick={() => handleStatusUpdate(pendingAction === 'approve' ? 'approved' : 'rejected')}
                       disabled={isSubmitting}
                     >
-                      {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                      {pendingAction === 'approve' ? 'Approve' : 'Reject'}
+                      {isSubmitting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <span>Confirm {pendingAction}</span>
+                      )}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -286,21 +310,31 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
 export function ApprovalTable({
   requests,
   requestType,
-  approvalStatus
+  approvalStatus,
+  currentPage,
+  totalPages,
+  onPageChange,
+  pageSize,
+  onPageSizeChange
 }: {
   requests: ApprovalRequest[];
   requestType: 'leave' | 'surplus';
   approvalStatus: 'pending' | 'approved';
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  pageSize: number;
+  onPageSizeChange: (size: number) => void
 }) {
   return (
-    <div className="space-y-4">
+    <div className="border rounded-lg shadow-sm">
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Requester</TableHead>
-            <TableHead>Campus Director</TableHead>
-            <TableHead>Details</TableHead>
-            <TableHead>Actions</TableHead>
+        <TableHeader className="bg-gray-50">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="px-3 py-3 text-sm">Missionary</TableHead>
+            <TableHead className="px-3 py-3 text-sm">Campus Director</TableHead>
+            <TableHead className="px-3 py-3 text-sm">Details</TableHead>
+            <TableHead className="px-3 py-3 text-sm">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -314,6 +348,15 @@ export function ApprovalTable({
           ))}
         </TableBody>
       </Table>
+      
+      <PaginationControls
+        className="px-2 py-1 border-t"
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={onPageChange}
+        pageSize={pageSize}
+        onPageSizeChange={onPageSizeChange}
+      />
     </div>
   )
 }

@@ -5,40 +5,8 @@ import { redirect } from "next/navigation";
 import LeadPastorSelector from "@/components/LeadPastorSelector";
 import LeadPastorDashboardClient from "./LeadPastorDashboardClient";
 import { getUserRole } from "@/utils/getUserRole";
+import { ChurchReportsTab } from "@/components/ChurchReportsTab";
 import { LeadPastorSidebar } from "@/components/LeadPastorSidebar";
-import { LeaveApproval, SurplusApproval } from "@/types/approval";
-
-interface RawLeaveRequest {
-  id: number;
-  type: "vacation" | "sick";
-  start_date: string;
-  end_date: string;
-  reason: string;
-  status: string;
-  created_at: string;
-  campus_director_approval: string;
-  campus_director_notes?: string;
-  lead_pastor_approval: string;
-  lead_pastor_notes?: string;
-  requester?: {
-    full_name: string;
-  };
-}
-
-interface RawSurplusRequest {
-  id: number;
-  amount_requested: number;
-  reason: string;
-  status: string;
-  created_at: string;
-  campus_director_approval: string;
-  campus_director_notes?: string;
-  lead_pastor_approval: string;
-  lead_pastor_notes?: string;
-  requester?: {
-    full_name: string;
-  };
-}
 
 export default async function LeadPastorDashboard({
   searchParams,
@@ -135,13 +103,13 @@ export default async function LeadPastorDashboard({
     .eq("status", "approved")
     .order("created_at", { ascending: false });
 
-  const transformLeave = (req: RawLeaveRequest): LeaveApproval => ({
+  const transformLeave = (req: any) => ({
     id: String(req.id),
     type: req.type === "vacation" ? "Vacation Leave" : "Sick Leave",
     startDate: req.start_date,
     endDate: req.end_date,
     reason: req.reason,
-    status: req.status as LeaveApproval['status'],
+    status: req.status,
     date: req.created_at,
     campusDirectorApproval: req.campus_director_approval,
     campusDirectorNotes: req.campus_director_notes,
@@ -152,12 +120,12 @@ export default async function LeadPastorDashboard({
     },
   });
 
-  const transformSurplus = (req: RawSurplusRequest): SurplusApproval => ({
+  const transformSurplus = (req: any) => ({
     id: String(req.id),
-    type: "Surplus",
+    type: "Surplus" as const,
     amount: req.amount_requested,
     reason: req.reason,
-    status: req.status as SurplusApproval['status'],
+    status: req.status,
     date: req.created_at,
     campusDirectorApproval: req.campus_director_approval,
     campusDirectorNotes: req.campus_director_notes,

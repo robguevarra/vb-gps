@@ -1,89 +1,41 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
-import crypto from 'crypto'
+import { createClient } from '@supabase/supabase-js'
 
-const WEBHOOK_TOKEN = process.env.XENDIT_WEBHOOK_SECRET || 'DfHz2IsSz1ErauIztRvCpGEVw0a1I4KbwgrO69EmFJlFl24z'
-
-interface XenditWebhookPayload {
-  event: 'invoice.paid' | 'invoice.expired';
-  invoice_id: string;
-  payment_method?: string;
-  payment_channel?: string;
-  payment_id?: string;
-}
-
-function verifyWebhookSignature(payload: XenditWebhookPayload, signature: string) {
-  const calculatedSignature = crypto
-    .createHmac('sha256', WEBHOOK_TOKEN)
-    .update(JSON.stringify(payload))
-    .digest('hex')
-  
-  return calculatedSignature === signature
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 export async function POST(request: Request) {
+  const secret = request.headers.get('x-xendit-callback-token')
+  if (secret !== process.env.XENDIT_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const payload = await request.json()
   try {
-    const signature = request.headers.get('x-callback-token')
-    if (!signature) {
-      return NextResponse.json({ error: 'No signature provided' }, { status: 401 })
+    // Example payload parsing - adjust based on Xendit's actual webhook format
+    const donation = {
+      missionary_id: payload.external_id, // Assuming you pass missionary ID as external_id
+      amount: payload.amount,
+      donor_name: payload.payer?.name || 'Anonymous',
+      source: 'online',
+      status: payload.status === 'PAID' ? 'completed' : 'failed'
     }
 
-    const payload = await request.json() as XenditWebhookPayload
-    
-    // Verify webhook signature
-    if (!verifyWebhookSignature(payload, signature)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+    const { data, error } = await supabase
+      .from('donations')
+      .insert(donation)
+      .select()
 
-    const supabase = await createClient()
-    
-    // Handle different webhook events
-    switch (payload.event) {
-      case 'invoice.paid': {
-        // Update all donations in the batch to completed
-        const { data, error } = await supabase
-          .from('donor_donations')
-          .update({
-            status: 'completed',
-            payment_method: payload.payment_method,
-            payment_channel: payload.payment_channel,
-            payment_timestamp: new Date().toISOString(),
-            xendit_payment_id: payload.payment_id
-          })
-          .eq('xendit_invoice_id', payload.invoice_id)
-          .select()
+    if (error) throw error
 
-        if (error) {
-          throw error
-        }
-
-        return NextResponse.json({ success: true, updated: data })
-      }
-
-      case 'invoice.expired': {
-        // Update donations to expired
-        const { data, error } = await supabase
-          .from('donor_donations')
-          .update({
-            status: 'expired'
-          })
-          .eq('xendit_invoice_id', payload.invoice_id)
-          .select()
-
-        if (error) {
-          throw error
-        }
-
-        return NextResponse.json({ success: true, updated: data })
-      }
-
-      default:
-        return NextResponse.json({ message: 'Unhandled event type' }, { status: 200 })
-    }
-
-  } catch (error: unknown) {
-    console.error("Webhook error:", error)
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    return NextResponse.json({ success: true, data })
+  } catch (error) {
+    console.error('Webhook error:', error)
+    return NextResponse.json(
+      { error: 'Error processing webhook' },
+      { status: 500 }
+    )
   }
 } 

@@ -35,9 +35,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
 
-  } catch (error: unknown) {
-    console.error("Creation error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to create user";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  } catch (err: any) {
+    console.error("Creation error:", err);
+    return NextResponse.json(
+      { error: err.message || "Failed to create user" },
+      { status: 500 }
+    );
   }
 } 

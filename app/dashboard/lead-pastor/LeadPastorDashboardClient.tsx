@@ -4,13 +4,43 @@ import LeadPastorApprovalTab from "@/components/LeadPastorApprovalTab"
 import { ChurchReportsTab } from "@/components/ChurchReportsTab"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ApprovedRequestsTab } from "@/components/ApprovedRequestsTab"
-import { ApprovalRequest, LeaveApproval, SurplusApproval } from "@/types/approval"
+
+type LeaveApproval = {
+  id: string
+  type: "Vacation Leave" | "Sick Leave"
+  startDate: string
+  endDate: string
+  reason: string
+  status: string
+  date: string
+  campusDirectorApproval: string
+  campusDirectorNotes?: string
+  leadPastorApproval: string
+  leadPastorNotes?: string
+  requester?: { full_name: string }
+}
+
+type SurplusApproval = {
+  id: string
+  type: "Surplus"
+  amount: number
+  reason: string
+  status: string
+  date: string
+  campusDirectorApproval: string
+  campusDirectorNotes?: string
+  leadPastorApproval: string
+  leadPastorNotes?: string
+  requester?: { full_name: string }
+}
 
 type LeadPastorDashboardClientProps = {
   pendingLeaveApprovals: LeaveApproval[]
   approvedLeaveApprovals: LeaveApproval[]
   pendingSurplusApprovals: SurplusApproval[]
   approvedSurplusApprovals: SurplusApproval[]
+  selectedLeadPastorName: string
+  localChurchId?: number
   churchIds: number[]
   currentTab: string
 }
@@ -20,6 +50,8 @@ export default function LeadPastorDashboardClient({
   approvedLeaveApprovals,
   pendingSurplusApprovals,
   approvedSurplusApprovals,
+  selectedLeadPastorName,
+  localChurchId,
   churchIds,
   currentTab,
 }: LeadPastorDashboardClientProps) {
@@ -28,15 +60,17 @@ export default function LeadPastorDashboardClient({
       <div className="space-y-8">
         {currentTab === 'approvals' && (
           <LeadPastorApprovalTab
-            pendingLeaveApprovals={pendingLeaveApprovals as ApprovalRequest[]}
-            pendingSurplusApprovals={pendingSurplusApprovals as ApprovalRequest[]}
+            pendingLeaveApprovals={pendingLeaveApprovals}
+            approvedLeaveApprovals={approvedLeaveApprovals}
+            pendingSurplusApprovals={pendingSurplusApprovals}
+            approvedSurplusApprovals={approvedSurplusApprovals}
           />
         )}
         
         {currentTab === 'approved-requests' && (
           <ApprovedRequestsTab
-            approvedLeave={approvedLeaveApprovals as ApprovalRequest[]}
-            approvedSurplus={approvedSurplusApprovals as ApprovalRequest[]}
+            approvedLeave={approvedLeaveApprovals}
+            approvedSurplus={approvedSurplusApprovals}
             currentPage={1}
             totalPages={1}
             onPageChange={() => {}}
