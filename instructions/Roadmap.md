@@ -16,6 +16,12 @@ A comprehensive staff portal for managing missionary donations, approvals, and c
    - ✅ Manual remittance
    - ✅ Donor tracking
    - ✅ Basic reporting
+   - ✅ Advanced reporting system
+     - Global reports dashboard
+     - Missionary performance tracking
+     - Church-wide metrics
+     - Partner donation history
+     - Real-time calculations
 
 3. **Approval Workflows**
    - ✅ Leave requests

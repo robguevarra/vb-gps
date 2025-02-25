@@ -1,133 +1,139 @@
-drop policy "select_own_donations" on "public"."donations";
+-- Drop policies if they exist
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'select_own_donations' AND tablename = 'donations') THEN
+        DROP POLICY "select_own_donations" ON "public"."donations";
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'insert_leave_requests' AND tablename = 'leave_requests') THEN
+        DROP POLICY "insert_leave_requests" ON "public"."leave_requests";
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'insert_surplus_requests' AND tablename = 'surplus_requests') THEN
+        DROP POLICY "insert_surplus_requests" ON "public"."surplus_requests";
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'select_surplus_requests' AND tablename = 'surplus_requests') THEN
+        DROP POLICY "select_surplus_requests" ON "public"."surplus_requests";
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'select_own_profile' AND tablename = 'profiles') THEN
+        DROP POLICY "select_own_profile" ON "public"."profiles";
+    END IF;
+END $$;
 
-drop policy "insert_leave_requests" on "public"."leave_requests";
+-- Revoke permissions if table exists
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'donations' AND schemaname = 'public') THEN
+        REVOKE ALL ON TABLE "public"."donations" FROM "anon", "authenticated", "service_role";
+        
+        -- Drop constraints if they exist
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'donations_created_by_fkey') THEN
+            ALTER TABLE "public"."donations" DROP CONSTRAINT "donations_created_by_fkey";
+        END IF;
+        
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'donations_missionary_id_fkey') THEN
+            ALTER TABLE "public"."donations" DROP CONSTRAINT "donations_missionary_id_fkey";
+        END IF;
+        
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'donations_source_check') THEN
+            ALTER TABLE "public"."donations" DROP CONSTRAINT "donations_source_check";
+        END IF;
+        
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'donations_status_check') THEN
+            ALTER TABLE "public"."donations" DROP CONSTRAINT "donations_status_check";
+        END IF;
+        
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_missionary') THEN
+            ALTER TABLE "public"."donations" DROP CONSTRAINT "fk_missionary";
+        END IF;
+        
+        IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'donations_pkey') THEN
+            ALTER TABLE "public"."donations" DROP CONSTRAINT "donations_pkey";
+        END IF;
+        
+        -- Drop indexes
+        DROP INDEX IF EXISTS "public"."donations_pkey";
+        DROP INDEX IF EXISTS "public"."idx_missionary_id";
+        
+        -- Drop the table
+        DROP TABLE "public"."donations";
+    END IF;
+END $$;
 
-drop policy "insert_surplus_requests" on "public"."surplus_requests";
+-- Drop sequence if exists
+DROP SEQUENCE IF EXISTS "public"."donations_id_seq";
 
-drop policy "select_surplus_requests" on "public"."surplus_requests";
+-- Add columns and constraints to existing tables
+ALTER TABLE "public"."leave_requests" ADD COLUMN IF NOT EXISTS "lead_pastor_notes" text;
+ALTER TABLE "public"."leave_requests" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."surplus_requests" ADD COLUMN IF NOT EXISTS "lead_pastor_notes" text;
 
-drop policy "select_own_profile" on "public"."profiles";
+-- Add constraints with existence checks
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'leave_requests_lead_pastor_approval_check') THEN
+        ALTER TABLE "public"."leave_requests" ADD CONSTRAINT "leave_requests_lead_pastor_approval_check" 
+        CHECK ((lead_pastor_approval = ANY (ARRAY['none'::text, 'approved'::text, 'rejected'::text, 'override-approved'::text, 'override-rejected'::text]))) NOT VALID;
+        
+        ALTER TABLE "public"."leave_requests" VALIDATE CONSTRAINT "leave_requests_lead_pastor_approval_check";
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'surplus_requests_lead_pastor_approval_check') THEN
+        ALTER TABLE "public"."surplus_requests" ADD CONSTRAINT "surplus_requests_lead_pastor_approval_check" 
+        CHECK ((lead_pastor_approval = ANY (ARRAY['none'::text, 'approved'::text, 'rejected'::text, 'override-approved'::text, 'override-rejected'::text]))) NOT VALID;
+        
+        ALTER TABLE "public"."surplus_requests" VALIDATE CONSTRAINT "surplus_requests_lead_pastor_approval_check";
+    END IF;
+END $$;
 
-revoke delete on table "public"."donations" from "anon";
-
-revoke insert on table "public"."donations" from "anon";
-
-revoke references on table "public"."donations" from "anon";
-
-revoke select on table "public"."donations" from "anon";
-
-revoke trigger on table "public"."donations" from "anon";
-
-revoke truncate on table "public"."donations" from "anon";
-
-revoke update on table "public"."donations" from "anon";
-
-revoke delete on table "public"."donations" from "authenticated";
-
-revoke insert on table "public"."donations" from "authenticated";
-
-revoke references on table "public"."donations" from "authenticated";
-
-revoke select on table "public"."donations" from "authenticated";
-
-revoke trigger on table "public"."donations" from "authenticated";
-
-revoke truncate on table "public"."donations" from "authenticated";
-
-revoke update on table "public"."donations" from "authenticated";
-
-revoke delete on table "public"."donations" from "service_role";
-
-revoke insert on table "public"."donations" from "service_role";
-
-revoke references on table "public"."donations" from "service_role";
-
-revoke select on table "public"."donations" from "service_role";
-
-revoke trigger on table "public"."donations" from "service_role";
-
-revoke truncate on table "public"."donations" from "service_role";
-
-revoke update on table "public"."donations" from "service_role";
-
-alter table "public"."donations" drop constraint "donations_created_by_fkey";
-
-alter table "public"."donations" drop constraint "donations_missionary_id_fkey";
-
-alter table "public"."donations" drop constraint "donations_source_check";
-
-alter table "public"."donations" drop constraint "donations_status_check";
-
-alter table "public"."donations" drop constraint "fk_missionary";
-
-alter table "public"."leave_requests" drop constraint "leave_requests_lead_pastor_approval_check";
-
-alter table "public"."surplus_requests" drop constraint "surplus_requests_lead_pastor_approval_check";
-
-alter table "public"."donations" drop constraint "donations_pkey";
-
-drop index if exists "public"."donations_pkey";
-
-drop index if exists "public"."idx_missionary_id";
-
-drop table "public"."donations";
-
-alter table "public"."leave_requests" add column "lead_pastor_notes" text;
-
-alter table "public"."leave_requests" disable row level security;
-
-alter table "public"."surplus_requests" add column "lead_pastor_notes" text;
-
-drop sequence if exists "public"."donations_id_seq";
-
-alter table "public"."leave_requests" add constraint "leave_requests_lead_pastor_approval_check" CHECK ((lead_pastor_approval = ANY (ARRAY['none'::text, 'approved'::text, 'rejected'::text, 'override-approved'::text, 'override-rejected'::text]))) not valid;
-
-alter table "public"."leave_requests" validate constraint "leave_requests_lead_pastor_approval_check";
-
-alter table "public"."surplus_requests" add constraint "surplus_requests_lead_pastor_approval_check" CHECK ((lead_pastor_approval = ANY (ARRAY['none'::text, 'approved'::text, 'rejected'::text, 'override-approved'::text, 'override-rejected'::text]))) not valid;
-
-alter table "public"."surplus_requests" validate constraint "surplus_requests_lead_pastor_approval_check";
-
-create policy "insert_own_leave_requests"
-on "public"."leave_requests"
-as permissive
-for insert
-to public
-with check (((requester_id = auth.uid()) OR (( SELECT profiles.role
-   FROM profiles
-  WHERE (profiles.id = auth.uid())) = 'superadmin'::text)));
-
-
-create policy "Enable read access for all users"
-on "public"."profiles"
-as permissive
-for select
-to public
-using (((id = auth.uid()) OR (auth.email() = 'robneil@gmail.com'::text)));
-
-
-create policy "insert_own_surplus_requests"
-on "public"."surplus_requests"
-as permissive
-for insert
-to public
-with check ((missionary_id = auth.uid()));
-
-
-create policy "select_own_surplus_requests"
-on "public"."surplus_requests"
-as permissive
-for select
-to public
-using ((missionary_id = auth.uid()));
-
-
-create policy "select_own_profile"
-on "public"."profiles"
-as permissive
-for select
-to public
-using (((id = auth.uid()) OR (auth.uid() = 'aebdeee3-427f-4d5b-832d-8c4ebaecdddc'::uuid)));
+-- Create policies
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'insert_own_leave_requests' AND tablename = 'leave_requests') THEN
+        CREATE POLICY "insert_own_leave_requests"
+        ON "public"."leave_requests"
+        AS permissive
+        FOR insert
+        TO public
+        WITH CHECK (((requester_id = auth.uid()) OR (( SELECT profiles.role
+           FROM profiles
+          WHERE (profiles.id = auth.uid())) = 'superadmin'::text)));
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Enable read access for all users' AND tablename = 'profiles') THEN
+        CREATE POLICY "Enable read access for all users"
+        ON "public"."profiles"
+        AS permissive
+        FOR select
+        TO public
+        USING (((id = auth.uid()) OR (auth.email() = 'robneil@gmail.com'::text)));
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'insert_own_surplus_requests' AND tablename = 'surplus_requests') THEN
+        CREATE POLICY "insert_own_surplus_requests"
+        ON "public"."surplus_requests"
+        AS permissive
+        FOR insert
+        TO public
+        WITH CHECK ((missionary_id = auth.uid()));
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'select_own_surplus_requests' AND tablename = 'surplus_requests') THEN
+        CREATE POLICY "select_own_surplus_requests"
+        ON "public"."surplus_requests"
+        AS permissive
+        FOR select
+        TO public
+        USING ((missionary_id = auth.uid()));
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'select_own_profile' AND tablename = 'profiles') THEN
+        CREATE POLICY "select_own_profile"
+        ON "public"."profiles"
+        AS permissive
+        FOR select
+        TO public
+        USING (((id = auth.uid()) OR (auth.uid() = 'aebdeee3-427f-4d5b-832d-8c4ebaecdddc'::uuid)));
+    END IF;
+END $$;
 
 
 

@@ -78,18 +78,73 @@
    - Performance optimized with memoization
    - Responsive grid layout (1-4 columns)
 
-2. **Reports Tab** (`components/ReportsTab.tsx`)
-   - Comprehensive donation analysis interface
-   - Features:
-     - Monthly partner giving trends (13-month history)
-     - Partner donation history with trend indicators
-     - Pivot table implementation for donation analysis
-     - Real-time updates via Supabase
-   - Performance optimizations:
-     - Client-side pivot table generation
-     - Efficient data grouping algorithms
-     - Memoized calculations
-     - Progressive loading
+2. **Reports System** (`components/reports/`)
+   - **Global Reports Tab** (`components/reports/GlobalReportsTab.tsx`)
+     - Features:
+       - Top-level metrics cards
+         - Total donations this month
+         - Current total percentage
+         - Change from last month
+         - Count of missionaries below 80%
+       - Tabbed interface for missionaries, churches, and partners
+       - Real-time data loading and error handling
+       - Responsive layout with clean UI
+
+   - **Data Loading Hook** (`hooks/useReportsData.ts`)
+     - Features:
+       - Centralized data fetching from Supabase
+       - Calculates key metrics:
+         - Monthly donation totals
+         - Percentage calculations
+         - Below 80% missionary count
+       - Builds donation maps for efficient lookups
+       - Error handling and loading states
+
+   - **Tables**
+     - **Missionaries Table** (`components/reports/tables/MissionariesTable.tsx`)
+       - Missionary list with monthly goals
+       - Current month percentage tracking
+       - Quick access to 6-month and full reports
+     - **Churches Table** (`components/reports/tables/ChurchesTable.tsx`)
+       - Church list with aggregated goals
+       - Current month percentage for all missionaries
+       - Detailed view of missionary performance
+     - **Partners Table** (`components/reports/tables/PartnersTable.tsx`)
+       - Partner list with 13-month donation history
+       - Total giving calculations
+       - Detailed donation history access
+
+   - **Modals**
+     - **Missionary Last 6 Modal** (`components/reports/modals/MissionaryLast6Modal.tsx`)
+       - 6-month performance history
+       - Monthly percentage calculations
+     - **Church Details Modal** (`components/reports/modals/ChurchDetailsModal.tsx`)
+       - 4-month view of all missionaries
+       - Color-coded performance indicators
+     - **Full Missionary Report Modal** (`components/reports/modals/FullMissionaryReportModal.tsx`)
+       - 13-month partner donation history
+       - Detailed partner information
+       - Paginated partner list
+     - **Partner Details Modal** (`components/reports/modals/PartnerDetailsModal.tsx`)
+       - Complete donation history
+       - Missionary-specific breakdowns
+       - Transaction details
+
+   - **Utilities** (`utils/reports.ts`)
+     - Helper functions for:
+       - Number formatting
+       - Donation calculations
+       - Percentage computations
+       - Date handling
+       - Data aggregation
+
+   - **Types** (`types/reports.ts`)
+     - Type definitions for:
+       - Profiles (missionaries)
+       - Churches
+       - Donors and donations
+       - Modal states
+       - Data structures
 
 3. **Approval System**
    - **Approval Tab** (`components/ApprovalTab.tsx`)

@@ -2,28 +2,31 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 
 interface ReportsTabsProps {
-  currentTab: string;
-  setCurrentTab: (tab: string) => void;
+  currentTab: "missionaries" | "churches" | "partners";
+  setCurrentTab: (tab: "missionaries" | "churches" | "partners") => void;
 }
 
 export function ReportsTabs({ currentTab, setCurrentTab }: ReportsTabsProps) {
-  const tabs = [
-    { key: "missionaries", label: "Missionaries" },
-    { key: "churches", label: "Churches" },
-    { key: "partners", label: "Partners" },
-  ];
-
   return (
-    <div className="flex space-x-2 mb-4">
-      {tabs.map((tab) => (
-        <Button
-          key={tab.key}
-          variant={currentTab === tab.key ? "default" : "outline"}
-          onClick={() => setCurrentTab(tab.key)}
-        >
-          {tab.label}
-        </Button>
-      ))}
+    <div className="flex items-center gap-2 mb-4">
+      <Button
+        variant={currentTab === "missionaries" ? "default" : "outline"}
+        onClick={() => setCurrentTab("missionaries")}
+      >
+        Missionaries
+      </Button>
+      <Button
+        variant={currentTab === "churches" ? "default" : "outline"}
+        onClick={() => setCurrentTab("churches")}
+      >
+        Churches
+      </Button>
+      <Button
+        variant={currentTab === "partners" ? "default" : "outline"}
+        onClick={() => setCurrentTab("partners")}
+      >
+        Partners
+      </Button>
     </div>
   );
 } 
