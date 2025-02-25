@@ -22,10 +22,10 @@ Below is a **fully rethought, end-to-end set of instructions** for building your
 3. **Leave Management**  
    - Missionaries (and possibly staff) can request leave.  
    - Approvals are from campus director + lead pastor, similar to surplus.  
-   - If either rejects, it’s rejected—unless the lead pastor overrides.
+   - If either rejects, it's rejected—unless the lead pastor overrides.
 
 4. **Reporting & Hierarchy**  
-   - We have **16 local churches** under one “province,” and each local church can belong to a “district” if needed.  
+   - We have **16 local churches** under one "province," and each local church can belong to a "district" if needed.  
    - **Superadmin** can generate **reports** at local church level, district level, or province level, showing donation summaries, surplus usage, leaves, etc.
 
 5. **Modern Front-End**  
@@ -37,47 +37,62 @@ Below is a **fully rethought, end-to-end set of instructions** for building your
 
 # **2. Technology Stack**
 
-1. **Front End**: **Next.js** (using the App Router in the `app/` directory).  
-2. **Backend**: **Supabase** (Postgres DB + Auth + APIs).  
-3. **Payment Gateway**: **Xendit** for online donations. We’ll create a webhook endpoint in Next.js for Xendit to call.  
-4. **Hosting**:  
-   - Next.js can be deployed on **Vercel** or any Node-compatible host.  
-   - Supabase is hosted, providing DB + Auth.  
-5. **Email Notifications**: Possibly integrated via a service like SendGrid or an SMTP-based solution.
+1. **Front End**: **Next.js** (using the App Router in the `app/` directory)
+   - Optimized state management
+   - Enhanced error handling
+   - Real-time data synchronization
+   - Efficient component rendering
+2. **Backend**: **Supabase** (Postgres DB + Auth + APIs)
+   - Efficient data processing
+   - Optimized queries
+   - Real-time subscriptions
+3. **Payment Gateway**: **Xendit** for online donations
+4. **Hosting**:
+   - Next.js can be deployed on **Vercel** or any Node-compatible host
+   - Supabase is hosted, providing DB + Auth
+5. **Email Notifications**: Possibly integrated via a service like SendGrid or an SMTP-based solution
 
 ---
 
 # **3. Database Design (Supabase)**
 
-Use **Supabase** to create the following tables and relationships (Note: table names can vary, but this is the conceptual layout):
+Use **Supabase** to create the following tables and relationships:
 
-1. **`local_churches`**  
+1. **`local_churches`**
    - `id (bigserial PK)`, `name (text)`, `district_id (bigint, optional)`, `lead_pastor_id (uuid)`, etc.
 
-2. **`districts`** (optional if you want to group local churches)  
-   - `id (bigserial PK)`, `name (text)`, `province_id (bigint, optional)`.
+2. **`districts`** (optional if you want to group local churches)
+   - `id (bigserial PK)`, `name (text)`, `province_id (bigint, optional)`
 
-3. **`users` / `profiles`** (extending `auth.users` if using Supabase Auth)  
-   - `id (uuid PK references auth.users(id))`  
-   - `full_name (text)`  
-   - `role (text: missionary, campus_director, lead_pastor, finance_officer, superadmin)`  
-   - `local_church_id (bigint references local_churches(id))`  
-   - `campus_director_id (uuid, references users(id) if the user is a missionary supervised by a campus director)`  
-   - `monthly_goal (numeric(10,2))`  
-   - `surplus_balance (numeric(10,2) default 0)`  
+3. **`users` / `profiles`** (extending `auth.users` if using Supabase Auth)
+   - `id (uuid PK references auth.users(id))`
+   - `full_name (text)`
+   - `role (text: missionary, campus_director, lead_pastor, finance_officer, superadmin)`
+   - `local_church_id (bigint references local_churches(id))`
+   - `campus_director_id (uuid, references users(id) if the user is a missionary supervised by a campus director)`
+   - `monthly_goal (numeric(10,2))`
+   - `surplus_balance (numeric(10,2) default 0)`
    - `created_at, updated_at`
 
-4. **`donations`**  
-   - `id (bigserial PK)`  
-   - `missionary_id (uuid references users(id))`  
-   - `donor_name (text, optional)` or `donor_id (optional) if you store donors as users`  
-   - `amount (numeric(10,2))`  
-   - `date (timestamptz)`  
-   - `source (varchar: 'online','offline')`  
-   - `status (varchar: 'completed','refunded','failed', etc.)`  
+4. **`donations`**
+   - `id (bigserial PK)`
+   - `missionary_id (uuid references users(id))`
+   - `donor_id (uuid references donors(id))`
+   - `amount (numeric(10,2))`
+   - `date (timestamptz)`
+   - `source (varchar: 'online','offline')`
+   - `status (varchar: 'completed','refunded','failed', etc.)`
    - `created_by (uuid, references users(id) if finance officer added manually)`
 
-5. **`surplus_requests`**  
+5. **`donors`**
+   - `id (uuid PK)`
+   - `name (text)`
+   - `email (text)`
+   - `phone (text)`
+   - `created_at (timestamptz)`
+   - `updated_at (timestamptz)`
+
+6. **`surplus_requests`**  
    - `id (bigserial PK)`  
    - `missionary_id (uuid references users(id))`  
    - `amount_requested (numeric(10,2))`  
@@ -87,7 +102,7 @@ Use **Supabase** to create the following tables and relationships (Note: table n
    - `lead_pastor_approval (varchar: 'none','approved','rejected','override')`  
    - `created_at (timestamptz)`, `updated_at (timestamptz)`
 
-6. **`leave_requests`**  
+7. **`leave_requests`**  
    - `id (bigserial PK)`  
    - `requester_id (uuid references users(id))`  
    - `start_date (date)`  
@@ -98,12 +113,12 @@ Use **Supabase** to create the following tables and relationships (Note: table n
    - `lead_pastor_approval (varchar: 'none','approved','rejected','override')`  
    - `created_at, updated_at`
 
-7. **`webhook_logs`** (optional, for debugging)  
+8. **`webhook_logs`** (optional, for debugging)  
    - `id (bigserial PK)`  
    - `payload (jsonb)`  
    - `created_at (timestamptz)`
 
-**Row-level security** or policy-based restrictions can be used so that finance officers only see their local church’s data, missionaries only see their own, etc.
+**Row-level security** or policy-based restrictions can be used so that finance officers only see their local church's data, missionaries only see their own, etc.
 
 ---
 
@@ -121,8 +136,8 @@ Use **Supabase** to create the following tables and relationships (Note: table n
    - Otherwise, use a secret token in the URL to ensure only Xendit can call it.
 
 3. **Testing**:  
-   - Use Xendit’s sandbox mode to send test events.  
-   - Confirm the data shows up on the missionary’s donation list.
+   - Use Xendit's sandbox mode to send test events.  
+   - Confirm the data shows up on the missionary's donation list.
 
 ---
 
@@ -166,7 +181,7 @@ app/
         page.tsx          // Manage user accounts
 ```
 
-You can refine the structure as needed, but this ensures a **clean separation** of each role’s dashboard.
+You can refine the structure as needed, but this ensures a **clean separation** of each role's dashboard.
 
 ---
 
@@ -176,8 +191,8 @@ You can refine the structure as needed, but this ensures a **clean separation** 
 
 - **View Monthly Donation Stats**: A progress bar or percentage of monthly_goal.  
 - **Recent Donations**: Show a table of date, amount, donor name (if available).  
-- **Donor History**: Clicking a donor name reveals a modal or separate page listing that donor’s full giving history **to this missionary**.  
-- **Request Surplus**: A form if the missionary’s surplus_balance > 0.  
+- **Donor History**: Clicking a donor name reveals a modal or separate page listing that donor's full giving history **to this missionary**.  
+- **Request Surplus**: A form if the missionary's surplus_balance > 0.  
 - **Request Leave**: A form to request start_date, end_date, reason.  
 - **View Surplus & Leave Request Status**: For each request, see pending/approved/rejected, with partial approvals if applicable.
 
@@ -193,16 +208,16 @@ You can refine the structure as needed, but this ensures a **clean separation** 
 
 - **Approve Surplus & Leave**:
   - List of all missionaries in the local church under this director.  
-  - Surplus requests: click “approve” or “reject.”  
+  - Surplus requests: click "approve" or "reject."  
   - Leave requests: same.  
 - **Partially Approved**: The request remains pending until the lead pastor also acts (or overrides).
 
 ## 6.4 Lead Pastor Dashboard
 
 - **Approve Surplus & Leave**:
-  - List of requests from missionaries (or campus director if that’s also a missionary) in the local church.  
-  - If campus director already approved, it shows “campus director: approved.” The lead pastor can finalize or override.  
-- **Override**: If campus director rejects but lead pastor wants to approve, that’s an override scenario. If the business logic is allowed, implement it.
+  - List of requests from missionaries (or campus director if that's also a missionary) in the local church.  
+  - If campus director already approved, it shows "campus director: approved." The lead pastor can finalize or override.  
+- **Override**: If campus director rejects but lead pastor wants to approve, that's an override scenario. If the business logic is allowed, implement it.
 
 ## 6.5 Superadmin Dashboard
 
@@ -220,7 +235,7 @@ You can refine the structure as needed, but this ensures a **clean separation** 
 
 1. **Accumulation**:
    - End of each month (or real-time), if `month_donations > monthly_goal`, surplus = `month_donations - monthly_goal`.  
-   - Add that to the user’s `surplus_balance`. If you carry it forward monthly, store it in `profiles.surplus_balance`.  
+   - Add that to the user's `surplus_balance`. If you carry it forward monthly, store it in `profiles.surplus_balance`.  
 2. **Request**:
    - Missionary can request up to `surplus_balance`.  
    - On approval, subtract from `surplus_balance`. On rejection, do nothing.  
@@ -256,7 +271,7 @@ You can refine the structure as needed, but this ensures a **clean separation** 
 3. **Visuals**:
    - **Donations** might have a simple bar or ring chart.  
    - Surplus usage can be displayed in a card.  
-   - Approvals can be displayed as “pending requests” lists with clear Accept/Reject buttons.
+   - Approvals can be displayed as "pending requests" lists with clear Accept/Reject buttons.
 
 ---
 

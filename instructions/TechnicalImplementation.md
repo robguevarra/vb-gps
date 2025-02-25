@@ -89,22 +89,29 @@
        - Tabbed interface for missionaries, churches, and partners
        - Real-time data loading and error handling
        - Responsive layout with clean UI
+       - Optimized state management
+       - Enhanced error handling
 
    - **Data Loading Hook** (`hooks/useReportsData.ts`)
      - Features:
        - Centralized data fetching from Supabase
+       - Efficient donor data processing
+       - Optimized state initialization
+       - Robust error handling
        - Calculates key metrics:
          - Monthly donation totals
          - Percentage calculations
          - Below 80% missionary count
+         - Partner donation totals
        - Builds donation maps for efficient lookups
-       - Error handling and loading states
+       - Real-time data synchronization
 
    - **Tables**
      - **Missionaries Table** (`components/reports/tables/MissionariesTable.tsx`)
        - Missionary list with monthly goals
        - Current month percentage tracking
        - Quick access to 6-month and full reports
+       - Real-time progress updates
      - **Churches Table** (`components/reports/tables/ChurchesTable.tsx`)
        - Church list with aggregated goals
        - Current month percentage for all missionaries
@@ -113,6 +120,8 @@
        - Partner list with 13-month donation history
        - Total giving calculations
        - Detailed donation history access
+       - Enhanced donor data display
+       - Optimized loading states
 
    - **Modals**
      - **Missionary Last 6 Modal** (`components/reports/modals/MissionaryLast6Modal.tsx`)
