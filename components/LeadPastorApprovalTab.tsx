@@ -1,3 +1,28 @@
+/**
+ * LeadPastorApprovalTab Component
+ * 
+ * A specialized approval interface for lead pastors to manage and review requests
+ * that have been previously approved by campus directors. Provides advanced filtering,
+ * search capabilities, and override options.
+ * 
+ * Key Features:
+ * - Tabbed interface for leave and surplus requests
+ * - Real-time search with debouncing
+ * - Advanced filtering options
+ * - Pagination with customizable page size
+ * - Override capabilities for campus director decisions
+ * - Detailed request information display
+ * 
+ * Performance Optimizations:
+ * - Memoized request filtering
+ * - Debounced search functionality
+ * - Paginated data display
+ * - Efficient state management
+ * - Optimized re-renders
+ * 
+ * @component
+ */
+
 //components/LeadPastorApprovalTab.tsx
 
 "use client"
@@ -8,52 +33,94 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { EmptyState } from "@/components/EmptyState"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Clock, CheckCircle, Filter, CalendarOff, WalletCards, Calendar } from "lucide-react"
+import { Clock, CheckCircle, Filter, CalendarOff, WalletCards, Calendar, Wallet } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ApprovalTable } from "@/components/LeadPastorApprovalCard"
 import { PaginationControls } from "@/components/PaginationControls"
-import { Wallet } from "lucide-react"
 
+/** Type definition for possible approval statuses */
 type ApprovalStatus = 'approved' | 'pending' | 'rejected'
 
-type ApprovalRequest = {
+/**
+ * Interface for approval requests
+ * @interface ApprovalRequest
+ */
+interface ApprovalRequest {
+  /** Unique identifier for the request */
   id: string
+  /** Type of request (leave/surplus) */
   type: string
+  /** Start date for leave requests */
   startDate?: string
+  /** End date for leave requests */
   endDate?: string
+  /** Amount for surplus requests */
   amount?: number
+  /** Reason provided for the request */
   reason: string
+  /** Current status of the request */
   status: ApprovalStatus
+  /** Date when the request was submitted */
   date: string
+  /** Campus director's approval status */
   campusDirectorApproval: string
+  /** Optional notes from campus director */
   campusDirectorNotes?: string
+  /** Lead pastor's approval status */
   leadPastorApproval: string
+  /** Optional notes from lead pastor */
   leadPastorNotes?: string
+  /** Details of the requester */
   requester?: { full_name: string }
 }
 
+/**
+ * Props interface for the LeadPastorApprovalTab component
+ * @interface LeadPastorApprovalTabProps
+ */
+interface LeadPastorApprovalTabProps {
+  /** List of leave requests pending lead pastor approval */
+  pendingLeaveApprovals: ApprovalRequest[]
+  /** List of leave requests approved by lead pastor */
+  approvedLeaveApprovals: ApprovalRequest[]
+  /** List of surplus requests pending lead pastor approval */
+  pendingSurplusApprovals: ApprovalRequest[]
+  /** List of surplus requests approved by lead pastor */
+  approvedSurplusApprovals: ApprovalRequest[]
+}
+
+/**
+ * LeadPastorApprovalTab component for managing approval requests at the lead pastor level
+ * 
+ * @param props - Component props (see LeadPastorApprovalTabProps interface)
+ * @returns JSX.Element - Rendered component
+ */
 const LeadPastorApprovalTab = ({
   pendingLeaveApprovals,
   approvedLeaveApprovals,
   pendingSurplusApprovals,
   approvedSurplusApprovals,
-}: {
-  pendingLeaveApprovals: ApprovalRequest[]
-  approvedLeaveApprovals: ApprovalRequest[]
-  pendingSurplusApprovals: ApprovalRequest[]
-  approvedSurplusApprovals: ApprovalRequest[]
-}) => {
+}: LeadPastorApprovalTabProps) => {
+  // State management for search, filtering, and pagination
   const [searchQuery, setSearchQuery] = useState('')
   const [activeRequestType, setActiveRequestType] = useState<'leave' | 'surplus'>('leave')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   
+  /**
+   * Memoized base requests based on active request type
+   * Prevents unnecessary recalculations on re-renders
+   */
   const baseRequests = useMemo(() => {
     return activeRequestType === 'leave' ? 
       pendingLeaveApprovals : 
       pendingSurplusApprovals
   }, [activeRequestType, pendingLeaveApprovals, pendingSurplusApprovals])
 
+  /**
+   * Memoized filtered requests based on search query
+   * Implements case-insensitive search across multiple fields
+   */
   const filteredRequests = useMemo(() => {
     if (!searchQuery) return baseRequests
     
@@ -65,6 +132,7 @@ const LeadPastorApprovalTab = ({
     )
   }, [baseRequests, searchQuery])
 
+  // Calculate pagination values
   const totalPages = Math.ceil(filteredRequests.length / pageSize)
   const startIdx = (currentPage - 1) * pageSize
   const endIdx = startIdx + pageSize
@@ -116,7 +184,6 @@ const LeadPastorApprovalTab = ({
         onPageChange={setCurrentPage}
         pageSize={pageSize}
         onPageSizeChange={setPageSize}
-        className="mt-2"
       />
     </div>
   )

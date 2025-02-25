@@ -1,246 +1,194 @@
+# Staff Portal - Project Roadmap
 
+## Project Vision
+A comprehensive staff portal for managing missionary donations, approvals, and church operations.
 
-# **WHAT IS DONE**
-- We have already developed the dashboard for all the roles, with the functionalities, using a superadmin that can switch dashboard and pretend to login as user profiles dropdown selector. 
-- We have already created roles on our supabase database, and tested the redirects to specific dashboards based on user role. The redirects are working.
-- We have implemented role-based authentication and authorization using Supabase Auth
-- Created separate dashboard layouts and components for each role:
-  - Missionary: Can view donations, submit surplus/leave requests, see reports
-  - Finance Officer: Can record offline donations, view recent transactions
-  - Campus Director: Shares dashboard with Missionary, additional option to approve/reject requests from missionaries
-  - Lead Pastor: Has override capabilities for approvals
-  - Superadmin: Full system access and reporting, has dashboard selector
+## Current Status (As of February 2024)
 
-- Built core database tables in Supabase:
-  - profiles: Stores user profile data linked to auth.users
-  - donor_donations: Records all donation transactions
-  - donors: Records all donors
-  - surplus_requests: Tracks surplus fund requests
-  - leave_requests: Manages missionary leave requests
-  - local_churches: Maintains church/location data
+### Completed Features
+1. **Core Authentication**
+   - ✅ Supabase Auth integration
+   - ✅ Role-based access control
+   - ✅ User profile management
 
-- Implemented key features:
-  - Role-based dashboard routing and access control
-  - Initial reporting capabilities for superadmin
-  - Profile management and role assignment
-  - Superadmin role-switching functionality for testing
+2. **Donation Management**
+   - ✅ Manual donation entry
+   - ✅ Manual remittance
+   - ✅ Donor tracking
+   - ✅ Basic reporting
 
-- Set up development environment:
-  - Next.js 13+ with App Router
-  - Supabase for backend and auth
-  - Tailwind CSS for styling
-  - TypeScript for type safety
-  - Shadcn/UI for components
+3. **Approval Workflows**
+   - ✅ Leave requests
+   - ✅ Surplus requests
+   - ✅ Two-level approval system
+   - ✅ Request history
 
-- Structure of the project
-    - global layout
-        - sidebar
-        - navbar
-    - dashboard layout
-    - dashboard components
-        - missionary
-            - DashboardCards.tsx
-            - RecentDonations.tsx
-            - LeaveRequestModal.tsx
-            - SurplusRequestModal.tsx
-            - ApprovalTab.tsx
-            - RequestHistoryTab.tsx
-            - ManualRemittanceWizard.tsx
-            - ReportsTab.tsx
-        - finance
-            - DonationModal.tsx
-            - RecentTransactions.tsx
-        - lead pastor
-            - LeadPastorDashboardClient.tsx
-            - LeadPastorSelector.tsx
-        - superadmin
-            - SuperAdminSidebar.tsx
-            - ChurchesList.tsx
-            - UsersList.tsx
-            - GlobalReportsTab.tsx
-                - ChurchesTable.tsx
-                - MissionariesTable.tsx
-                - PartnersTable.tsx
-                - ReportsTabs.tsx
-                - TopMetricsCards.tsx
-            - SettingsLayout.tsx
+4. **Role-Specific Dashboards**
+   - ✅ Missionary dashboard
+   - ✅ Finance officer dashboard
+   - ✅ Lead pastor dashboard
+   - ✅ Superadmin dashboard
 
+### In Progress
+1. **Online Payments**
+   - 🔄 Xendit integration planning
+   - 🔄 Payment workflow design
+   - 🔄 Database schema updates
 
+2. **Email Notifications**
+   - 🔄 Email service selection
+   - 🔄 Template design
+   - 🔄 Integration planning
 
-*Finance Dashboard:*
-    Explanation
-    Fetching the Finance Officer’s Profile:
-    We query the profiles table for the current user's profile to obtain the local_church_id.
+3. **Partner Management**
+   - 🔄 Enhanced tracking features
+   - 🔄 Pledge system design
+   - 🔄 Automated reminders
 
-    Filtering Missionary Profiles:
-    We then query the profiles table for users with the role "missionary" and add an additional condition .eq('local_church_id', financeProfile?.local_church_id) so that only missionaries belonging to the same local church as the finance officer are fetched.
+## Timeline
 
-    Passing the Filtered Data:
-    The filtered list is passed as a prop to the DonationModal, which uses it to populate the "Select Missionary" dropdown.
+### Q1 2024 (Current Quarter)
+1. **February**
+   - Complete Xendit integration planning
+   - Finalize email notification system design
+   - Begin partner management system implementation
 
-*New Update*
-- Changed the way we fetch roles. Implemented a user_roles table to store the roles of the users.
-- Finance route already working. Able to login with finance role and able to go straight to finance dashboard. 
-- All the other dashboards need editting to apply getUserRole.ts to fetch the correct roles. 
-- Recent Transactions Table should be able to see offline transactions made by finance officer only. 
-- Added a column on donor_donations table to record who made the transaction. 
-- api/donations route is working. Able to post data to the database. 
-- DonationModal is working. Able to post data to the database. 
-- api/donations updated to include comments. allows online donations.
-- ManualRemittanceWizard is working. Able to post data to the database. 
+2. **March**
+   - Implement Xendit payment gateway
+   - Deploy email notification system
+   - Complete partner pledge tracking
 
-Recent Donations fix:
-- updated RLS on donor_donations table:
-    drop policy if exists "Allow select donation" on donor_donations;
+### Q2 2024
+1. **April**
+   - System logging implementation
+   - Enhanced security features
+   - Performance optimization
 
-    create policy "Access based on role and relationships"
-    on donor_donations
-    for select using (
-    exists (select 1 from user_roles where user_id = auth.uid() and role = 'superadmin')
-    or donor_donations.missionary_id = auth.uid()
-    or exists (
-        select 1 from profiles
-        where id = auth.uid()
-        and role = 'campus_director'
-        and donor_donations.missionary_id in (
-        select id from profiles
-        where campus_director_id = auth.uid()
-        )
-    )
-    or exists (
-        select 1 from profiles pastor
-        join profiles missionary
-        on missionary.local_church_id = pastor.local_church_id
-        where pastor.id = auth.uid()
-        and pastor.role = 'lead_pastor'
-        and donor_donations.missionary_id = missionary.id
-    )
-    or donor_donations.recorded_by = auth.uid()
-    );
+2. **May**
+   - Advanced analytics
+   - Mobile responsiveness
+   - API documentation
 
-    create index idx_donor_donations_missionary on donor_donations(missionary_id);
-    create index idx_donor_donations_recorded_by on donor_donations(recorded_by);
-    create index idx_profiles_campus_director on profiles(campus_director_id);
-    create index idx_profiles_local_church on profiles(local_church_id);
+3. **June**
+   - Testing and QA
+   - User acceptance testing
+   - Documentation updates
 
-works now. 
+### Q3 2024
+1. **July**
+   - Mobile app development start
+   - Additional payment methods
+   - Advanced reporting features
 
-errors on missionary dashboard in displaying recent donations fixed. 
+2. **August**
+   - CRM integration
+   - Business intelligence tools
+   - API expansion
 
-changes from usd sign to php sign.
+3. **September**
+   - Performance optimization
+   - Security audits
+   - Feature refinement
 
-missionary dashboard improved:
-- added a new card for current partners and new partners this month. 
+## Feature Priority Matrix
 
+### High Priority (Next 2-4 Weeks)
+1. **Xendit Integration**
+   - Payment gateway setup
+   - Webhook implementation
+   - Testing and validation
 
-**Current Implementation Summary**  
-We've restructured the lead pastor approval interface to separate pending and approved requests into distinct sidebar tabs. The "Pending Approvals" tab now exclusively shows actionable requests, while approved items moved to a new "Approved Requests" section. This involved removing dual status tabs (pending/approved) from the approval interface and creating a dedicated component for approved requests.
+2. **Email Notifications**
+   - Service integration
+   - Template creation
+   - Testing and deployment
 
-**Technical Changes Made**  
-1. Updated `LeadPastorSidebar.tsx` with new navigation items  
-2. Created `ApprovedRequestsTab.tsx` for approved request display  
-3. Modified `LeadPastorApprovalTab.tsx` to only handle pending requests  
-4. Added state management for request type filtering (leave/surplus)  
-5. Fixed missing component imports (Button, Calendar, Wallet icons)  
+3. **Partner Management**
+   - Database schema updates
+   - UI component development
+   - Pledge tracking system
 
-**Outstanding Issues & Next Steps**  
-- TypeScript errors persist in `LeadPastorApprovalCard.tsx` regarding Lodash types and className prop  
-- Missing `LeadPastorApprovalCard` import in approval tab components  
-- Pagination controls need proper integration with backend data  
-- UI requires testing for empty states and edge cases  
-- Audit all approval flow components for prop type consistency
+### Medium Priority (2-3 Months)
+1. **System Logging**
+   - Activity tracking
+   - Error logging
+   - Audit trail
 
+2. **Analytics Enhancement**
+   - Advanced KPIs
+   - Financial forecasting
+   - Trend analysis
 
+3. **Security Updates**
+   - Multi-factor authentication
+   - Enhanced RLS policies
+   - Security audit implementation
 
-**Current Implementation Summary**  
-We've implemented a partner tracking system for missionary dashboards that calculates:  
-1. **Active Partners**: Unique donors contributing in the current month  
-2. **New Partners**: First-time donors this month (no prior contributions)  
-Using Set operations on raw donation data from Supabase. The core logic lives in `app/dashboard/missionary/page.tsx`, with UI components in `components/DashboardCards.tsx` and `components/RecentDonations.tsx`.
+### Low Priority (3-6 Months)
+1. **Mobile App**
+   - React Native development
+   - Core feature parity
+   - Offline capabilities
 
-**Key Challenges & Solutions**  
-Initial attempts using Supabase's `distinct` and subqueries produced inaccurate counts due to:  
-- Date filtering edge cases (UTC vs local time)  
-- Null donor_id handling  
-- Complex NOT IN subquery limitations  
-The working solution uses manual deduplication via JavaScript Sets after fetching raw donation records, verified through debug logging of actual donor IDs.
+2. **Integration Expansion**
+   - Additional payment gateways
+   - CRM integration
+   - Accounting software integration
 
+3. **Advanced Features**
+   - Custom report builder
+   - Business intelligence tools
+   - API expansion
 
+## Success Metrics
 
-**Relevant Implementation Details**  
-- **Data Flow**: Fetches all donations → deduplicates via Set → calculates new partners through Set difference  
-- **Modified Files**:  
-  - `app/dashboard/missionary/page.tsx` (core logic)  
-  - UI components for cards/transactions  
-  - Global CSS for dashboard styling  
-- **Known Limitations**:  
-  - Current implementation requires full donation history scans  
-  - No caching layer for partner counts  
-  - Date calculations use client-side UTC  
-- **Validation**: Console logs raw donor IDs and query parameters for verification  
-- **Error Handling**: Catches Supabase errors explicitly and throws standardized errors  
+### User Engagement
+- Daily active users
+- Feature usage statistics
+- User satisfaction scores
 
-change DONORS to PARTNERS
-finance recent donations working
-fixed manual remittance wizard add new partners bug
-added current month tab in reports for missionaries
+### System Performance
+- Page load times < 2s
+- API response times < 500ms
+- Zero downtime deployments
 
-errors on missionary dashboard when sidebar is hidden.
+### Business Impact
+- Increased donation processing efficiency
+- Reduced manual workload
+- Improved reporting accuracy
 
-Campus Missionary Dashbaord
-- changed "Reports" to "My reports"
-- added "Staff Reports" to campus directors
+## Risk Management
 
-Lead Pastor dashboard
-- added "Staff reports"
+### Technical Risks
+1. **Payment Integration**
+   - Mitigation: Thorough testing, phased rollout
+   - Contingency: Fallback to manual processing
 
-Staff Reports are copied from Missionaries Table from superadmin. 
+2. **Data Security**
+   - Mitigation: Regular security audits
+   - Contingency: Incident response plan
 
-# **Currently working on**
+3. **Performance**
+   - Mitigation: Continuous monitoring
+   - Contingency: Performance optimization plan
 
+### Business Risks
+1. **User Adoption**
+   - Mitigation: User training and documentation
+   - Contingency: Feature refinement based on feedback
 
+2. **Resource Allocation**
+   - Mitigation: Clear prioritization
+   - Contingency: Flexible resource planning
 
+## Contact Information
 
-# **WHAT IS NEXT**
-- enable RLS for all.
+### Project Leadership
+- Project Manager: [Name]
+- Technical Lead: [Name]
+- Product Owner: [Name]
 
-
-
-# **BRAIN DUMP**
-- add surplus logic sa superadmin reports and to the whole data. 
-- trigger surplus compute or something
-
-- try to fix approval logic for surplus and leave request. 
-- i think its trying to check who is assigned to the request, instead of just looking at the local church. 
-
-    
-superadmin
-- list ng lahat ng pending
-- list ng lahat ng online donations
-- list ng lahat ng offline donations
-- pending missionary manual remittance. 
--- pag nag remit si missionary, dapat pending muna until confirmation ni xendit. 
--- so dapat may status ung donor donations 
-
-
-QR code for missionaries to give to partners
-
-profile customization
-
-MPD WORK stuff. 
-- partners na ma-eexpire (2 months reminder ng 1 year commitment about to expire)
-- partners na dormant / inactive (di nag bigay last 6 months)
-
-additional MPD leave
-
-
-campus director dapat may reports din
-to check missionary giving status
-
-lead pastor + campus director should have reports
-like missionariestable
-
-pastors shoud have delikado list
-delinquent list
-
-anything below 15k sagot ni bulacan
+### Support Channels
+- Technical Support: [Email/Channel]
+- User Support: [Email/Channel]
+- Emergency Contact: [Phone/Email] 

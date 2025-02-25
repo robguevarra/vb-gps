@@ -1,3 +1,35 @@
+/**
+ * ManualRemittanceWizard Component
+ * 
+ * A multi-step form wizard for recording manual (offline) donations with multiple donors.
+ * This component is crucial for finance officers and missionaries to record offline donations
+ * in a structured and validated way.
+ * 
+ * Key Features:
+ * - Two-step wizard interface:
+ *   1. Total amount entry
+ *   2. Donor distribution with dynamic donor entries
+ * - Real-time donor search with debouncing
+ * - New donor creation capability
+ * - Amount validation and balancing
+ * - Progress tracking
+ * - Success animations
+ * 
+ * Technical Implementation:
+ * - Uses debounced search for efficient API calls
+ * - Implements real-time validation
+ * - Handles concurrent donor creation
+ * - Manages complex form state
+ * - Provides immediate visual feedback
+ * 
+ * Performance Considerations:
+ * - Debounced search to prevent API flooding
+ * - Optimized re-renders with proper state management
+ * - Efficient donor lookup and creation
+ * 
+ * @component
+ */
+
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -9,32 +41,58 @@ import { createClient } from "@/utils/supabase/client"
 import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
+import { PostgrestError } from "@supabase/supabase-js"
 
-interface Partner {
-  id: string
-  name: string
+/**
+ * Props for the ManualRemittanceWizard component
+ */
+interface ManualRemittanceWizardProps {
+  /** ID of the missionary for whom the remittance is being recorded */
+  missionaryId: string;
 }
 
-export interface ManualRemittanceWizardProps {
-  missionaryId: string
-  partners: Array<{ id: string; name: string }>
+/**
+ * Interface representing a donor in the system
+ */
+interface Donor {
+  /** Unique identifier for the donor */
+  id: string;
+  /** Full name of the donor */
+  name: string;
 }
 
-export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemittanceWizardProps) {
+/**
+ * Interface for a donor entry in the remittance form
+ */
+interface DonorEntry {
+  /** ID of the donor */
+  donorId: string;
+  /** Amount contributed by this donor */
+  amount: string;
+  /** Name of the donor (for display purposes) */
+  donorName?: string;
+}
+
+export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardProps) {
+  // Initialize Supabase client for database operations
   const supabase = createClient()
+
+  // State Management
   const [step, setStep] = useState<1 | 2>(1)
   const [totalAmount, setTotalAmount] = useState("")
-  const [donorEntries, setDonorEntries] = useState<{ donorId: string; amount: string; donorName?: string }[]>([
+  const [donorEntries, setDonorEntries] = useState<DonorEntry[]>([
     { donorId: "", amount: "" },
   ])
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [searchResults, setSearchResults] = useState<Partner[]>([])
+  const [searchResults, setSearchResults] = useState<Donor[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
-  const [isCreatingPartner, setIsCreatingPartner] = useState(false)
 
-  // Debounced Search
+  /**
+   * Debounced search function to prevent excessive API calls
+   * Searches for donors based on the input term
+   */
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
       setSearchLoading(true)
@@ -47,7 +105,7 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
             config: "english",
           })
         } else {
-          query = query.order("created_at", { ascending: false }).limit(10) // Show recent donors
+          query = query.order("created_at", { ascending: false }).limit(10)
         }
 
         const { data, error } = await query
@@ -63,45 +121,39 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
     [],
   )
 
-  // Handle search term changes
+  // Trigger donor search when search term changes
   useEffect(() => {
     debouncedSearch(searchTerm)
   }, [searchTerm, debouncedSearch])
 
-  const handleCreatePartner = async (name: string, index: number) => {
-    if (isCreatingPartner) return // Prevent multiple clicks
-    setIsCreatingPartner(true)
+  /**
+   * Creates a new donor in the database
+   * @param name - Name of the new donor
+   * @returns The ID of the newly created donor
+   */
+  const handleCreateDonor = async (name: string) => {
+    setLoading(true)
     try {
-      const { data: newPartner, error } = await supabase
-        .from("donors")
-        .insert({ name })
-        .select()
-        .single()
+      const { data: newDonor, error } = await supabase.from("donors").insert({ name }).select().single()
 
       if (error) throw error
 
-      // Update search results with new partner
-      setSearchResults((prevResults) => [...prevResults, newPartner])
-      
-      // Immediately select the new partner for this entry
-      handleSelectDonor(index, newPartner)
-      
-      // Clear search term since we've selected the partner
-      setSearchTerm("")
-      
-      return newPartner.id
+      setSearchResults((prevResults) => [...prevResults, newDonor])
+      return newDonor.id
     } catch (error) {
-      toast({ 
-        title: "Error creating partner", 
-        description: error.message, 
-        variant: "destructive" 
-      })
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
+      toast({ title: "Error creating donor", description: errorMessage, variant: "destructive" })
     } finally {
-      setIsCreatingPartner(false)
+      setLoading(false)
     }
   }
 
-  const handleSelectDonor = (index: number, donor: Partner) => {
+  /**
+   * Handles the selection of a donor from the search results
+   * @param index - Index of the donor entry being modified
+   * @param donor - Selected donor object
+   */
+  const handleSelectDonor = (index: number, donor: Donor) => {
     const newEntries = [...donorEntries]
     newEntries[index] = { ...newEntries[index], donorId: donor.id, donorName: donor.name }
     setDonorEntries(newEntries)
@@ -109,19 +161,38 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
     setSearchResults([])
   }
 
+  /**
+   * Adds a new empty donor entry to the form
+   */
   const handleAddDonorEntry = () => {
     setDonorEntries([...donorEntries, { donorId: "", amount: "", donorName: "" }])
   }
 
+  /**
+   * Removes a donor entry from the form
+   * @param index - Index of the donor entry to remove
+   */
   const handleRemoveDonorEntry = (index: number) => {
     setDonorEntries(donorEntries.filter((_, i) => i !== index))
   }
 
+  /**
+   * Validates the total amount entry in step 1
+   * @returns boolean indicating if the total amount is valid
+   */
   const validateStep1 = () => {
     const total = Number.parseFloat(totalAmount)
     return !isNaN(total) && total > 0
   }
 
+  /**
+   * Validates the donor distribution in step 2
+   * Checks if:
+   * 1. All donors are selected
+   * 2. All amounts are valid
+   * 3. Total matches the initial amount
+   * @returns boolean indicating if the distribution is valid
+   */
   const validateStep2 = () => {
     const sum = donorEntries.reduce((acc, entry) => {
       const amount = Number.parseFloat(entry.amount)
@@ -139,6 +210,10 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
     )
   }
 
+  /**
+   * Handles the final submission of the remittance
+   * Creates donation records for each donor entry
+   */
   const handleSubmit = async () => {
     setLoading(true)
     try {
@@ -173,9 +248,10 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
         description: "The donations have been recorded.",
       })
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
       toast({
         title: "Submission failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -192,7 +268,7 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
         <Progress value={step === 1 ? 50 : 100} className="w-full" />
 
         <p className="text-center text-muted-foreground">
-          {step === 1 ? "Enter total amount" : "Distribute donations to partners"}
+          {step === 1 ? "Enter total amount" : "Distribute donations to donors"}
         </p>
 
         <div className="relative">
@@ -222,7 +298,7 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
               </div>
 
               <Button size="lg" className="w-full" onClick={() => setStep(2)} disabled={!validateStep1()}>
-                Next: Assign Partners
+                Next: Assign Donors
               </Button>
             </div>
           )}
@@ -230,18 +306,13 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
           {step === 2 && (
             <div className="space-y-6">
               {donorEntries.map((entry, index) => (
-                <Card key={index} className="p-4 border-2 border-muted">
+                <Card key={index} className="p-4">
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <Label className="text-lg font-medium">Partner {index + 1}</Label>
+                      <Label className="text-lg">Donor {index + 1}</Label>
                       {index > 0 && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => handleRemoveDonorEntry(index)}
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveDonorEntry(index)}>
+                          <Trash className="h-4 w-4 text-red-500" />
                         </Button>
                       )}
                     </div>
@@ -250,7 +321,7 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="text"
-                        placeholder="Search for a partner..."
+                        placeholder="Search for a donor..."
                         value={entry.donorName || searchTerm}
                         onChange={(e) => {
                           if (!entry.donorId) {
@@ -258,35 +329,33 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
                           }
                         }}
                         disabled={!!entry.donorId}
-                        className="pl-8 transition-all focus:ring-2 focus:ring-primary/20"
+                        className="pl-8"
                       />
                     </div>
 
                     {searchTerm.trim() && !entry.donorId && (
-                      <Card className="mt-2 border-2 border-muted">
+                      <Card className="mt-2">
                         <CardContent className="p-2">
-                          {searchLoading ? (
-                            <div className="flex items-center justify-center p-4 text-muted-foreground">
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
-                              Searching...
+                          {searchLoading && (
+                            <div className="flex items-center justify-center p-2 text-muted-foreground">
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Searching...
                             </div>
-                          ) : searchResults.length > 0 ? (
-                            <ul className="space-y-1 max-h-48 overflow-y-auto">
-                              {searchResults.map((partner) => (
+                          )}
+                          {!searchLoading && searchResults.length > 0 && (
+                            <ul className="space-y-1">
+                              {searchResults.map((donor) => (
                                 <li
-                                  key={partner.id}
-                                  className="p-2 hover:bg-accent rounded-md cursor-pointer transition-colors flex items-center"
-                                  onClick={() => handleSelectDonor(index, partner)}
+                                  key={donor.id}
+                                  className="p-2 hover:bg-accent rounded-md cursor-pointer transition-colors"
+                                  onClick={() => handleSelectDonor(index, donor)}
                                 >
-                                  <span className="flex-1">{partner.name}</span>
-                                  <CheckCircle className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                  {donor.name}
                                 </li>
                               ))}
                             </ul>
-                          ) : (
-                            <div className="p-4 text-center text-muted-foreground">
-                              No partners found
-                            </div>
+                          )}
+                          {!searchLoading && searchResults.length === 0 && (
+                            <div className="p-2 text-muted-foreground">No donors found.</div>
                           )}
                         </CardContent>
                       </Card>
@@ -298,78 +367,50 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
                         variant="outline"
                         size="sm"
                         onClick={async () => {
-                          await handleCreatePartner(searchTerm, index)
+                          const newDonorId = await handleCreateDonor(searchTerm)
+                          if (newDonorId) {
+                            const newDonor = searchResults.find((d) => d.id === newDonorId)
+                            if (newDonor) {
+                              handleSelectDonor(index, newDonor)
+                            }
+                          }
                         }}
-                        disabled={!searchTerm.trim() || isCreatingPartner}
+                        disabled={!searchTerm.trim()}
                         className="w-full"
                       >
-                        {isCreatingPartner ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Creating Partner...
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus className="mr-2 h-4 w-4" /> 
-                            Create New Partner
-                          </>
-                        )}
+                        <UserPlus className="mr-2 h-4 w-4" /> Create New Donor
                       </Button>
                     )}
 
                     <div className="space-y-2">
                       <Label htmlFor={`amount-${index}`}>Amount</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 text-muted-foreground">₱</span>
-                        <Input
-                          id={`amount-${index}`}
-                          type="number"
-                          value={entry.amount}
-                          onChange={(e) => {
-                            const newEntries = [...donorEntries]
-                            newEntries[index].amount = e.target.value
-                            setDonorEntries(newEntries)
-                          }}
-                          placeholder="0.00"
-                          className="pl-8"
-                        />
-                      </div>
+                      <Input
+                        id={`amount-${index}`}
+                        type="number"
+                        value={entry.amount}
+                        onChange={(e) => {
+                          const newEntries = [...donorEntries]
+                          newEntries[index].amount = e.target.value
+                          setDonorEntries(newEntries)
+                        }}
+                        placeholder="0.00"
+                      />
                     </div>
                   </div>
                 </Card>
               ))}
 
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <Button 
-                  variant="outline" 
-                  className="flex-1" 
-                  onClick={handleAddDonorEntry}
-                >
-                  <Plus className="mr-2 h-4 w-4" /> Add Partner
+              <div className="flex gap-4">
+                <Button variant="outline" className="flex-1" onClick={handleAddDonorEntry}>
+                  <Plus className="mr-2 h-4 w-4" /> Add Donor
                 </Button>
 
-                <Button 
-                  size="lg" 
-                  className="flex-1" 
-                  onClick={handleSubmit} 
-                  disabled={!validateStep2() || loading}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Submit Remittance"
-                  )}
+                <Button size="lg" className="flex-1" onClick={handleSubmit} disabled={!validateStep2() || loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Remittance"}
                 </Button>
               </div>
 
-              <Button 
-                variant="ghost" 
-                onClick={() => setStep(1)} 
-                className="w-full"
-              >
+              <Button variant="ghost" onClick={() => setStep(1)} className="w-full">
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Total Amount
               </Button>
             </div>
@@ -377,21 +418,20 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
         </div>
 
         {step === 2 && (
-          <Card className="bg-muted/50 border-2 border-muted">
+          <Card className="bg-muted">
             <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex justify-between font-medium">
-                  <span>Total Entered:</span>
-                  <span className="text-primary">
-                    ₱{donorEntries
-                      .reduce((acc, entry) => acc + (Number.parseFloat(entry.amount) || 0), 0)
-                      .toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Declared Total:</span>
-                  <span>₱{Number.parseFloat(totalAmount).toLocaleString()}</span>
-                </div>
+              <div className="flex justify-between font-medium">
+                <span>Total Entered:</span>
+                <span>
+                  ₱
+                  {donorEntries
+                    .reduce((acc, entry) => acc + (Number.parseFloat(entry.amount) || 0), 0)
+                    .toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between mt-2">
+                <span>Declared Total:</span>
+                <span>₱{Number.parseFloat(totalAmount).toLocaleString()}</span>
               </div>
             </CardContent>
           </Card>
@@ -401,6 +441,11 @@ export function ManualRemittanceWizard({ missionaryId, partners }: ManualRemitta
   )
 }
 
+/**
+ * Utility function to debounce function calls
+ * @param func - Function to debounce
+ * @param delay - Delay in milliseconds
+ */
 function debounce(func: (...args: any[]) => void, delay: number) {
   let timeoutId: NodeJS.Timeout
   return (...args: any[]) => {

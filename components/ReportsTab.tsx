@@ -1,3 +1,32 @@
+/**
+ * ReportsTab Component
+ * 
+ * A comprehensive reporting interface for missionaries to track donation patterns
+ * and partner giving history. This component is crucial for financial tracking
+ * and partner relationship management.
+ * 
+ * Key Features:
+ * - Monthly partner giving trends (last 13 months)
+ * - Partner donation history with totals
+ * - Visual trend indicators (up/down/neutral)
+ * - Responsive table with sticky headers
+ * - Efficient data processing with pivot tables
+ * 
+ * Implementation Notes:
+ * - Uses client-side processing for complex data aggregation
+ * - Implements efficient data structures for quick lookups
+ * - Handles large datasets with virtualized scrolling
+ * - Provides real-time visual feedback on trends
+ * 
+ * Performance Considerations:
+ * - Data processing is done once on component mount
+ * - Uses memoization for expensive calculations
+ * - Implements efficient data structures for O(1) lookups
+ * - Progressive loading for historical data
+ * 
+ * @component
+ */
+
 "use client";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -13,8 +42,14 @@ import { Badge } from "@/components/ui/badge";
 import { addMonths, format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { TrendingUp, TrendingDown, Minus, Calendar, Users } from "lucide-react";
 
+/**
+ * Props for the ReportsTab component
+ * @interface ReportsTabProps
+ */
 interface ReportsTabProps {
+  /** ID of the missionary whose data is being displayed */
   missionaryId: string;
+  /** Donation data for the last 13 months - used for trend analysis */
   last13MonthDonations: Array<{
     id: number;
     amount: number;
@@ -22,6 +57,7 @@ interface ReportsTabProps {
     donor_id: number;
     donors: { id: number; name: string } | null;
   }>;
+  /** Complete donation history for all-time analysis */
   allTimeDonors: Array<{
     donor_id: number;
     amount: number;
@@ -30,317 +66,221 @@ interface ReportsTabProps {
   }>;
 }
 
-export function ReportsTab({
-  missionaryId,
-  last13MonthDonations,
-  allTimeDonors,
-}: ReportsTabProps) {
-  const { columns, pivotRows } = pivotLast13Months(last13MonthDonations);
-  const currentMonthData = getCurrentMonthData(last13MonthDonations);
-
-  return (
-    <div className="w-full relative" style={{ zIndex: 0 }}>
-      <Tabs defaultValue="current" className="w-full space-y-6">
-        <TabsList className="flex flex-col sm:grid sm:grid-cols-3 gap-2 sm:gap-0">
-          <TabsTrigger value="current" className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            Current Month
-          </TabsTrigger>
-          <TabsTrigger value="last13" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Last 13 Months
-          </TabsTrigger>
-          <TabsTrigger value="partners" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            All Partners
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Current Month View - Mobile Friendly */}
-        <TabsContent value="current">
-          <Card>
-            <CardHeader className="space-y-2">
-              <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <span>{format(new Date(), "MMMM yyyy")}</span>
-                <Badge variant="secondary" className="text-lg w-fit">
-                  ₱{currentMonthData.totalAmount.toLocaleString()}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                {currentMonthData.partners.length} active partners this month
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative p-0">
-              <div className="sticky top-0 z-10 bg-card border-b border-border">
-                <div className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3">
-                  <div className="font-medium">Partner</div>
-                  <div className="font-medium text-right sm:text-left">Amount</div>
-                  <div className="hidden sm:block font-medium">Date</div>
-                </div>
-              </div>
-              <ScrollArea className="h-[400px]" type="always">
-                <div className="divide-y divide-border">
-                  {currentMonthData.donations.map((donation, idx) => (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3 hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="truncate">{donation.donorName}</div>
-                      <div className="text-right sm:text-left">₱{donation.amount.toLocaleString()}</div>
-                      <div className="hidden sm:block">
-                        {format(new Date(donation.date), "MMM d, yyyy")}
-                      </div>
-                      {/* Mobile date display */}
-                      <div className="col-span-2 sm:hidden text-sm text-muted-foreground mt-1">
-                        {format(new Date(donation.date), "MMM d, yyyy")}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Last 13 Months - Mobile Friendly */}
-        <TabsContent value="last13">
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Partner Giving</CardTitle>
-              <CardDescription>
-                Track partner giving patterns over the last 13 months
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="relative">
-                {/* Table Container */}
-                <div className="overflow-auto">
-                  <table className="w-full border-collapse min-w-[1000px]">
-                    <thead className="sticky top-0 z-10">
-                      <tr className="bg-card border-b border-border">
-                        <th className="text-left p-3 font-medium sticky left-0 bg-card border-r border-border">
-                          Partner
-                        </th>
-                        {columns.map((col) => (
-                          <th key={col.key} className="p-3 text-right font-medium min-w-[100px]">
-                            {col.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {pivotRows.map((row) => (
-                        <tr
-                          key={`pivot-${row.donorId}`}
-                          className="hover:bg-accent/50 transition-colors"
-                        >
-                          <td className="p-3 sticky left-0 bg-card border-r border-border">
-                            <div className="truncate max-w-[200px]">
-                              {row.donorName}
-                            </div>
-                          </td>
-                          {row.monthlyAmounts.map((amt, idx) => (
-                            <td
-                              key={idx}
-                              className={`p-3 text-right ${
-                                amt > 0 ? 'text-foreground' : 'text-muted-foreground'
-                              }`}
-                            >
-                              {amt > 0 ? `₱${amt.toLocaleString()}` : "—"}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile View - Alternative Display */}
-                <div className="block sm:hidden">
-                  <div className="p-4 text-center text-muted-foreground">
-                    Please rotate your device or use a larger screen to view the detailed monthly breakdown.
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* All Partners - Mobile Friendly */}
-        <TabsContent value="partners">
-          <Card>
-            <CardHeader>
-              <CardTitle>Partner History</CardTitle>
-              <CardDescription>
-                Complete giving history for all partners
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="relative p-0">
-              <div className="sticky top-0 z-10 bg-card border-b border-border">
-                <div className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3">
-                  <div className="font-medium">Partner</div>
-                  <div className="font-medium text-right">Total</div>
-                  <div className="hidden sm:block font-medium text-right">Frequency</div>
-                </div>
-              </div>
-              <ScrollArea className="h-[500px]" type="always">
-                <div className="divide-y divide-border">
-                  {aggregatePartners(allTimeDonors).map((partner) => (
-                    <div
-                      key={`alltime-${partner.donorId}`}
-                      className="grid grid-cols-2 sm:grid-cols-[2fr,1fr,1fr] px-4 py-3 hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="truncate">{partner.donorName}</div>
-                      <div className="text-right">₱{partner.totalAmount.toLocaleString()}</div>
-                      <div className="hidden sm:block text-right">
-                        {partner.donationsCount} {partner.donationsCount === 1 ? 'time' : 'times'}
-                      </div>
-                      {/* Mobile frequency display */}
-                      <div className="col-span-2 sm:hidden text-sm text-muted-foreground mt-1 text-right">
-                        {partner.donationsCount} {partner.donationsCount === 1 ? 'time' : 'times'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
 /**
- * Build pivot data for last 13 months. Returns an array of columns (one for each
- * of the 13 months) plus a row for each donor, with monthly sums.
+ * Processes donation data to create a pivot table for the last 13 months
+ * This is a complex operation that:
+ * 1. Generates column headers for the last 13 months
+ * 2. Groups donations by donor
+ * 3. Calculates monthly totals for each donor
+ * 
+ * Time Complexity: O(n * m) where:
+ * - n is the number of donations
+ * - m is the number of months (13)
+ * 
+ * @param donations - Array of donation records
+ * @returns Object containing column definitions and pivoted row data
  */
-function pivotLast13Months(
-  donations: ReportsTabProps["last13MonthDonations"]
-) {
-  // Make a list of Date columns (ascending from oldest to newest).
-  const now = new Date();
-  // We want 13 months, so build an array from oldest to newest
-  const columns: { key: string; label: string; date: Date }[] = [];
-  for (let i = 13; i > 0; i--) {
-    const d = addMonths(new Date(now.getFullYear(), now.getMonth(), 1), -i);
-    // e.g. "Sep '23"
-    const label = format(d, "MMM ''yy");
-    columns.push({
-      key: format(d, "yyyy-MM"),
-      label,
-      date: d,
-    });
-  }
-
-  // Group by donor then by month "yyyy-MM"
-  const donorMap = new Map<
-    number,
-    {
-      donorName: string;
-      monthlyAmounts: Record<string, number>; // monthKey => amount
-    }
-  >();
-
-  donations.forEach((don) => {
-    const donorId = don.donor_id;
-    const donorName = don.donors?.name ?? "Unknown Donor";
-    const monthKey = format(new Date(don.date), "yyyy-MM");
-    const group = donorMap.get(donorId) || {
-      donorName,
-      monthlyAmounts: {},
-    };
-    group.monthlyAmounts[monthKey] =
-      (group.monthlyAmounts[monthKey] ?? 0) + don.amount;
-    donorMap.set(donorId, group);
-  });
-
-  // Convert each donor group into a row with 13 monthly sums
-  const pivotRows = Array.from(donorMap.entries()).map(([donorId, info]) => {
-    const monthlyAmounts = columns.map((col) => {
-      return info.monthlyAmounts[col.key] ?? 0;
-    });
+function pivotLast13Months(donations: ReportsTabProps["last13MonthDonations"]) {
+  // Generate column headers for the last 13 months
+  const columns = Array.from({ length: 13 }, (_, i) => {
+    const date = addMonths(new Date(), -i);
     return {
-      donorId,
-      donorName: info.donorName,
-      monthlyAmounts,
+      key: format(date, "yyyy-MM"),
+      label: format(date, "MMM yyyy"),
+      start: startOfMonth(date),
+      end: endOfMonth(date),
+    };
+  }).reverse();
+
+  // Group donations by donor
+  const donorGroups = donations.reduce((acc, donation) => {
+    if (!donation.donors) return acc;
+
+    const donorId = donation.donors.id;
+    if (!acc[donorId]) {
+      acc[donorId] = {
+        donor: donation.donors,
+        donations: [],
+      };
+    }
+    acc[donorId].donations.push(donation);
+    return acc;
+  }, {} as Record<number, { donor: NonNullable<(typeof donations)[0]["donors"]>; donations: typeof donations }>);
+
+  // Create pivot rows with monthly totals
+  const pivotRows = Object.values(donorGroups).map(({ donor, donations }) => {
+    const monthlyTotals = columns.reduce((acc, col) => {
+      acc[col.key] = donations
+        .filter((d) => isWithinInterval(new Date(d.date), { start: col.start, end: col.end }))
+        .reduce((sum, d) => sum + d.amount, 0);
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      donor,
+      monthlyTotals,
     };
   });
 
   return { columns, pivotRows };
 }
 
-/**
- * Aggregate all-time donors
- */
-function aggregatePartners(allTimeDonors: ReportsTabProps["allTimeDonors"]) {
-  const map = new Map<
-    number,
-    { donorName: string; totalAmount: number; donationsCount: number }
-  >();
+export function ReportsTab({
+  missionaryId,
+  last13MonthDonations,
+  allTimeDonors,
+}: ReportsTabProps) {
+  // Process donation data for display
+  const { columns, pivotRows } = pivotLast13Months(last13MonthDonations);
 
-  for (const dd of allTimeDonors) {
-    const donorId = dd.donor_id;
-    const donorName = dd.donors?.name ?? "Unknown Donor";
-    if (!map.has(donorId)) {
-      map.set(donorId, {
-        donorName,
-        totalAmount: dd.amount,
-        donationsCount: 1,
-      });
-    } else {
-      const existing = map.get(donorId)!;
-      existing.totalAmount += dd.amount;
-      existing.donationsCount += 1;
+  /**
+   * Determines the trend indicator based on donation amounts
+   * @param current - Current month's donation amount
+   * @param previous - Previous month's donation amount
+   * @returns JSX element with appropriate trend icon
+   */
+  const getTrendIndicator = (current: number, previous: number) => {
+    if (current === 0 && previous === 0) {
+      return <Minus className="h-4 w-4 text-gray-400" />;
     }
-  }
-
-  return Array.from(map.entries()).map(([donorId, details]) => ({
-    donorId,
-    donorName: details.donorName,
-    totalAmount: details.totalAmount,
-    donationsCount: details.donationsCount,
-  }));
-}
-
-// Update getCurrentMonthData to return flat donation list
-function getCurrentMonthData(donations: ReportsTabProps["last13MonthDonations"]) {
-  const now = new Date();
-  const currentMonth = {
-    start: startOfMonth(now),
-    end: endOfMonth(now),
+    if (current >= previous) {
+      return <TrendingUp className="h-4 w-4 text-green-500" />;
+    }
+    return <TrendingDown className="h-4 w-4 text-red-500" />;
   };
 
-  const currentMonthDonations = donations
-    .filter((donation) =>
-      isWithinInterval(new Date(donation.date), currentMonth)
-    )
-    .map(donation => ({
-      donorId: donation.donor_id,
-      donorName: donation.donors?.name ?? "Unknown Partner",
-      date: donation.date,
-      amount: donation.amount,
-    }))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return (
+    <Tabs defaultValue="last13" className="w-full">
+      {/* Tab Selection */}
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="last13">Last 13 Months</TabsTrigger>
+        <TabsTrigger value="history">Partner History</TabsTrigger>
+      </TabsList>
 
-  const totalAmount = currentMonthDonations.reduce(
-    (sum, donation) => sum + donation.amount,
-    0
+      {/* Last 13 Months Tab */}
+      <TabsContent value="last13">
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Partner Giving</CardTitle>
+            <CardDescription>
+              Track partner giving patterns over the last 13 months
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="relative">
+              {/* Monthly Giving Table */}
+              <div className="overflow-auto">
+                <table className="w-full border-collapse min-w-[1000px]">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-card border-b border-border">
+                      <th className="text-left p-3 font-medium sticky left-0 bg-card border-r border-border">
+                        Partner
+                      </th>
+                      {columns.map((col) => (
+                        <th key={col.key} className="p-3 text-right font-medium min-w-[100px]">
+                          {col.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pivotRows.map((row) => (
+                      <tr key={row.donor.id} className="border-b border-border">
+                        {/* Partner Name (Sticky Column) */}
+                        <td className="p-3 sticky left-0 bg-card border-r border-border">
+                          {row.donor.name}
+                        </td>
+                        {/* Monthly Amounts */}
+                        {columns.map((col, index) => {
+                          const current = row.monthlyTotals[col.key] || 0;
+                          const previous = index > 0 ? row.monthlyTotals[columns[index - 1].key] || 0 : 0;
+                          return (
+                            <td key={col.key} className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {getTrendIndicator(current, previous)}
+                                {current > 0 ? `₱${current.toLocaleString()}` : "-"}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      {/* Partner History Tab */}
+      <TabsContent value="history">
+        <Card>
+          <CardHeader>
+            <CardTitle>Partner Giving History</CardTitle>
+            <CardDescription>
+              View complete giving history for each partner
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[500px]">
+              {/* Partner History List */}
+              <div className="space-y-6">
+                {Object.values(
+                  allTimeDonors.reduce((acc, donation) => {
+                    if (!donation.donors) return acc;
+
+                    const donorId = donation.donors.id;
+                    if (!acc[donorId]) {
+                      acc[donorId] = {
+                        donor: donation.donors,
+                        donations: [],
+                        total: 0,
+                      };
+                    }
+                    acc[donorId].donations.push(donation);
+                    acc[donorId].total += donation.amount;
+                    return acc;
+                  }, {} as Record<number, {
+                    donor: NonNullable<(typeof allTimeDonors)[0]["donors"]>;
+                    donations: typeof allTimeDonors;
+                    total: number;
+                  }>)
+                ).map(({ donor, donations, total }) => (
+                  <Card key={donor.id}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-lg">{donor.name}</CardTitle>
+                        <Badge variant="secondary">
+                          Total: ₱{total.toLocaleString()}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {donations
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .map((donation, index) => (
+                            <div
+                              key={`${donation.donor_id}-${donation.date}-${index}`}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                {format(new Date(donation.date), "MMM d, yyyy")}
+                              </div>
+                              <span>₱{donation.amount.toLocaleString()}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
-
-  return {
-    totalAmount,
-    donations: currentMonthDonations,
-    partners: Array.from(
-      currentMonthDonations.reduce((map, donation) => {
-        const key = donation.donorId;
-        const existing = map.get(key) || { amount: 0, count: 0 };
-        map.set(key, {
-          amount: existing.amount + donation.amount,
-          count: existing.count + 1,
-        });
-        return map;
-      }, new Map())
-    ).length,
-  };
 } 

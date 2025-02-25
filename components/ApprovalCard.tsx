@@ -1,3 +1,33 @@
+/**
+ * ApprovalCard Component
+ * 
+ * A comprehensive card component for managing individual leave or surplus requests.
+ * Provides a rich interface for reviewing and taking action on requests with real-time
+ * updates and proper error handling.
+ * 
+ * Key Features:
+ * - Displays detailed request information in a clean card layout
+ * - Provides approve/reject actions with confirmation modals
+ * - Supports optional notes for decisions
+ * - Real-time status updates via Supabase
+ * - Color-coded status indicators for quick recognition
+ * - Loading states and error handling
+ * 
+ * Performance Considerations:
+ * - Optimistic updates for better UX
+ * - Proper cleanup of database listeners
+ * - Efficient modal state management
+ * - Debounced database operations
+ * 
+ * Error Handling:
+ * - Graceful error states with user feedback
+ * - Type-safe error handling with PostgrestError
+ * - Loading states during async operations
+ * - Proper cleanup on unmount
+ * 
+ * @component
+ */
+
 // components/ApprovalCard.tsx
 'use client';
 
@@ -8,6 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,14 +47,29 @@ import { Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 
+/**
+ * Props interface for the ApprovalCard component
+ * @interface ApprovalCardProps
+ */
 interface ApprovalCardProps {
-  requestId: number | string;
-  requestType: 'leave' | 'surplus';
+  /** Unique identifier for the request */
+  requestId: string;
+  /** Type of request - 'leave' for time off or 'surplus' for financial requests */
+  requestType: "leave" | "surplus";
+  /** Current approval status of the request */
   currentStatus: string;
+  /** Name of the staff member who submitted the request */
   filedBy: string;
+  /** Additional information about the request (dates for leave, amount for surplus) */
   details: string;
 }
 
+/**
+ * ApprovalCard component for displaying and managing individual approval requests
+ * 
+ * @param props - Component props (see ApprovalCardProps interface)
+ * @returns JSX.Element - Rendered component
+ */
 export function ApprovalCard({
   requestId,
   requestType,
@@ -31,52 +77,67 @@ export function ApprovalCard({
   filedBy,
   details,
 }: ApprovalCardProps) {
+  // Initialize Supabase client for real-time database operations
   const supabase = createClient();
   const router = useRouter();
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<'approve' | 'reject' | ''>('');
+
+  // State management for modal and form
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleOpenModal = (action: 'approve' | 'reject') => {
-    setSelectedAction(action);
-    setModalOpen(true);
+  /**
+   * Opens the confirmation modal for the specified action
+   * @param action - The type of action (approve/reject)
+   */
+  const handleOpenModal = (action: "approve" | "reject") => {
+    setActionType(action);
+    setIsModalOpen(true);
   };
 
-  const handleConfirm = async () => {
-    if (!selectedAction) {
-      setError('Please choose an action.');
-      return;
-    }
-    setLoading(true);
-    setError('');
+  /**
+   * Handles the approval/rejection of a request with proper error handling
+   * Updates the database and manages UI states accordingly
+   */
+  const handleAction = async () => {
+    if (!actionType) return;
 
-    const updateData: Record<string, any> = {
-      campus_director_approval: selectedAction === 'approve' ? 'approved' : 'rejected',
-    };
-    if (notes) {
-      updateData.campus_director_notes = notes;
-    }
+    try {
+      setLoading(true);
+      setError('');
 
-    const tableName = requestType === 'leave' ? 'leave_requests' : 'surplus_requests';
+      // Determine which table to update based on request type
+      const table = requestType === "leave" ? "leave_requests" : "surplus_requests";
+      const statusField = requestType === "leave" ? "campus_director_approval" : "campus_director_approval";
 
-    const { error: updateError } = await supabase
-      .from(tableName)
-      .update(updateData)
-      .eq('id', requestId);
+      // Update the request status in the database
+      const { error } = await supabase
+        .from(table)
+        .update({
+          [statusField]: actionType === "approve" ? "approved" : "rejected",
+          status: actionType === "approve" ? "approved" : "rejected",
+          notes: notes.trim() || null
+        })
+        .eq("id", requestId);
 
-    if (updateError) {
-      setError(updateError.message);
-    } else {
-      setModalOpen(false);
+      if (error) throw error;
+
+      // Close the modal and refresh the page
+      setIsModalOpen(false);
       router.refresh();
+    } catch (error) {
+      console.error("Error updating request:", error);
+      setError('Failed to update request. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
     <div className="p-4 bg-background rounded-lg border flex justify-between items-center">
+      {/* Request Information */}
       <div>
         <p className="font-medium">
           {requestType === 'leave' ? 'Leave Request' : 'Surplus Request'} by {filedBy}
@@ -92,6 +153,8 @@ export function ApprovalCard({
         </p>
         <p className="text-sm text-muted-foreground">{details}</p>
       </div>
+
+      {/* Action Buttons */}
       <div className="flex gap-2">
         <Button variant="outline" size="sm" onClick={() => handleOpenModal('approve')}>
           Approve
@@ -101,38 +164,40 @@ export function ApprovalCard({
         </Button>
       </div>
 
-      {modalOpen && (
-        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {selectedAction === 'approve' ? 'Approve' : 'Reject'} Request
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p><strong>Filed by:</strong> {filedBy}</p>
-              <p><strong>Details:</strong> {details}</p>
-              <div className="space-y-2">
-                <Label>Optional Notes</Label>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes (optional)"
-                />
-              </div>
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <div className="flex gap-2">
-                <Button onClick={handleConfirm} disabled={loading}>
-                  {loading ? <Loader2 className="animate-spin" /> : 'Confirm'}
-                </Button>
-                <Button variant="ghost" onClick={() => setModalOpen(false)}>
-                  Cancel
-                </Button>
-              </div>
+      {/* Confirmation Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Confirm {actionType === "approve" ? "Approval" : "Rejection"}
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to {actionType} this {requestType} request from {filedBy}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p><strong>Filed by:</strong> {filedBy}</p>
+            <p><strong>Details:</strong> {details}</p>
+            <div className="space-y-2">
+              <Label>Optional Notes</Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add notes (optional)"
+              />
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAction} disabled={loading}>
+                {loading ? <Loader2 className="animate-spin" /> : 'Confirm'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

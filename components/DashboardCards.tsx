@@ -1,13 +1,47 @@
+/**
+ * DashboardCards Component
+ * 
+ * A responsive grid of cards displaying key metrics for missionaries:
+ * - Monthly Goal vs Current Donations (with progress bar)
+ * - Current Donations total
+ * - Active Partners count
+ * - New Partners count
+ * 
+ * Features:
+ * - Responsive grid layout (1 column on mobile, 4 on large screens)
+ * - Progress bar for monthly goal tracking
+ * - Currency formatting for monetary values
+ * - Color-coded indicators
+ * - Hover animations
+ * 
+ * @component
+ */
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { TrendingUp, Wallet, Users, UserPlus } from "lucide-react"
 
 interface DashboardCardsProps {
-  monthlyGoal: number
-  currentDonations: number
-  currentPartnersCount: number
-  surplusBalance: number
-  newPartnersCount: number
+  /** Monthly donation goal for the missionary */
+  monthlyGoal: number;
+  /** Total donations received in the current month */
+  currentDonations: number;
+  /** Number of active partners (donors who gave this month) */
+  currentPartnersCount: number;
+  /** Current surplus balance available */
+  surplusBalance: number;
+  /** Number of new partners this month */
+  newPartnersCount: number;
+}
+
+// Define the card type to ensure type safety
+interface DashboardCard {
+  title: string;
+  value: number;
+  progress?: number;
+  variant: "blue" | "emerald" | "indigo" | "teal";
+  isCurrency: boolean;
+  icon: React.ElementType;
 }
 
 export default function DashboardCards({
@@ -17,11 +51,17 @@ export default function DashboardCards({
   surplusBalance,
   newPartnersCount,
 }: DashboardCardsProps) {
-  const cards = [
+  // Calculate progress percentage, ensuring we don't divide by zero
+  const progressPercentage = monthlyGoal > 0 
+    ? (currentDonations / monthlyGoal) * 100 
+    : 0;
+
+  // Define card configurations with their respective properties
+  const cards: DashboardCard[] = [
     {
       title: "Monthly Goal",
       value: monthlyGoal,
-      progress: (currentDonations / monthlyGoal) * 100,
+      progress: progressPercentage, // Use the safely calculated percentage
       variant: "blue",
       isCurrency: true,
       icon: TrendingUp
@@ -57,9 +97,10 @@ export default function DashboardCards({
           className="group relative overflow-hidden transition-all hover:shadow-lg"
         >
           <div className="p-6">
+            {/* Card Header with Icon and Progress */}
             <div className="flex items-center justify-between">
               <card.icon className="h-8 w-8 text-muted-foreground/80" />
-              {"progress" in card && (
+              {card.progress !== undefined && (
                 <span className={cn(
                   "text-lg font-semibold",
                   card.variant === "blue" ? "text-blue-600" :
@@ -72,18 +113,20 @@ export default function DashboardCards({
               )}
             </div>
             
+            {/* Card Content with Title and Value */}
             <div className="mt-4 space-y-1">
               <h3 className="text-sm font-medium text-muted-foreground">
                 {card.title}
               </h3>
               <p className="text-2xl font-bold tracking-tight">
                 {card.isCurrency 
-                  ? `₱${(card.value || 0).toLocaleString()}` 
-                  : (card.value || 0).toLocaleString()}
+                  ? `₱${card.value.toLocaleString()}` 
+                  : card.value.toLocaleString()}
               </p>
             </div>
 
-            {"progress" in card && (
+            {/* Progress Bar (only for Monthly Goal) */}
+            {card.progress !== undefined && (
               <div className="mt-4">
                 <div className="h-2 overflow-hidden rounded-full bg-accent">
                   <div
@@ -94,7 +137,7 @@ export default function DashboardCards({
                       card.variant === "indigo" ? "bg-indigo-600" :
                       "bg-teal-600"
                     )}
-                    style={{ width: `${card.progress}%` }}
+                    style={{ width: `${Math.min(card.progress, 100)}%` }}
                   />
                 </div>
               </div>

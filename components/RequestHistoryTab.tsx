@@ -90,7 +90,9 @@ function RequestHistoryCard({ request }: { request: any }) {
       <p className="mt-2 text-sm">
         {request.type === 'Leave' 
           ? `Dates: ${request.startDate} - ${request.endDate}`
-          : `Amount: ₱${request.amount.toLocaleString()}`
+          : `Amount: ₱${typeof request.amount === 'number' 
+              ? request.amount.toLocaleString() 
+              : '0'}`
         }
       </p>
       <p className="text-sm text-muted-foreground mt-1">Reason: {request.reason}</p>
