@@ -3,11 +3,32 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
+interface BaseRequest {
+  id: string;
+  type: 'Leave' | 'Surplus';
+  date: string;
+  status: 'approved' | 'rejected' | 'pending';
+  reason: string;
+}
+
+interface LeaveRequest extends BaseRequest {
+  type: 'Leave';
+  startDate: string;
+  endDate: string;
+}
+
+interface SurplusRequest extends BaseRequest {
+  type: 'Surplus';
+  amount: number;
+}
+
+type Request = LeaveRequest | SurplusRequest;
+
 interface RequestHistoryTabProps {
-  pendingLeaveRequests: any[]
-  approvedLeaveRequests: any[]
-  pendingSurplusRequests: any[]
-  approvedSurplusRequests: any[]
+  pendingLeaveRequests: LeaveRequest[];
+  approvedLeaveRequests: LeaveRequest[];
+  pendingSurplusRequests: SurplusRequest[];
+  approvedSurplusRequests: SurplusRequest[];
 }
 
 export function RequestHistoryTab({
@@ -70,7 +91,7 @@ export function RequestHistoryTab({
   )
 }
 
-function RequestHistoryCard({ request }: { request: any }) {
+function RequestHistoryCard({ request }: { request: Request }) {
   return (
     <div className="p-4 mb-4 bg-background rounded-lg border">
       <div className="flex justify-between items-start">

@@ -12,9 +12,22 @@ import {
 } from "@/components/ui/dialog";
 // Import createBrowserClient from @supabase/ssr.
 import { createBrowserClient } from "@supabase/ssr";
+import { User } from "@supabase/supabase-js";
+
+interface Missionary {
+  id: string;
+  full_name: string;
+}
+
+interface Donor {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}
 
 interface DonationModalProps {
-  missionaries: any[];
+  missionaries: Missionary[];
 }
 
 export default function DonationModal({ missionaries }: DonationModalProps) {
@@ -25,7 +38,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
   const [missionaryId, setMissionaryId] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [donorPhone, setDonorPhone] = useState("");
-  const [donorSuggestions, setDonorSuggestions] = useState<any[]>([]);
+  const [donorSuggestions, setDonorSuggestions] = useState<Donor[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [donorSelected, setDonorSelected] = useState(false);
@@ -41,7 +54,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
   );
 
   // State to hold the current user.
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   // Fetch the current session on mount.
   useEffect(() => {
@@ -92,7 +105,7 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
     }, 500);
   };
 
-  const handleSuggestionClick = (donor: any) => {
+  const handleSuggestionClick = (donor: Donor) => {
     setDonorName(donor.name);
     setDonorEmail(donor.email || "");
     setDonorPhone(donor.phone || "");
@@ -180,9 +193,10 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
         console.error("[DonationModal] Failed to record donation:", errorData.error);
         setFormError(errorData.error || "Failed to record donation.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Unexpected error occurred";
       console.error("[DonationModal] Error submitting donation:", error);
-      setFormError(error.message || "Unexpected error occurred.");
+      setFormError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -212,9 +226,9 @@ export default function DonationModal({ missionaries }: DonationModalProps) {
               className="mt-1 rounded-md border p-2"
             >
               <option value="">Select Missionary</option>
-              {missionaries.map((m: any) => (
-                <option key={m.id} value={m.id}>
-                  {m.full_name}
+              {missionaries.map((missionary) => (
+                <option key={missionary.id} value={missionary.id}>
+                  {missionary.full_name}
                 </option>
               ))}
             </select>

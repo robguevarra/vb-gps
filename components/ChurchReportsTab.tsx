@@ -6,17 +6,37 @@ import { Profile } from "@/types";
 import { MissionariesTable } from "@/components/reports/MissionariesTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber } from "@/utils/numbers";
-import { useUser } from "@supabase/auth-helpers-react";
 import { MissionaryLast6Modal, FullMissionaryReportModal } from "@/components/MissionaryModals";
 
 interface ChurchReportsTabProps {
   churchIds: number[];
 }
 
+interface Donor {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
+interface Donation {
+  id: string;
+  missionary_id: string;
+  donor_id: string;
+  date: string;
+  amount: number;
+  status: string;
+  source: string;
+  notes?: string;
+  donors: Donor;
+}
+
+type DonationMap = Record<string, Record<string, number>>;
+
 export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
   const supabase = createClient();
   const [missionaries, setMissionaries] = useState<Profile[]>([]);
-  const [donationMap, setDonationMap] = useState<Record<string, Record<string, number>>>({});
+  const [donationMap, setDonationMap] = useState<DonationMap>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missionaryFilter, setMissionaryFilter] = useState("");
@@ -25,15 +45,14 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
   const [showMissionaryModal, setShowMissionaryModal] = useState(false);
   const [showFullReportModal, setShowFullReportModal] = useState(false);
   const pageSize = 10;
-  const [donations, setDonations] = useState<any[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
   const [thirteenMonthKeys, setThirteenMonthKeys] = useState<string[]>([]);
 
-  // Move ratio calculation outside useEffect
   const getCurrentMonthRatio = (m: Profile) => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const mo = now.getMonth();
-    const key = `${y}-${String(mo + 1).padStart(2, "0")}`;
+    const currentDate = new Date();
+    const year = currentDate.getFullYear();
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const key = `${year}-${month}`;
     const donated = donationMap[m.id]?.[key] || 0;
     const goal = m.monthly_goal || 0;
     return goal > 0 ? (donated / goal) * 100 : 0;
@@ -41,21 +60,21 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
 
   const getLastXMonthsRatios = (m: Profile, x: number) => {
     const out: { label: string; ratio: number }[] = [];
-    let now = new Date();
-    let y = now.getFullYear();
-    let mo = now.getMonth();
+    const currentDate = new Date();
+    let year = currentDate.getFullYear();
+    let month = currentDate.getMonth();
     
     for (let i = 0; i < x; i++) {
-      const label = `${y}-${String(mo + 1).padStart(2, "0")}`;
+      const label = `${year}-${String(month + 1).padStart(2, "0")}`;
       const donated = donationMap[m.id]?.[label] || 0;
-      const mg = m.monthly_goal || 0;
-      const ratio = mg > 0 ? (donated / mg) * 100 : 0;
+      const monthlyGoal = m.monthly_goal || 0;
+      const ratio = monthlyGoal > 0 ? (donated / monthlyGoal) * 100 : 0;
       out.push({ label, ratio });
       
-      mo--;
-      if (mo < 0) {
-        mo = 11;
-        y--;
+      month--;
+      if (month < 0) {
+        month = 11;
+        year--;
       }
     }
     return out.reverse();
@@ -71,77 +90,79 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
           throw new Error('User not authenticated');
         }
 
-        // Only query if we have church IDs
         if (churchIds.length === 0) {
           setMissionaries([]);
           setIsLoading(false);
           return;
         }
 
-        const { data, error } = await supabase
+        const { data: missionariesData, error: missionariesError } = await supabase
           .from('profiles')
           .select('*')
           .in('local_church_id', churchIds)
           .neq('id', currentUserId)
           .in('role', ['missionary', 'campus_director']);
 
-        if (error) throw error;
+        if (missionariesError) throw missionariesError;
         
-        console.log('Fetched missionaries:', data);
-        setMissionaries(data || []);
+        console.log('Fetched missionaries:', missionariesData);
+        setMissionaries(missionariesData || []);
 
-        // Fetch and process donations
-        const { data: donationsData } = await supabase
+        const { data: donationsData, error: donationsError } = await supabase
           .from('donor_donations')
           .select('id, missionary_id, donor_id, date, amount, status, source, notes, donors(id, name, email, phone)')
-          .in('missionary_id', data?.map(m => m.id) || []);
+          .in('missionary_id', missionariesData?.map(m => m.id) || []);
 
-        const newDonationMap: Record<string, Record<string, number>> = {};
+        if (donationsError) throw donationsError;
+
+        const newDonationMap: DonationMap = {};
+        const typedDonations = (donationsData || []).map(donation => ({
+          ...donation,
+          donors: Array.isArray(donation.donors) ? donation.donors[0] : donation.donors
+        })) as Donation[];
         
-        donationsData?.forEach((don) => {
-          if (!newDonationMap[don.missionary_id]) {
-            newDonationMap[don.missionary_id] = {};
+        typedDonations.forEach((donation) => {
+          if (!newDonationMap[donation.missionary_id]) {
+            newDonationMap[donation.missionary_id] = {};
           }
-          const dateObj = new Date(don.date);
-          const yy = dateObj.getFullYear();
-          const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
-          const key = `${yy}-${mm}`;
-          newDonationMap[don.missionary_id][key] = 
-            (newDonationMap[don.missionary_id][key] || 0) + (don.amount || 0);
+          const donationDate = new Date(donation.date);
+          const year = donationDate.getFullYear();
+          const month = String(donationDate.getMonth() + 1).padStart(2, "0");
+          const key = `${year}-${month}`;
+          newDonationMap[donation.missionary_id][key] = 
+            (newDonationMap[donation.missionary_id][key] || 0) + (donation.amount || 0);
         });
         
-        setDonationMap({...newDonationMap});
+        setDonationMap(newDonationMap);
+        setDonations(typedDonations);
 
-        // Add donations fetch
-        setDonations(donationsData || []);
-
-        // Generate 13 month keys
-        const keyArr: string[] = [];
-        const now = new Date();
-        let y = now.getFullYear();
-        let mo = now.getMonth();
+        const monthKeys: string[] = [];
+        const currentDate = new Date();
+        let year = currentDate.getFullYear();
+        let month = currentDate.getMonth();
+        
         for (let i = 0; i < 13; i++) {
-          const kk = `${y}-${String(mo + 1).padStart(2, "0")}`;
-          keyArr.push(kk);
-          mo--;
-          if (mo < 0) {
-            mo = 11;
-            y--;
+          const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+          monthKeys.push(key);
+          month--;
+          if (month < 0) {
+            month = 11;
+            year--;
           }
         }
-        setThirteenMonthKeys(keyArr.reverse());
+        setThirteenMonthKeys(monthKeys.reverse());
 
-      } catch (err: any) {
-        console.error('Error loading missionaries:', err);
-        setError(err.message);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+        console.error('Error loading missionaries:', error);
+        setError(errorMessage);
       } finally {
         setIsLoading(false);
       }
     };
     loadData();
-  }, [churchIds, supabase.auth]);
+  }, [churchIds, supabase]);
 
-  // Add modal handlers
   const openMissionaryModal = (m: Profile) => {
     setSelectedMissionary(m);
     setShowMissionaryModal(true);
@@ -177,7 +198,6 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
         )}
       </CardContent>
 
-      {/* Add modals */}
       <MissionaryLast6Modal
         isOpen={showMissionaryModal}
         onClose={() => setShowMissionaryModal(false)}
@@ -191,7 +211,6 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
         onClose={() => setShowFullReportModal(false)}
         missionary={selectedMissionary}
         donations={donations}
-        donationMap={donationMap}
         thirteenMonthKeys={thirteenMonthKeys}
         formatNumber={formatNumber}
       />

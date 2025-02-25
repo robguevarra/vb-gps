@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     const recorded_by = authUser.id;
 
     // Check if donor exists by donor_name
-    const { data: existingDonor, error: donorError } = await supabase
+    const { data: existingDonor } = await supabase
       .from('donors')
       .select('id, email, phone')
       .eq('name', donor_name)
@@ -138,8 +138,9 @@ export async function POST(request: Request) {
 
     console.log("[API] Donation inserted successfully:", donation);
     return NextResponse.json({ donation }, { status: 200 });
-  } catch (error: any) {
-    console.error("[API] Unexpected error:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+    console.error("[API] Unexpected error:", errorMessage);
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

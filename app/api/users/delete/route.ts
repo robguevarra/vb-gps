@@ -25,11 +25,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
 
-  } catch (err: any) {
-    console.error("Deletion error:", err);
-    return NextResponse.json(
-      { error: err.message || "Failed to delete user" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    console.error("Deletion error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to delete user";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 } 

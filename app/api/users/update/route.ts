@@ -28,15 +28,14 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.auth.admin.updateUserById(id, { email });
     
     if (error) {
-      return NextResponse.json(
-        { error: error.error_description || error.message || error.msg || "Unknown error" },
-        { status: 500 }
-      );
+      const errorMessage = error.message || "Unknown error";
+      return NextResponse.json({ error: errorMessage }, { status: 500 });
     }
     
     return NextResponse.json({ data });
-  } catch (err: any) {
-    console.error("Caught error in API route:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Caught error in API route:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
