@@ -60,7 +60,7 @@ export default function DashboardCards({
   const cards: DashboardCard[] = [
     {
       title: "Monthly Goal",
-      value: monthlyGoal,
+      value: monthlyGoal ?? 0,
       progress: progressPercentage, // Use the safely calculated percentage
       variant: "blue",
       isCurrency: true,
@@ -68,24 +68,31 @@ export default function DashboardCards({
     },
     {
       title: "Current Donations",
-      value: currentDonations,
+      value: currentDonations ?? 0,
       variant: "emerald",
       isCurrency: true,
       icon: Wallet
     },
     {
       title: "Active Partners",
-      value: currentPartnersCount,
+      value: currentPartnersCount ?? 0,
       variant: "indigo",
       isCurrency: false,
       icon: Users
     },
     {
       title: "New Partners",
-      value: newPartnersCount,
+      value: newPartnersCount ?? 0,
       variant: "teal",
       isCurrency: false,
       icon: UserPlus
+    },
+    {
+      title: "Surplus Balance",
+      value: surplusBalance ?? 0,
+      variant: "teal",
+      isCurrency: true,
+      icon: Wallet
     }
   ]
 
@@ -120,8 +127,8 @@ export default function DashboardCards({
               </h3>
               <p className="text-2xl font-bold tracking-tight">
                 {card.isCurrency 
-                  ? `₱${card.value.toLocaleString()}` 
-                  : card.value.toLocaleString()}
+                  ? `₱${(card.value ?? 0).toLocaleString()}` 
+                  : (card.value ?? 0).toLocaleString()}
               </p>
             </div>
 
