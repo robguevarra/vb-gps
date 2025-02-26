@@ -4,9 +4,9 @@ export const dynamic = "force-dynamic"; // Ensures fresh data on every request
 
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import DonationModal from "../../../components/DonationModal";
 import RecentTransactionsTable from "@/components/RecentTransactionsTable";
 import { getUserRole } from "@/utils/getUserRole";
+import FinanceRemittanceWizard from "@/components/FinanceRemittanceWizard";
 
 export default async function FinanceDashboard() {
   // Initialize Supabase client
@@ -92,8 +92,8 @@ export default async function FinanceDashboard() {
             <h1 className="text-3xl font-bold text-foreground">Finance Dashboard</h1>
             <p className="text-lg text-muted-foreground mt-1">Manage manual donation entries</p>
           </div>
-          {/* Pass the filtered missionaryProfiles to the DonationModal */}
-          <DonationModal missionaries={missionaryProfiles || []} />
+          {/* Use our new FinanceRemittanceWizard instead of DonationModal */}
+          <FinanceRemittanceWizard missionaries={missionaryProfiles || []} />
         </header>
         <div className="p-6 bg-card rounded-lg shadow">
           <h2 className="text-2xl font-semibold mb-4">Recent Transactions</h2>
