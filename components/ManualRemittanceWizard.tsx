@@ -222,6 +222,13 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
   /**
    * Handles the final submission of the remittance
    * Creates donation records for each donor entry using server action
+   * 
+   * IMPORTANT IMPLEMENTATION NOTES:
+   * 1. We use a server action (submitDonations) that bypasses RLS restrictions
+   * 2. The key fix was adding the 'recorded_by' field in the server action
+   * 3. We prevent multiple submissions with loading state
+   * 4. We provide detailed feedback to users based on success/failure
+   * 5. Detailed logs are available for debugging but hidden from users
    */
   const handleSubmit = async () => {
     if (loading) return; // Prevent multiple submissions
@@ -242,6 +249,11 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
 
       // Use the server action instead of client-side Supabase
       const result = await submitDonations(entries);
+
+      // Display detailed logs for debugging - can be removed in production
+      // if (result.logs) {
+      //   console.log("Donation submission logs:", result.logs);
+      // }
 
       if (!result.success) {
         throw new Error(result.error || "Unknown error occurred");

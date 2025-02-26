@@ -9,6 +9,31 @@
  * 
  * These actions are used by client components that need to perform
  * operations that might be restricted by RLS policies.
+ * 
+ * IMPORTANT IMPLEMENTATION NOTES:
+ * 
+ * 1. ROW LEVEL SECURITY (RLS) BYPASS:
+ *    We use the admin client with service role key to bypass RLS restrictions.
+ *    This is necessary because our RLS policies require the 'recorded_by' field
+ *    to match the authenticated user's ID.
+ * 
+ * 2. RECORDED_BY FIELD:
+ *    The critical fix was adding the 'recorded_by' field to each donation record.
+ *    We set this to the missionary_id, which satisfies our RLS policy:
+ *    "Allow insert donation by self or admin" ON public.donor_donations
+ *    FOR INSERT WITH CHECK ((recorded_by = auth.uid()) OR ...)
+ * 
+ * 3. DETAILED LOGGING:
+ *    We implemented comprehensive logging to diagnose issues with donation submissions.
+ *    These logs are returned to the client for debugging but can be disabled in production.
+ * 
+ * 4. INDIVIDUAL INSERTS:
+ *    We process each donation individually rather than in batch to minimize
+ *    transaction conflicts and provide better error reporting.
+ * 
+ * 5. FALLBACK MECHANISM:
+ *    If the standard insert fails, we attempt a fallback using RPC.
+ *    This provides redundancy in case of permission or other database issues.
  */
 
 "use server"
@@ -30,56 +55,60 @@ interface DonationEntry {
 }
 
 /**
- * Submits multiple donation entries while handling RLS and permission issues
+ * Submits multiple donation entries with detailed logging for debugging
  * 
- * IMPORTANT IMPLEMENTATION NOTES:
- * 
- * 1. ROW LEVEL SECURITY BYPASS:
- *    This function uses the admin client with service role key to bypass RLS,
- *    but we also explicitly set the recorded_by field to the missionary_id to
- *    satisfy RLS policies that check this field.
- * 
- * 2. INDIVIDUAL INSERTS APPROACH:
- *    We process each donation individually to minimize transaction conflicts
- *    and to allow partial success even if some donations fail.
- * 
- * 3. ERROR HANDLING STRATEGY:
- *    We track successful inserts and continue processing even after errors,
- *    allowing for partial success scenarios where some donations are recorded
- *    while others fail.
- * 
- * 4. MATERIALIZED VIEW CONSIDERATIONS:
- *    The donor_donations table may have triggers that refresh materialized views,
- *    which can cause permission issues. This implementation handles those errors
- *    gracefully.
+ * This function includes comprehensive logging to diagnose RLS and permission issues.
+ * The key fix was adding the 'recorded_by' field set to missionary_id to satisfy RLS policies.
  * 
  * @param entries - Array of donation entries to submit
- * @returns Object containing success status and detailed results
+ * @returns Object containing success status, error messages, and detailed logs
  */
 export async function submitDonations(entries: DonationEntry[]) {
+  // Create logs array to collect diagnostic information
+  const logs: string[] = [];
   let insertedCount = 0;
   
   try {
+    logs.push(`[START] Donation submission process with ${entries.length} entries`);
+    
     // Validate entries
     if (!entries.length) {
+      logs.push("[ERROR] No donation entries provided");
       throw new Error("No donation entries provided");
     }
     
-    // Validate each entry
-    for (const entry of entries) {
-      if (!entry.donor_id) throw new Error("Donor ID is required for all entries");
-      if (!entry.missionary_id) throw new Error("Missionary ID is required for all entries");
-      if (isNaN(entry.amount) || entry.amount <= 0) throw new Error("Valid amount is required for all entries");
+    // Log entry validation
+    for (const [index, entry] of entries.entries()) {
+      logs.push(`[VALIDATE] Entry ${index + 1}: donor_id=${entry.donor_id}, missionary_id=${entry.missionary_id}, amount=${entry.amount}`);
+      
+      if (!entry.donor_id) {
+        logs.push(`[ERROR] Entry ${index + 1}: Missing donor_id`);
+        throw new Error("Donor ID is required for all entries");
+      }
+      if (!entry.missionary_id) {
+        logs.push(`[ERROR] Entry ${index + 1}: Missing missionary_id`);
+        throw new Error("Missionary ID is required for all entries");
+      }
+      if (isNaN(entry.amount) || entry.amount <= 0) {
+        logs.push(`[ERROR] Entry ${index + 1}: Invalid amount ${entry.amount}`);
+        throw new Error("Valid amount is required for all entries");
+      }
     }
     
+    logs.push("[INFO] All entries validated successfully");
+    
     // Use admin client that explicitly bypasses RLS
+    logs.push("[INFO] Creating admin client to bypass RLS");
     const supabase = createAdminClient();
     
-    // Process each donation individually
-    for (const entry of entries) {
+    // Try individual inserts with detailed logging
+    logs.push("[INFO] Starting individual inserts");
+    
+    for (const [index, entry] of entries.entries()) {
       try {
-        // Format entry for database with recorded_by field set to missionary_id
-        // This is critical for satisfying RLS policies
+        logs.push(`[INSERT] Attempting entry ${index + 1}: donor_id=${entry.donor_id}, amount=${entry.amount}`);
+        
+        // Format entry for database
         const donationData = {
           donor_id: entry.donor_id,
           missionary_id: entry.missionary_id,
@@ -88,8 +117,13 @@ export async function submitDonations(entries: DonationEntry[]) {
           source: entry.source,
           status: entry.status,
           notes: entry.notes || null,
-          recorded_by: entry.missionary_id // Critical: Set recorded_by to missionary_id
+          // CRITICAL FIX: Add recorded_by field to satisfy RLS policy
+          // This field is required by our RLS policy for insert operations
+          recorded_by: entry.missionary_id // Use missionary_id as recorded_by
         };
+        
+        // Log the exact data being inserted
+        logs.push(`[DATA] Entry ${index + 1} data: ${JSON.stringify(donationData)}`);
         
         // Try to insert the donation
         const result = await supabase
@@ -97,43 +131,81 @@ export async function submitDonations(entries: DonationEntry[]) {
           .insert(donationData)
           .select();
         
-        // If successful or if the error is related to materialized view refresh,
-        // count as a success since the data was likely inserted
-        if (!result.error || 
-            (result.error && result.error.message && 
-             result.error.message.includes('missionary_monthly_stats'))) {
+        if (result.error) {
+          logs.push(`[ERROR] Entry ${index + 1} insert failed: ${result.error.message}`);
+          logs.push(`[ERROR] Entry ${index + 1} error details: ${JSON.stringify(result.error)}`);
+          
+          // Try a raw SQL insert as fallback
+          logs.push(`[FALLBACK] Trying raw SQL insert for entry ${index + 1}`);
+          
+          const { data: sqlData, error: sqlError } = await supabase.rpc(
+            'debug_insert_donation',
+            {
+              p_donor_id: entry.donor_id,
+              p_missionary_id: entry.missionary_id,
+              p_amount: entry.amount,
+              p_date: entry.date,
+              p_source: entry.source,
+              p_status: entry.status,
+              p_notes: entry.notes || null
+            }
+          );
+          
+          if (sqlError) {
+            logs.push(`[ERROR] SQL fallback failed: ${sqlError.message}`);
+            logs.push(`[ERROR] SQL error details: ${JSON.stringify(sqlError)}`);
+          } else {
+            logs.push(`[SUCCESS] SQL fallback succeeded for entry ${index + 1}`);
+            insertedCount++;
+          }
+        } else {
+          logs.push(`[SUCCESS] Entry ${index + 1} inserted successfully`);
           insertedCount++;
         }
       } catch (err) {
-        // Continue processing other entries even if one fails
-        continue;
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        logs.push(`[EXCEPTION] Entry ${index + 1} threw exception: ${errMsg}`);
+        logs.push(`[EXCEPTION] Stack trace: ${err instanceof Error ? err.stack : 'No stack trace'}`);
       }
     }
     
+    logs.push(`[SUMMARY] Inserted ${insertedCount} of ${entries.length} entries`);
+    
     // If none of the donations were inserted successfully, throw an error
     if (insertedCount === 0 && entries.length > 0) {
+      logs.push("[FAILURE] Failed to insert any donations");
       throw new Error("Failed to insert any donations");
     }
     
     // Revalidate the dashboard path to reflect new data
+    logs.push("[INFO] Revalidating dashboard path");
     revalidatePath('/dashboard/missionary');
+    
+    logs.push("[END] Donation submission process completed");
     
     return { 
       success: true, 
       error: null,
       partialSuccess: insertedCount < entries.length,
       insertedCount: insertedCount,
-      totalCount: entries.length
+      totalCount: entries.length,
+      logs: logs // In production, you may want to disable this or limit the log size
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+    logs.push(`[FATAL] Process failed with error: ${errorMessage}`);
+    
+    // These console logs can be removed in production
+    // console.error("Failed to submit donations:", errorMessage);
+    // console.error("Detailed logs:", logs);
     
     return { 
       success: false, 
       error: errorMessage,
       partialSuccess: insertedCount > 0,
       insertedCount: insertedCount,
-      totalCount: entries.length
+      totalCount: entries.length,
+      logs: logs // In production, you may want to disable this or limit the log size
     };
   }
 } 

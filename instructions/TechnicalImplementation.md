@@ -270,37 +270,37 @@
    - **Manual Remittance Wizard** (`components/ManualRemittanceWizard.tsx`)
      - Features:
        - Multi-step form for recording offline donations
-       - Donor search and selection
-       - New donor creation
-       - Amount validation and distribution
-       - Success animations and feedback
-     - RLS Bypass Implementation:
+       - Dynamic donor entry with search functionality
+       - Real-time validation and error handling
+       - Progress tracking with visual indicators
+       - Success animations and toast notifications
+     - RLS Compliance:
        - Uses server actions to bypass RLS restrictions
-       - Handles partial success scenarios
-       - Provides detailed error feedback
-       - Prevents duplicate submissions
+       - Sets required 'recorded_by' field to satisfy RLS policies
+       - Comprehensive error handling and logging
+       - Fallback mechanisms for failed submissions
+     - Implementation Notes:
+       - Server action in `actions/donations.ts` handles RLS bypass
+       - Critical fix: Setting 'recorded_by' field to missionary_id
+       - Detailed logging for troubleshooting permission issues
+       - Individual transaction processing for better error isolation
 
-   - **Server Actions for Donations** (`actions/donations.ts`)
+   - **Donation Submission Action** (`actions/donations.ts`)
      - Features:
-       - RLS bypass using admin client
-       - Explicit recorded_by field setting
-       - Individual donation processing
-       - Partial success handling
-       - Materialized view error handling
-     - Implementation Details:
-       ```typescript
-       // Critical implementation for RLS bypass
-       const donationData = {
-         donor_id: entry.donor_id,
-         missionary_id: entry.missionary_id,
-         amount: entry.amount,
-         date: entry.date,
-         source: entry.source,
-         status: entry.status,
-         notes: entry.notes || null,
-         recorded_by: entry.missionary_id // Critical for RLS policies
-       };
-       ```
+       - Server-side action that bypasses RLS using admin client
+       - Comprehensive validation of donation entries
+       - Detailed logging for troubleshooting
+       - Individual transaction processing
+       - Fallback mechanisms for failed submissions
+     - RLS Compliance:
+       - Uses admin client with service role key
+       - Sets 'recorded_by' field to satisfy RLS policies
+       - Handles materialized view refresh errors
+     - Implementation Notes:
+       - Critical fix: Setting 'recorded_by' field to missionary_id
+       - Detailed logging for troubleshooting permission issues
+       - Fallback to RPC for failed submissions
+       - Partial success handling for multiple donations
 
    - **Missionary Dashboard Overview** (`components/missionary-dashboard/OverviewTab.tsx`)
      - Features:
@@ -470,37 +470,37 @@ local_churches (
 5. **Manual Remittance Wizard** (`components/ManualRemittanceWizard.tsx`)
    - Features:
      - Multi-step form for recording offline donations
-     - Donor search and selection
-     - New donor creation
-     - Amount validation and distribution
-     - Success animations and feedback
-   - RLS Bypass Implementation:
+     - Dynamic donor entry with search functionality
+     - Real-time validation and error handling
+     - Progress tracking with visual indicators
+     - Success animations and toast notifications
+   - RLS Compliance:
      - Uses server actions to bypass RLS restrictions
-     - Handles partial success scenarios
-     - Provides detailed error feedback
-     - Prevents duplicate submissions
+     - Sets required 'recorded_by' field to satisfy RLS policies
+     - Comprehensive error handling and logging
+     - Fallback mechanisms for failed submissions
+   - Implementation Notes:
+     - Server action in `actions/donations.ts` handles RLS bypass
+     - Critical fix: Setting 'recorded_by' field to missionary_id
+     - Detailed logging for troubleshooting permission issues
+     - Individual transaction processing for better error isolation
 
-6. **Server Actions for Donations** (`actions/donations.ts`)
+6. **Donation Submission Action** (`actions/donations.ts`)
    - Features:
-     - RLS bypass using admin client
-     - Explicit recorded_by field setting
-     - Individual donation processing
-     - Partial success handling
-     - Materialized view error handling
-   - Implementation Details:
-     ```typescript
-     // Critical implementation for RLS bypass
-     const donationData = {
-       donor_id: entry.donor_id,
-       missionary_id: entry.missionary_id,
-       amount: entry.amount,
-       date: entry.date,
-       source: entry.source,
-       status: entry.status,
-       notes: entry.notes || null,
-       recorded_by: entry.missionary_id // Critical for RLS policies
-     };
-     ```
+     - Server-side action that bypasses RLS using admin client
+     - Comprehensive validation of donation entries
+     - Detailed logging for troubleshooting
+     - Individual transaction processing
+     - Fallback mechanisms for failed submissions
+   - RLS Compliance:
+     - Uses admin client with service role key
+     - Sets 'recorded_by' field to satisfy RLS policies
+     - Handles materialized view refresh errors
+   - Implementation Notes:
+     - Critical fix: Setting 'recorded_by' field to missionary_id
+     - Detailed logging for troubleshooting permission issues
+     - Fallback to RPC for failed submissions
+     - Partial success handling for multiple donations
 
 7. **Missionary Dashboard Overview** (`components/missionary-dashboard/OverviewTab.tsx`)
    - Features:
@@ -532,7 +532,7 @@ donor_donations (
   date timestamptz,
   source varchar(20),
   status varchar(20),
-  recorded_by uuid references auth.users(id), -- Critical for RLS policies
+  recorded_by uuid references auth.users(id),
   notes text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -546,20 +546,6 @@ donors (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 )
-```
-
-#### RLS Policies
-```sql
--- Allow insert donation by authorized roles
-CREATE POLICY "Allow insert donation by authorized roles" ON public.donor_donations 
-FOR INSERT WITH CHECK (
-  (recorded_by = auth.uid()) OR 
-  (EXISTS ( 
-    SELECT 1 FROM public.user_roles
-    WHERE user_roles.user_id = auth.uid() 
-    AND user_roles.role = ANY (ARRAY['finance_officer', 'superadmin', 'missionary', 'campus_director'])
-  ))
-);
 ```
 
 #### Integration Points
@@ -592,7 +578,8 @@ FOR INSERT WITH CHECK (
    - Church-specific access
    - Audit trail via recorded_by
    - Data integrity protection
-   - RLS bypass with proper attribution
+   - RLS policy compliance with proper field validation
+   - Server actions to bypass RLS when needed
 
 3. **Error Handling**
    - Form validation errors
@@ -601,7 +588,7 @@ FOR INSERT WITH CHECK (
    - Network error handling
    - Foreign key relationship error handling
    - Resilient rendering with fallback data
-   - Materialized view refresh error handling
+   - RLS permission error diagnostics and resolution
 
 ### Data Processing
 1. **Donation Analysis**
@@ -676,91 +663,6 @@ FOR INSERT WITH CHECK (
    - Error logging and monitoring
    - Resilient query patterns
 
-### Donation Debugging Tools
-
-1. **SQL Debugging Function**
-   ```sql
-   -- Function for debugging donation inserts with detailed error reporting
-   CREATE OR REPLACE FUNCTION debug_insert_donation(
-     p_donor_id BIGINT,
-     p_missionary_id UUID,
-     p_amount NUMERIC,
-     p_date TIMESTAMPTZ,
-     p_source TEXT,
-     p_status TEXT,
-     p_notes TEXT DEFAULT NULL
-   )
-   RETURNS JSONB
-   LANGUAGE plpgsql
-   SECURITY DEFINER -- Run with privileges of the function creator
-   AS $$
-   DECLARE
-     result JSONB;
-     error_message TEXT;
-     success BOOLEAN := FALSE;
-   BEGIN
-     -- Attempt to insert with error capture
-     BEGIN
-       -- Direct insert using parameters
-       INSERT INTO donor_donations(
-         donor_id, 
-         missionary_id, 
-         amount, 
-         date, 
-         source, 
-         status, 
-         notes,
-         recorded_by
-       ) 
-       VALUES (
-         p_donor_id, 
-         p_missionary_id, 
-         p_amount, 
-         p_date, 
-         p_source, 
-         p_status, 
-         p_notes,
-         p_missionary_id -- Set recorded_by to missionary_id
-       )
-       RETURNING to_jsonb(donor_donations.*) INTO result;
-       
-       success := TRUE;
-     EXCEPTION WHEN OTHERS THEN
-       -- Capture the error
-       error_message := SQLERRM;
-       
-       -- Create error result
-       result := jsonb_build_object(
-         'error', error_message,
-         'sqlstate', SQLSTATE,
-         'donor_id', p_donor_id,
-         'missionary_id', p_missionary_id,
-         'amount', p_amount
-       );
-     END;
-     
-     -- Return success or error information
-     RETURN jsonb_build_object(
-       'success', success,
-       'result', result
-     );
-   END;
-   $$;
-   ```
-
-2. **Usage in Server Actions**
-   - Can be called from server actions for detailed error diagnostics
-   - Provides comprehensive error information
-   - Runs with elevated privileges to bypass RLS
-   - Maintains proper recorded_by attribution
-
-3. **Troubleshooting Process**
-   - Identify failing donations through server action logs
-   - Use debug function to attempt direct inserts
-   - Analyze detailed error information
-   - Address specific permission or constraint issues
-   - Verify RLS policy requirements
-
 ## Known Technical Debt
 1. TypeScript errors in approval components
 2. Missing component imports
@@ -769,7 +671,6 @@ FOR INSERT WITH CHECK (
 5. Test coverage needs expansion
 6. Foreign key relationships in database need audit and potential restructuring
 7. Donor-donation relationship needs validation and data cleanup
-8. RLS policies need comprehensive documentation and testing
 
 ## Development Environment
 - Next.js 13+ with App Router
