@@ -1,3 +1,4 @@
+//app/page.tsx
 import { createClient } from '@/utils/supabase/server';
 import { redirect } from 'next/navigation';
 
@@ -7,6 +8,8 @@ export default async function HomePage() {
 
   if (!user) {
     redirect('/login');
+  } else {
+    redirect('/dashboard');
   }
 
   return (
