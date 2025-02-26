@@ -201,26 +201,38 @@
 4. **Donation Management**
    - **Donation Modal** (`components/DonationModal.tsx`)
      - Features:
-       - Comprehensive donation recording interface
-       - Real-time donor search with suggestions
-       - Validation for required fields
-       - Loading states and error handling
-       - Optimistic updates
-     - State Management:
-       ```typescript
-       interface DonationModalProps {
-         missionaries: any[];
-       }
+       - Dialog-based donation entry form
+       - Missionary selection
+       - Donor search with suggestions
+       - Form validation
+       - Success feedback
+     - Implementation Notes:
+       - Sets required 'recorded_by' field to satisfy RLS policies
+       - Uses API route for donation submission
+       - Handles donor creation and selection
+       - Provides real-time validation feedback
 
-       // Component State
-       const [donorName, setDonorName] = useState("");
-       const [amount, setAmount] = useState("");
-       const [date, setDate] = useState("");
-       const [missionaryId, setMissionaryId] = useState("");
-       const [donorEmail, setDonorEmail] = useState("");
-       const [donorPhone, setDonorPhone] = useState("");
-       const [notes, setNotes] = useState("");
-       ```
+   - **Finance Remittance Wizard** (`components/FinanceRemittanceWizard.tsx`)
+     - Features:
+       - Three-step wizard interface for donation entry
+       - Missionary selection in first step
+       - Total amount entry in second step
+       - Donor distribution with notes in third step
+       - Real-time donor search with debouncing
+       - New donor creation with validation
+       - Amount validation and balancing
+     - Implementation Notes:
+       - Critical fix: Setting 'recorded_by' field to finance officer's ID
+       - Adds notes field for additional donation context
+       - Uses server action for donation submission
+       - Multi-level fallback system for resilient submission
+       - Comprehensive error handling and validation
+       - Designed specifically for finance dashboard integration
+     - Benefits:
+       - Improved user experience for finance officers
+       - Enhanced audit trail with proper attribution
+       - Better data integrity with validation
+       - More contextual information with notes field
 
    - **Create Donation Form** (`components/create-donation-form.tsx`)
      - Features:
@@ -281,7 +293,7 @@
        - Fallback mechanisms for failed submissions
      - Implementation Notes:
        - Server action in `actions/donations.ts` handles RLS bypass
-       - Critical fix: Setting 'recorded_by' field to missionary_id
+       - Critical fix: Setting 'recorded_by' field to finance officer's ID (not missionary_id)
        - Detailed logging for troubleshooting permission issues
        - Individual transaction processing for better error isolation
 
@@ -297,7 +309,7 @@
        - Sets 'recorded_by' field to satisfy RLS policies
        - Handles materialized view refresh errors
      - Implementation Notes:
-       - Critical fix: Setting 'recorded_by' field to missionary_id
+       - Critical fix: Setting 'recorded_by' field to finance officer's ID (not missionary_id)
        - Detailed logging for troubleshooting permission issues
        - Fallback to RPC for failed submissions
        - Partial success handling for multiple donations
@@ -401,28 +413,40 @@ local_churches (
 
 1. **Donation Modal** (`components/DonationModal.tsx`)
    - Features:
-     - Comprehensive donation recording interface
-     - Real-time donor search with suggestions
-     - Validation for required fields
-     - Loading states and error handling
-     - Optimistic updates
-   - State Management:
-     ```typescript
-     interface DonationModalProps {
-       missionaries: any[];
-     }
+     - Dialog-based donation entry form
+     - Missionary selection
+     - Donor search with suggestions
+     - Form validation
+     - Success feedback
+   - Implementation Notes:
+     - Sets required 'recorded_by' field to satisfy RLS policies
+     - Uses API route for donation submission
+     - Handles donor creation and selection
+     - Provides real-time validation feedback
 
-     // Component State
-     const [donorName, setDonorName] = useState("");
-     const [amount, setAmount] = useState("");
-     const [date, setDate] = useState("");
-     const [missionaryId, setMissionaryId] = useState("");
-     const [donorEmail, setDonorEmail] = useState("");
-     const [donorPhone, setDonorPhone] = useState("");
-     const [notes, setNotes] = useState("");
-     ```
+2. **Finance Remittance Wizard** (`components/FinanceRemittanceWizard.tsx`)
+   - Features:
+     - Three-step wizard interface for donation entry
+     - Missionary selection in first step
+     - Total amount entry in second step
+     - Donor distribution with notes in third step
+     - Real-time donor search with debouncing
+     - New donor creation with validation
+     - Amount validation and balancing
+   - Implementation Notes:
+     - Critical fix: Setting 'recorded_by' field to finance officer's ID
+     - Adds notes field for additional donation context
+     - Uses server action for donation submission
+     - Multi-level fallback system for resilient submission
+     - Comprehensive error handling and validation
+     - Designed specifically for finance dashboard integration
+   - Benefits:
+     - Improved user experience for finance officers
+     - Enhanced audit trail with proper attribution
+     - Better data integrity with validation
+     - More contextual information with notes field
 
-2. **Create Donation Form** (`components/create-donation-form.tsx`)
+3. **Create Donation Form** (`components/create-donation-form.tsx`)
    - Features:
      - Simplified donation entry for church staff
      - Missionary selection
@@ -437,7 +461,7 @@ local_churches (
      }
      ```
 
-3. **Recent Donations** (`components/RecentDonations.tsx`)
+4. **Recent Donations** (`components/RecentDonations.tsx`)
    - Features:
      - Card-based transaction display
      - Donor name with history modal
@@ -455,7 +479,7 @@ local_churches (
      }
      ```
 
-4. **Donor History Modal** (`components/DonorHistoryModal.tsx`)
+5. **Donor History Modal** (`components/DonorHistoryModal.tsx`)
    - Features:
      - Complete donation history for specific donor
      - Real-time data fetching
@@ -467,7 +491,7 @@ local_churches (
      - Optimistic updates
      - Proper cleanup on close
 
-5. **Manual Remittance Wizard** (`components/ManualRemittanceWizard.tsx`)
+6. **Manual Remittance Wizard** (`components/ManualRemittanceWizard.tsx`)
    - Features:
      - Multi-step form for recording offline donations
      - Dynamic donor entry with search functionality
@@ -480,12 +504,12 @@ local_churches (
      - Comprehensive error handling and logging
      - Fallback mechanisms for failed submissions
    - Implementation Notes:
-     - Server action in `actions/donations.ts` handles RLS bypass
-     - Critical fix: Setting 'recorded_by' field to missionary_id
-     - Detailed logging for troubleshooting permission issues
-     - Individual transaction processing for better error isolation
+       - Server action in `actions/donations.ts` handles RLS bypass
+       - Critical fix: Setting 'recorded_by' field to finance officer's ID (not missionary_id)
+       - Detailed logging for troubleshooting permission issues
+       - Individual transaction processing for better error isolation
 
-6. **Donation Submission Action** (`actions/donations.ts`)
+7. **Donation Submission Action** (`actions/donations.ts`)
    - Features:
      - Server-side action that bypasses RLS using admin client
      - Comprehensive validation of donation entries
@@ -497,12 +521,12 @@ local_churches (
      - Sets 'recorded_by' field to satisfy RLS policies
      - Handles materialized view refresh errors
    - Implementation Notes:
-     - Critical fix: Setting 'recorded_by' field to missionary_id
+     - Critical fix: Setting 'recorded_by' field to finance officer's ID (not missionary_id)
      - Detailed logging for troubleshooting permission issues
      - Fallback to RPC for failed submissions
      - Partial success handling for multiple donations
 
-7. **Missionary Dashboard Overview** (`components/missionary-dashboard/OverviewTab.tsx`)
+8. **Missionary Dashboard Overview** (`components/missionary-dashboard/OverviewTab.tsx`)
    - Features:
      - Comprehensive dashboard with donation statistics
      - Recent donation list integration

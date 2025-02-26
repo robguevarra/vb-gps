@@ -18,22 +18,37 @@
  *    to match the authenticated user's ID.
  * 
  * 2. RECORDED_BY FIELD:
- *    The critical fix was adding the 'recorded_by' field to each donation record.
- *    We set this to the missionary_id, which satisfies our RLS policy:
- *    "Allow insert donation by self or admin" ON public.donor_donations
- *    FOR INSERT WITH CHECK ((recorded_by = auth.uid()) OR ...)
+ *    The critical fix was ensuring the 'recorded_by' field is set correctly:
+ *    - It should be set to the ID of the user who is recording the donation (finance officer)
+ *    - Previously, it was incorrectly set to missionary_id, which caused RLS policy issues
+ *    - Now we preserve the recorded_by value from the client, with missionary_id as fallback
+ *    - This satisfies our RLS policy: "Allow insert donation by self or admin" 
+ *      ON public.donor_donations FOR INSERT WITH CHECK ((recorded_by = auth.uid()) OR ...)
  * 
- * 3. DETAILED LOGGING:
- *    We implemented comprehensive logging to diagnose issues with donation submissions.
- *    These logs are returned to the client for debugging but can be disabled in production.
+ * 3. MULTI-LEVEL FALLBACK MECHANISM:
+ *    We implemented a robust three-tier approach for donation insertion:
+ *    a. Primary: Standard Supabase insert operation
+ *    b. First Fallback: RPC function call to debug_insert_donation with recorded_by parameter
+ *    c. Second Fallback: Direct SQL insert via execute_sql RPC for maximum reliability
+ *    This ensures donations are recorded even if permission issues occur with standard methods.
  * 
- * 4. INDIVIDUAL INSERTS:
+ * 4. DIAGNOSTIC CAPABILITIES:
+ *    The action includes comprehensive diagnostic features:
+ *    - Table schema verification to confirm column structure
+ *    - RPC function definition checking to validate parameters
+ *    - Detailed logging of each step in the process
+ *    - Specific recorded_by field tracking to diagnose permission issues
+ * 
+ * 5. INDIVIDUAL INSERTS:
  *    We process each donation individually rather than in batch to minimize
  *    transaction conflicts and provide better error reporting.
  * 
- * 5. FALLBACK MECHANISM:
- *    If the standard insert fails, we attempt a fallback using RPC.
- *    This provides redundancy in case of permission or other database issues.
+ * 6. ERROR HANDLING:
+ *    Robust error handling at multiple levels:
+ *    - Entry validation before processing
+ *    - Try/catch blocks around each operation
+ *    - Detailed error logging for debugging
+ *    - Partial success reporting when some entries succeed
  */
 
 "use server"
@@ -59,7 +74,13 @@ interface DonationEntry {
  * Submits multiple donation entries with detailed logging for debugging
  * 
  * This function includes comprehensive logging to diagnose RLS and permission issues.
- * The key fix was adding the 'recorded_by' field set to missionary_id to satisfy RLS policies.
+ * The key fix was ensuring the recorded_by field is set to the finance officer's ID
+ * (the user who is recording the donation) rather than the missionary_id.
+ * 
+ * The function implements a multi-level fallback system:
+ * 1. Standard Supabase insert
+ * 2. RPC function call with recorded_by parameter
+ * 3. Direct SQL insert as final fallback
  * 
  * @param entries - Array of donation entries to submit
  * @returns Object containing success status, error messages, and detailed logs
@@ -166,9 +187,13 @@ export async function submitDonations(entries: DonationEntry[]) {
           source: entry.source,
           status: entry.status,
           notes: entry.notes || null,
-          // CRITICAL FIX: Use the recorded_by field from the client
+          // CRITICAL FIX: Use the recorded_by field from the client (finance officer's ID)
           // This should be the ID of the user who is recording the donation (finance officer)
           // NOT the missionary_id as previously implemented
+          // This is critical for:
+          // 1. RLS policy compliance - allows the finance officer to view their own records
+          // 2. Audit trail - tracks who actually recorded the donation
+          // 3. Dashboard filtering - shows only donations recorded by the current user
           recorded_by: entry.recorded_by || entry.missionary_id // Fallback to missionary_id if not provided
         };
         

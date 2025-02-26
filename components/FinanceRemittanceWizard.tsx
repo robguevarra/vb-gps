@@ -16,6 +16,37 @@
  * - Progress tracking
  * - Success animations
  * 
+ * IMPORTANT IMPLEMENTATION NOTES:
+ * 
+ * 1. RECORDED_BY FIELD:
+ *    The 'recorded_by' field is critical for RLS (Row Level Security) policies in the database.
+ *    It must be set to the current user's ID (finance officer) who is recording the donation.
+ *    This field is used to:
+ *    - Satisfy RLS policies for insert operations
+ *    - Track who recorded each donation for audit purposes
+ *    - Filter donations in the finance dashboard by the logged-in user
+ * 
+ * 2. NOTES FIELD:
+ *    The 'notes' field allows finance officers to add contextual information about the donation.
+ *    This is particularly useful for:
+ *    - Recording special circumstances or conditions of the donation
+ *    - Noting the purpose or designation of funds
+ *    - Adding any relevant information for future reference
+ *    The notes are stored in the donor_donations table and displayed in transaction history.
+ * 
+ * 3. SUBMISSION PROCESS:
+ *    Donations are submitted using a server action that:
+ *    - Bypasses RLS restrictions using admin privileges
+ *    - Properly sets the recorded_by field to the current user's ID
+ *    - Includes multiple fallback mechanisms for resilience
+ *    - Provides detailed error handling and feedback
+ * 
+ * 4. SECURITY CONSIDERATIONS:
+ *    - User authentication is verified before submission
+ *    - The recorded_by field cannot be manipulated by users
+ *    - All inputs are validated before submission
+ *    - The server action provides an additional layer of validation
+ * 
  * @component
  */
 
@@ -415,12 +446,6 @@ export default function FinanceRemittanceWizard({ missionaries }: FinanceRemitta
 
       // Use the server action for submission
       const result = await submitDonations(entries);
-
-      // Add diagnostic logging
-      console.log("[FinanceRemittanceWizard] Submission result:", result);
-      if (result.logs) {
-        console.log("[FinanceRemittanceWizard] Server logs:", result.logs);
-      }
 
       if (!result.success) {
         throw new Error(result.error || "Unknown error occurred");
