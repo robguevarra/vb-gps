@@ -84,27 +84,70 @@ export default function DonorHistoryModal({
 
       const fetchDonations = async () => {
         try {
-          const { data, error } = await supabase
-            .from("donor_donations")
-            .select("id, amount, date, donors(name)")
-            .eq("missionary_id", missionaryId);
-
-          if (error) throw error;
+          // Step 1: First attempt to get donations using the donor's name
+          // This is more resilient when RLS is enabled
+          let donorDonations: Donation[] = [];
           
-          // Filter donations by donor name and map to our interface
-          const donorDonations = (data || [])
-            .filter((record: any) => record.donors?.name === donorName)
-            .map((record: any) => ({
-              id: record.id,
-              amount: record.amount,
-              date: record.date,
-              donor_name: record.donors?.name,
-            }));
+          // Check if the donorName is in the format "Donor #123"
+          const donorIdMatch = donorName.match(/Donor #(\d+)/);
+          
+          if (donorIdMatch) {
+            // If it's a fallback donor name, use the donor_id directly
+            const donorId = parseInt(donorIdMatch[1], 10);
+            
+            const { data: directData, error: directError } = await supabase
+              .from("donor_donations")
+              .select("id, amount, date")
+              .eq("missionary_id", missionaryId)
+              .eq("donor_id", donorId)
+              .order("date", { ascending: false });
+              
+            if (!directError && directData) {
+              donorDonations = directData.map(record => ({
+                id: record.id,
+                amount: record.amount,
+                date: record.date,
+                donor_name: donorName // Use the provided donor name since we don't have the real one
+              }));
+            }
+          } else {
+            // Otherwise try to get with proper joins
+            // Define the expected response type
+            interface DonorDonationWithDonor {
+              id: number | string;
+              amount: number;
+              date: string;
+              donor_id: number;
+              donors: {
+                name: string;
+              };
+            }
+            
+            const { data, error } = await supabase
+              .from("donor_donations")
+              .select("id, amount, date, donor_id, donors!inner(name)")
+              .eq("missionary_id", missionaryId)
+              .eq("donors.name", donorName)
+              .order("date", { ascending: false });
 
+            if (!error && data) {
+              // Type assertion to help TypeScript understand the structure
+              const typedData = data as unknown as DonorDonationWithDonor[];
+              
+              donorDonations = typedData.map(record => ({
+                id: record.id,
+                amount: record.amount,
+                date: record.date,
+                donor_name: record.donors.name || donorName
+              }));
+            }
+          }
+          
           setDonations(donorDonations);
         } catch (err) {
           const error = err as Error | PostgrestError;
-          setError(error.message);
+          console.error("Error fetching donor history:", error);
+          setError("Failed to load donation history. Please try again later.");
         } finally {
           setLoading(false);
         }

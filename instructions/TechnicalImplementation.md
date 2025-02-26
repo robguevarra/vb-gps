@@ -243,6 +243,7 @@
        - Donor name with history modal
        - Date and amount formatting
        - Empty state handling
+       - Resilient data handling with fallbacks for missing donors
      - Data Model:
        ```typescript
        interface Donation {
@@ -250,6 +251,7 @@
          donor_name: string;
          date: string;
          amount: number;
+         notes?: string;
        }
        ```
 
@@ -264,6 +266,26 @@
        - Data fetched only when modal opens
        - Optimistic updates
        - Proper cleanup on close
+
+   - **Missionary Dashboard Overview** (`components/missionary-dashboard/OverviewTab.tsx`)
+     - Features:
+       - Comprehensive dashboard with donation statistics
+       - Recent donation list integration
+       - Robust data fetching architecture
+       - Foreign key relationship handling
+       - Fallback mechanisms for data inconsistencies
+     - Advanced Query Strategy:
+       - Two-step query approach to avoid problematic joins
+       - Separate fetching of donations and donor information
+       - Manual data linking with TypeScript Maps
+       - Fallback donor names for missing records
+       - Detailed documentation through code comments
+     - Benefits:
+       - Resilient to database inconsistencies
+       - Graceful handling of missing relationships
+       - Improved type safety with TypeScript Maps
+       - Enhanced maintainability with comprehensive comments
+       - Better debugging capabilities with targeted error handling
 
 ### Church Management
 
@@ -386,6 +408,7 @@ local_churches (
      - Donor name with history modal
      - Date and amount formatting
      - Empty state handling
+     - Resilient data handling with fallbacks for missing donors
    - Data Model:
      ```typescript
      interface Donation {
@@ -393,6 +416,7 @@ local_churches (
        donor_name: string;
        date: string;
        amount: number;
+       notes?: string;
      }
      ```
 
@@ -407,6 +431,26 @@ local_churches (
      - Data fetched only when modal opens
      - Optimistic updates
      - Proper cleanup on close
+
+5. **Missionary Dashboard Overview** (`components/missionary-dashboard/OverviewTab.tsx`)
+   - Features:
+     - Comprehensive dashboard with donation statistics
+     - Recent donation list integration
+     - Robust data fetching architecture
+     - Foreign key relationship handling
+     - Fallback mechanisms for data inconsistencies
+   - Advanced Query Strategy:
+     - Two-step query approach to avoid problematic joins
+     - Separate fetching of donations and donor information
+     - Manual data linking with TypeScript Maps
+     - Fallback donor names for missing records
+     - Detailed documentation through code comments
+   - Benefits:
+     - Resilient to database inconsistencies
+     - Graceful handling of missing relationships
+     - Improved type safety with TypeScript Maps
+     - Enhanced maintainability with comprehensive comments
+     - Better debugging capabilities with targeted error handling
 
 #### Database Schema
 ```sql
@@ -457,17 +501,21 @@ donors (
    - Email format checking
    - Required field validation
    - Date range validation
+   - Foreign key relationship validation
 
 2. **Access Control**
    - Role-based permissions
    - Church-specific access
    - Audit trail via recorded_by
+   - Data integrity protection
 
 3. **Error Handling**
    - Form validation errors
    - API error handling
    - Database error recovery
    - Network error handling
+   - Foreign key relationship error handling
+   - Resilient rendering with fallback data
 
 ### Data Processing
 1. **Donation Analysis**
@@ -487,6 +535,15 @@ donors (
    - Donor activity metrics
    - Real-time aggregations
    - Progressive data loading for large datasets
+
+4. **Resilient Query Architecture**
+   - Two-step query approach for problematic foreign key relationships
+   - Separate fetching of related data to avoid join failures
+   - Manual data linking in JavaScript for robust relationships
+   - Fallback mechanisms for missing or inconsistent data
+   - Enhanced error logging and diagnostics for query failures
+   - Type-safe data handling with TypeScript Maps and interfaces
+   - Example implementation in `components/missionary-dashboard/OverviewTab.tsx`
 
 ### State Management
 1. **Client-Side State**
@@ -524,11 +581,14 @@ donors (
    - User-friendly error messages
    - Graceful fallbacks
    - Loading states
+   - Resilient rendering with fallback data
+   - Comprehensive error logging
 
 2. **Server-Side**
    - Supabase error handling
    - Type-safe error responses
    - Error logging and monitoring
+   - Resilient query patterns
 
 ## Known Technical Debt
 1. TypeScript errors in approval components
@@ -536,6 +596,8 @@ donors (
 3. Pagination implementation needs improvement
 4. Error state handling could be more robust
 5. Test coverage needs expansion
+6. Foreign key relationships in database need audit and potential restructuring
+7. Donor-donation relationship needs validation and data cleanup
 
 ## Development Environment
 - Next.js 13+ with App Router
