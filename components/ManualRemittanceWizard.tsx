@@ -10,7 +10,7 @@
  *   1. Total amount entry
  *   2. Donor distribution with dynamic donor entries
  * - Real-time donor search with debouncing
- * - New donor creation capability
+ * - New donor creation capability with optional email and phone
  * - Amount validation and balancing
  * - Progress tracking
  * - Success animations
@@ -38,7 +38,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
-import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus } from "lucide-react"
+import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus, Mail, Phone, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
 import { PostgrestError } from "@supabase/supabase-js"
@@ -49,8 +49,14 @@ import { submitDonations } from "@/actions/donations" // Import the donation sub
  * Props for the ManualRemittanceWizard component
  */
 interface ManualRemittanceWizardProps {
-  /** ID of the missionary for whom the remittance is being recorded */
-  missionaryId: string;
+  /** ID of the user for whom the remittance is being recorded */
+  userId: string;
+  /** Optional title for the wizard */
+  title?: string;
+  /** Optional callback function to be called after successful submission */
+  onSuccess?: () => void;
+  /** Optional callback function to be called after submission failure */
+  onError?: (error: string) => void;
 }
 
 /**
@@ -61,6 +67,10 @@ interface Donor {
   id: string;
   /** Full name of the donor */
   name: string;
+  /** Optional email of the donor */
+  email?: string;
+  /** Optional phone number of the donor */
+  phone?: string;
 }
 
 /**
@@ -75,7 +85,34 @@ interface DonorEntry {
   donorName?: string;
 }
 
-export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardProps) {
+/**
+ * Interface for new donor form data
+ */
+interface NewDonorForm {
+  name: string;
+  email: string;
+  phone: string;
+  showForm: boolean;
+  emailError?: string;
+}
+
+/**
+ * Validates an email address
+ * @param email - Email address to validate
+ * @returns True if the email is valid, false otherwise
+ */
+const isValidEmail = (email: string): boolean => {
+  if (!email) return true; // Empty email is considered valid (it's optional)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+export function ManualRemittanceWizard({ 
+  userId, 
+  title = "Manual Remittance",
+  onSuccess,
+  onError
+}: ManualRemittanceWizardProps) {
   // Initialize Supabase client for database operations
   const supabase = createClient()
 
@@ -90,6 +127,13 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<Donor[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const [newDonorForm, setNewDonorForm] = useState<NewDonorForm>({
+    name: "",
+    email: "",
+    phone: "",
+    showForm: false,
+    emailError: undefined
+  })
 
   /**
    * Debounced search function to prevent excessive API calls
@@ -99,7 +143,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
     debounce(async (term: string) => {
       setSearchLoading(true)
       try {
-        let query = supabase.from("donors").select("id, name")
+        let query = supabase.from("donors").select("id, name, email, phone")
 
         if (term.trim()) {
           // Use ilike for case-insensitive matching with wildcards
@@ -113,7 +157,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
           setSearchResults(data || [])
         }
       } catch (error) {
-        toast({ title: "Search Error", description: "Failed to fetch donors" })
+        toast({ title: "Search Error", description: "Failed to fetch partners" })
       } finally {
         setSearchLoading(false)
       }
@@ -127,15 +171,39 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
   }, [searchTerm, debouncedSearch])
 
   /**
+   * Validates the email in the new donor form
+   * @returns True if the email is valid, false otherwise
+   */
+  const validateEmail = (): boolean => {
+    if (!newDonorForm.email) return true; // Empty email is valid (it's optional)
+    
+    if (!isValidEmail(newDonorForm.email)) {
+      setNewDonorForm(prev => ({
+        ...prev,
+        emailError: "Please enter a valid email address"
+      }));
+      return false;
+    }
+    
+    setNewDonorForm(prev => ({
+      ...prev,
+      emailError: undefined
+    }));
+    return true;
+  };
+
+  /**
    * Creates a new donor in the database using server action
    * @param name - Name of the new donor
-   * @returns The ID of the newly created donor
+   * @param email - Optional email of the new donor
+   * @param phone - Optional phone number of the new donor
+   * @returns The newly created donor or null if creation failed
    */
-  const handleCreateDonor = async (name: string) => {
+  const handleCreateDonor = async (name: string, email?: string, phone?: string) => {
     setLoading(true)
     try {
       // Use the server action instead of client-side Supabase
-      const result = await createDonor(name)
+      const result = await createDonor(name, email, phone)
 
       if (result.error) {
         throw new Error(result.error)
@@ -144,16 +212,86 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
       const newDonor = result.donor
       
       if (newDonor) {
-        setSearchResults((prevResults) => [...prevResults, newDonor])
-        return newDonor.id
+        // Immediately add the new donor to search results to ensure it's available
+        setSearchResults(prevResults => {
+          // Check if donor already exists in results to avoid duplicates
+          const exists = prevResults.some(d => d.id === newDonor.id);
+          if (!exists) {
+            return [...prevResults, newDonor];
+          }
+          return prevResults;
+        });
+        return newDonor
       }
       return null
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
-      toast({ title: "Error creating donor", description: errorMessage, variant: "destructive" })
+      toast({ title: "Error creating partner", description: errorMessage, variant: "destructive" })
       return null
     } finally {
       setLoading(false)
+    }
+  }
+
+  /**
+   * Creates a new donor in the database using server action
+   * @param name - Name of the new donor
+   * @param email - Optional email of the new donor
+   * @param phone - Optional phone number of the new donor
+   * @param index - Index of the donor entry to update after creation
+   */
+  const handleCreateAndSelectDonor = async (name: string, email: string, phone: string, index: number) => {
+    if (!name.trim() || loading) return;
+    
+    // Validate email before proceeding
+    if (!validateEmail()) return;
+    
+    setLoading(true);
+    try {
+      // Use the server action instead of client-side Supabase
+      const result = await createDonor(name, email, phone);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      const newDonor = result.donor;
+      
+      if (newDonor) {
+        // Directly update the donor entry with the new donor
+        const newEntries = [...donorEntries];
+        newEntries[index] = { 
+          ...newEntries[index], 
+          donorId: newDonor.id, 
+          donorName: newDonor.name 
+        };
+        setDonorEntries(newEntries);
+        
+        // Reset search and form state
+        setSearchTerm("");
+        setSearchResults([]);
+        setNewDonorForm({
+          name: "",
+          email: "",
+          phone: "",
+          showForm: false,
+          emailError: undefined
+        });
+        
+        toast({ 
+          title: "Partner created", 
+          description: `${newDonor.name} has been added successfully.` 
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      toast({ 
+        title: "Error creating partner", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -164,10 +302,22 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
    */
   const handleSelectDonor = (index: number, donor: Donor) => {
     const newEntries = [...donorEntries]
-    newEntries[index] = { ...newEntries[index], donorId: donor.id, donorName: donor.name }
+    newEntries[index] = { 
+      ...newEntries[index], 
+      donorId: donor.id, 
+      donorName: donor.name 
+    }
     setDonorEntries(newEntries)
     setSearchTerm("")
     setSearchResults([])
+    // Reset new donor form
+    setNewDonorForm({
+      name: "",
+      email: "",
+      phone: "",
+      showForm: false,
+      emailError: undefined
+    })
   }
 
   /**
@@ -240,7 +390,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
         return {
           donor_id: entry.donorId,
           amount,
-          missionary_id: missionaryId,
+          missionary_id: userId, // Use the userId prop instead of hardcoded missionaryId
           date: new Date().toISOString(),
           source: "offline" as const,
           status: "completed" as const,
@@ -280,6 +430,11 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
           description: "All donations have been recorded.",
         });
       }
+      
+      // Call the onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       toast({
@@ -287,21 +442,36 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
         description: errorMessage,
         variant: "destructive",
       });
+      
+      // Call the onError callback if provided
+      if (onError) {
+        onError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle email input change with validation
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const email = e.target.value;
+    setNewDonorForm(prev => ({ 
+      ...prev, 
+      email,
+      emailError: email && !isValidEmail(email) ? "Please enter a valid email address" : undefined
+    }));
+  };
+
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Manual Remittance</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <Progress value={step === 1 ? 50 : 100} className="w-full" />
 
         <p className="text-center text-muted-foreground">
-          {step === 1 ? "Enter total amount" : "Distribute donations to donors"}
+          {step === 1 ? "Enter total amount" : "Distribute donations to partners"}
         </p>
 
         <div className="relative">
@@ -331,7 +501,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
               </div>
 
               <Button size="lg" className="w-full" onClick={() => setStep(2)} disabled={!validateStep1()}>
-                Next: Assign Donors
+                Next: Assign Partners
               </Button>
             </div>
           )}
@@ -342,7 +512,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
                 <Card key={index} className="p-4">
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <Label className="text-lg">Donor {index + 1}</Label>
+                      <Label className="text-lg">Partner {index + 1}</Label>
                       {index > 0 && (
                         <Button variant="ghost" size="sm" onClick={() => handleRemoveDonorEntry(index)}>
                           <Trash className="h-4 w-4 text-red-500" />
@@ -354,11 +524,16 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="text"
-                        placeholder="Search for a donor..."
+                        placeholder="Search for a partner..."
                         value={entry.donorName || searchTerm}
                         onChange={(e) => {
                           if (!entry.donorId) {
                             setSearchTerm(e.target.value)
+                            // Update the new donor form name as well
+                            setNewDonorForm(prev => ({
+                              ...prev,
+                              name: e.target.value
+                            }))
                           }
                         }}
                         disabled={!!entry.donorId}
@@ -366,7 +541,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
                       />
                     </div>
 
-                    {searchTerm.trim() && !entry.donorId && (
+                    {searchTerm.trim() && !entry.donorId && !newDonorForm.showForm && (
                       <Card className="mt-2">
                         <CardContent className="p-2">
                           {searchLoading && (
@@ -383,38 +558,120 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
                                   onClick={() => handleSelectDonor(index, donor)}
                                 >
                                   {donor.name}
+                                  {donor.email && <span className="text-xs text-muted-foreground ml-2">{donor.email}</span>}
                                 </li>
                               ))}
                             </ul>
                           )}
                           {!searchLoading && searchResults.length === 0 && (
-                            <div className="p-2 text-muted-foreground">No donors found.</div>
+                            <div className="p-2 text-muted-foreground">No partners found.</div>
                           )}
                         </CardContent>
                       </Card>
                     )}
 
-                    {!entry.donorId && (
+                    {!entry.donorId && !newDonorForm.showForm && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={async () => {
+                        onClick={() => {
                           if (!searchTerm.trim() || loading) return;
-                          
-                          const newDonorId = await handleCreateDonor(searchTerm)
-                          if (newDonorId) {
-                            const newDonor = searchResults.find((d) => d.id === newDonorId)
-                            if (newDonor) {
-                              handleSelectDonor(index, newDonor)
-                            }
-                          }
+                          setNewDonorForm(prev => ({
+                            ...prev,
+                            name: searchTerm,
+                            showForm: true
+                          }));
                         }}
                         disabled={!searchTerm.trim()}
                         className="w-full"
                       >
-                        <UserPlus className="mr-2 h-4 w-4" /> Create New Donor
+                        <UserPlus className="mr-2 h-4 w-4" /> Create New Partner
                       </Button>
+                    )}
+
+                    {!entry.donorId && newDonorForm.showForm && (
+                      <Card className="p-4 border-dashed">
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="newDonorName">Partner Name</Label>
+                            <Input
+                              id="newDonorName"
+                              value={newDonorForm.name}
+                              onChange={(e) => setNewDonorForm(prev => ({ ...prev, name: e.target.value }))}
+                              placeholder="Full Name"
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="newDonorEmail" className="flex items-center">
+                              <Mail className="h-4 w-4 mr-1" /> Email (Optional)
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                id="newDonorEmail"
+                                type="email"
+                                value={newDonorForm.email}
+                                onChange={handleEmailChange}
+                                placeholder="email@example.com"
+                                className={newDonorForm.emailError ? "border-red-500 pr-10" : ""}
+                              />
+                              {newDonorForm.emailError && (
+                                <AlertCircle className="h-4 w-4 text-red-500 absolute right-3 top-3" />
+                              )}
+                            </div>
+                            {newDonorForm.emailError && (
+                              <p className="text-xs text-red-500">{newDonorForm.emailError}</p>
+                            )}
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="newDonorPhone" className="flex items-center">
+                              <Phone className="h-4 w-4 mr-1" /> Phone (Optional)
+                            </Label>
+                            <Input
+                              id="newDonorPhone"
+                              type="tel"
+                              value={newDonorForm.phone}
+                              onChange={(e) => setNewDonorForm(prev => ({ ...prev, phone: e.target.value }))}
+                              placeholder="+1234567890"
+                            />
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setNewDonorForm(prev => ({ ...prev, showForm: false, emailError: undefined }))}
+                              className="flex-1"
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleCreateAndSelectDonor(
+                                newDonorForm.name,
+                                newDonorForm.email,
+                                newDonorForm.phone,
+                                index
+                              )}
+                              disabled={!newDonorForm.name.trim() || loading || !!newDonorForm.emailError}
+                              className="flex-1"
+                            >
+                              {loading ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
+                                </>
+                              ) : (
+                                "Save Partner"
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
                     )}
 
                     <div className="space-y-2">
@@ -437,7 +694,7 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
 
               <div className="flex gap-4">
                 <Button variant="outline" className="flex-1" onClick={handleAddDonorEntry}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Donor
+                  <Plus className="mr-2 h-4 w-4" /> Add Partner
                 </Button>
 
                 <Button size="lg" className="flex-1" onClick={handleSubmit} disabled={!validateStep2() || loading}>

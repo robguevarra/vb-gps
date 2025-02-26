@@ -62,7 +62,7 @@ interface DonorHistoryModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export default function DonorHistoryModal({
+export default function PartnerHistoryModal({
   donorName,
   missionaryId,
   open,
@@ -146,7 +146,7 @@ export default function DonorHistoryModal({
           setDonations(donorDonations);
         } catch (err) {
           const error = err as Error | PostgrestError;
-          console.error("Error fetching donor history:", error);
+          console.error("Error fetching partner history:", error);
           setError("Failed to load donation history. Please try again later.");
         } finally {
           setLoading(false);
@@ -185,7 +185,7 @@ export default function DonorHistoryModal({
                 </div>
               ))
             ) : (
-              <p>No donation history found for this donor.</p>
+              <p>No donation history found for this partner.</p>
             )}
           </div>
         )}

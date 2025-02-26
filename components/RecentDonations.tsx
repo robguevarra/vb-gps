@@ -20,7 +20,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { useState } from "react";
-import DonorHistoryModal from "./DonorHistoryModal";
+import PartnerHistoryModal from "./DonorHistoryModal";
 import { Inbox } from "lucide-react";
 
 /**
@@ -49,16 +49,16 @@ interface RecentDonationsProps {
 
 export default function RecentDonations({ donations, missionaryId }: RecentDonationsProps) {
   // State for managing the donor history modal
-  const [donorModalOpen, setDonorModalOpen] = useState(false);
-  const [selectedDonor, setSelectedDonor] = useState<string>("");
+  const [partnerModalOpen, setPartnerModalOpen] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState<string>("");
 
   /**
-   * Opens the donor history modal for a specific donor
-   * @param donorName - Name of the donor to show history for
+   * Opens the partner history modal for a specific partner
+   * @param donorName - Name of the partner to show history for
    */
   const openModal = (donorName: string) => {
-    setSelectedDonor(donorName);
-    setDonorModalOpen(true);
+    setSelectedPartner(donorName);
+    setPartnerModalOpen(true);
   };
 
   return (
@@ -76,7 +76,7 @@ export default function RecentDonations({ donations, missionaryId }: RecentDonat
                   className="flex items-center justify-between p-4 transition-colors hover:bg-muted/5"
                 >
                   <div className="grid gap-1">
-                    {/* Donor name with click handler for history modal */}
+                    {/* Partner name with click handler for history modal */}
                     <div 
                       className="font-medium cursor-pointer hover:text-primary"
                       onClick={() => openModal(donation.donor_name)}
@@ -104,12 +104,12 @@ export default function RecentDonations({ donations, missionaryId }: RecentDonat
         </CardContent>
       </Card>
 
-      {/* Donor History Modal */}
-      <DonorHistoryModal
-        donorName={selectedDonor}
+      {/* Partner History Modal */}
+      <PartnerHistoryModal
+        donorName={selectedPartner}
         missionaryId={missionaryId}
-        open={donorModalOpen}
-        onOpenChange={setDonorModalOpen}
+        open={partnerModalOpen}
+        onOpenChange={setPartnerModalOpen}
       />
     </>
   );

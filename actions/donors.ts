@@ -20,9 +20,11 @@ import { revalidatePath } from "next/cache"
  * Creates a new donor in the database
  * 
  * @param name - The name of the donor to create
+ * @param email - Optional email address for the donor
+ * @param phone - Optional phone number for the donor
  * @returns The newly created donor object or null if creation failed
  */
-export async function createDonor(name: string) {
+export async function createDonor(name: string, email?: string, phone?: string) {
   try {
     if (!name.trim()) {
       throw new Error("Donor name is required")
@@ -51,7 +53,11 @@ export async function createDonor(name: string) {
     // Critical: This operation now bypasses RLS completely
     const { data, error } = await supabase
       .from("donors")
-      .insert({ name: name.trim() })
+      .insert({ 
+        name: name.trim(),
+        email: email?.trim() || null,
+        phone: phone?.trim() || null
+      })
       .select()
       .single()
       
