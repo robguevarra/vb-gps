@@ -243,11 +243,6 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
       // Use the server action instead of client-side Supabase
       const result = await submitDonations(entries);
 
-      // Display detailed logs for debugging
-      if (result.logs) {
-        console.log("Donation submission logs:", result.logs);
-      }
-
       if (!result.success) {
         throw new Error(result.error || "Unknown error occurred");
       }
