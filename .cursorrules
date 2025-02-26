@@ -42,6 +42,7 @@
     - Write unit tests for components using Jest and React Testing Library.
     - Provide clear and concise comments for complex logic.
     - Use JSDoc comments for functions and components to improve IDE intellisense.
+    - DO NOT REPLACE COMMENTS. JUST EDIT THEM AND APPEND THE CHANGES. THIS WAY WE CAN ALWAYS TRACK CODE CHANGES.
 
     ### Methodology
     1. **System 2 Thinking**: Approach the problem with analytical rigor. Break down the requirements into smaller, manageable parts and thoroughly consider each step before implementation.

@@ -52,6 +52,7 @@ interface DonationEntry {
   source: "offline" | "online";
   status: "completed" | "pending";
   notes?: string;
+  recorded_by: string;
 }
 
 /**
@@ -70,6 +71,58 @@ export async function submitDonations(entries: DonationEntry[]) {
   
   try {
     logs.push(`[START] Donation submission process with ${entries.length} entries`);
+    
+    // Use admin client that explicitly bypasses RLS
+    logs.push("[INFO] Creating admin client to bypass RLS");
+    const supabase = createAdminClient();
+    
+    // Check table schema
+    logs.push("[DIAGNOSTIC] Checking donor_donations table schema");
+    try {
+      const { data: tableData, error: tableError } = await supabase
+        .from('donor_donations')
+        .select('*')
+        .limit(1);
+      
+      if (tableError) {
+        logs.push(`[DIAGNOSTIC] Error checking table schema: ${tableError.message}`);
+      } else {
+        // Get column names from the first row
+        const columns = tableData && tableData.length > 0 ? Object.keys(tableData[0]) : [];
+        logs.push(`[DIAGNOSTIC] Table columns: ${JSON.stringify(columns)}`);
+      }
+    } catch (e) {
+      logs.push(`[DIAGNOSTIC] Exception checking table schema: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
+    
+    // Check RPC function definition directly with SQL
+    logs.push("[DIAGNOSTIC] Checking RPC function definition with SQL");
+    try {
+      const { data: sqlRpcData, error: sqlRpcError } = await supabase.rpc(
+        'execute_sql',
+        {
+          sql_query: `
+            SELECT 
+              p.proname AS function_name,
+              pg_get_function_arguments(p.oid) AS function_arguments
+            FROM 
+              pg_proc p
+              JOIN pg_namespace n ON p.pronamespace = n.oid
+            WHERE 
+              n.nspname = 'public'
+              AND p.proname = 'debug_insert_donation';
+          `
+        }
+      );
+      
+      if (sqlRpcError) {
+        logs.push(`[DIAGNOSTIC] SQL RPC check error: ${sqlRpcError.message}`);
+      } else {
+        logs.push(`[DIAGNOSTIC] SQL RPC check result: ${JSON.stringify(sqlRpcData)}`);
+      }
+    } catch (e) {
+      logs.push(`[DIAGNOSTIC] SQL RPC check exception: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
     
     // Validate entries
     if (!entries.length) {
@@ -97,10 +150,6 @@ export async function submitDonations(entries: DonationEntry[]) {
     
     logs.push("[INFO] All entries validated successfully");
     
-    // Use admin client that explicitly bypasses RLS
-    logs.push("[INFO] Creating admin client to bypass RLS");
-    const supabase = createAdminClient();
-    
     // Try individual inserts with detailed logging
     logs.push("[INFO] Starting individual inserts");
     
@@ -117,10 +166,15 @@ export async function submitDonations(entries: DonationEntry[]) {
           source: entry.source,
           status: entry.status,
           notes: entry.notes || null,
-          // CRITICAL FIX: Add recorded_by field to satisfy RLS policy
-          // This field is required by our RLS policy for insert operations
-          recorded_by: entry.missionary_id // Use missionary_id as recorded_by
+          // CRITICAL FIX: Use the recorded_by field from the client
+          // This should be the ID of the user who is recording the donation (finance officer)
+          // NOT the missionary_id as previously implemented
+          recorded_by: entry.recorded_by || entry.missionary_id // Fallback to missionary_id if not provided
         };
+        
+        // Add detailed logging about the recorded_by field
+        logs.push(`[RECORDED_BY] Entry ${index + 1} recorded_by: ${entry.recorded_by || 'Not provided, using missionary_id'}`);
+        logs.push(`[RECORDED_BY] Entry ${index + 1} missionary_id: ${entry.missionary_id}`);
         
         // Log the exact data being inserted
         logs.push(`[DATA] Entry ${index + 1} data: ${JSON.stringify(donationData)}`);
@@ -147,13 +201,57 @@ export async function submitDonations(entries: DonationEntry[]) {
               p_date: entry.date,
               p_source: entry.source,
               p_status: entry.status,
-              p_notes: entry.notes || null
+              p_notes: entry.notes || null,
+              p_recorded_by: entry.recorded_by
             }
           );
+          
+          logs.push(`[FALLBACK] RPC params: ${JSON.stringify({
+            p_donor_id: entry.donor_id,
+            p_missionary_id: entry.missionary_id,
+            p_amount: entry.amount,
+            p_date: entry.date,
+            p_source: entry.source,
+            p_status: entry.status,
+            p_notes: entry.notes || null,
+            p_recorded_by: entry.recorded_by
+          })}`);
           
           if (sqlError) {
             logs.push(`[ERROR] SQL fallback failed: ${sqlError.message}`);
             logs.push(`[ERROR] SQL error details: ${JSON.stringify(sqlError)}`);
+            
+            // Try direct SQL insert as a second fallback
+            logs.push(`[FALLBACK2] Trying direct SQL insert for entry ${index + 1}`);
+            
+            try {
+              const { data: directSqlData, error: directSqlError } = await supabase.rpc(
+                'execute_sql',
+                {
+                  sql_query: `
+                    INSERT INTO donor_donations 
+                    (donor_id, missionary_id, amount, date, source, status, notes, recorded_by) 
+                    VALUES 
+                    ('${entry.donor_id}', '${entry.missionary_id}', ${entry.amount}, 
+                     '${entry.date}', '${entry.source}', '${entry.status}', 
+                     ${entry.notes ? `'${entry.notes}'` : 'NULL'}, 
+                     '${entry.recorded_by}')
+                    RETURNING id;
+                  `
+                }
+              );
+              
+              if (directSqlError) {
+                logs.push(`[ERROR] Direct SQL fallback failed: ${directSqlError.message}`);
+                logs.push(`[ERROR] Direct SQL error details: ${JSON.stringify(directSqlError)}`);
+              } else {
+                logs.push(`[SUCCESS] Direct SQL fallback succeeded for entry ${index + 1}`);
+                insertedCount++;
+              }
+            } catch (directSqlErr) {
+              const directSqlErrMsg = directSqlErr instanceof Error ? directSqlErr.message : "Unknown error";
+              logs.push(`[EXCEPTION] Direct SQL fallback threw exception: ${directSqlErrMsg}`);
+            }
           } else {
             logs.push(`[SUCCESS] SQL fallback succeeded for entry ${index + 1}`);
             insertedCount++;

@@ -124,6 +124,7 @@ export default function FinanceRemittanceWizard({ missionaries }: FinanceRemitta
   // Form state
   const [missionaryId, setMissionaryId] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
+  const [notes, setNotes] = useState("");
   const [donorEntries, setDonorEntries] = useState<DonorEntry[]>([
     { donorId: "", amount: "" },
   ]);
@@ -170,6 +171,7 @@ export default function FinanceRemittanceWizard({ missionaries }: FinanceRemitta
       setStep(1);
       setMissionaryId("");
       setTotalAmount("");
+      setNotes("");
       setDonorEntries([{ donorId: "", amount: "" }]);
       setSearchTerm("");
       setSearchResults([]);
@@ -407,11 +409,18 @@ export default function FinanceRemittanceWizard({ missionaries }: FinanceRemitta
           source: "offline" as const,
           status: "completed" as const,
           recorded_by: user.id, // Important: Set the recorded_by field
+          notes: notes,
         };
       });
 
       // Use the server action for submission
       const result = await submitDonations(entries);
+
+      // Add diagnostic logging
+      console.log("[FinanceRemittanceWizard] Submission result:", result);
+      if (result.logs) {
+        console.log("[FinanceRemittanceWizard] Server logs:", result.logs);
+      }
 
       if (!result.success) {
         throw new Error(result.error || "Unknown error occurred");
@@ -565,6 +574,18 @@ export default function FinanceRemittanceWizard({ missionaries }: FinanceRemitta
             {/* Step 3: Donor Distribution */}
             {step === 3 && (
               <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="notes" className="text-lg">
+                    Notes (Optional)
+                  </Label>
+                  <Input
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add any additional notes about this donation"
+                  />
+                </div>
+                
                 {donorEntries.map((entry, index) => (
                   <Card key={index} className="p-4">
                     <div className="space-y-4">
