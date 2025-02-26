@@ -42,6 +42,8 @@ import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus } from "
 import { toast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
 import { PostgrestError } from "@supabase/supabase-js"
+import { createDonor } from "@/actions/donors" // Import the server action
+import { submitDonations } from "@/actions/donations" // Import the donation submission action
 
 /**
  * Props for the ManualRemittanceWizard component
@@ -100,10 +102,8 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
         let query = supabase.from("donors").select("id, name")
 
         if (term.trim()) {
-          query = query.textSearch("name", term, {
-            type: "websearch",
-            config: "english",
-          })
+          // Use ilike for case-insensitive matching with wildcards
+          query = query.ilike("name", `%${term.trim()}%`)
         } else {
           query = query.order("created_at", { ascending: false }).limit(10)
         }
@@ -127,22 +127,31 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
   }, [searchTerm, debouncedSearch])
 
   /**
-   * Creates a new donor in the database
+   * Creates a new donor in the database using server action
    * @param name - Name of the new donor
    * @returns The ID of the newly created donor
    */
   const handleCreateDonor = async (name: string) => {
     setLoading(true)
     try {
-      const { data: newDonor, error } = await supabase.from("donors").insert({ name }).select().single()
+      // Use the server action instead of client-side Supabase
+      const result = await createDonor(name)
 
-      if (error) throw error
+      if (result.error) {
+        throw new Error(result.error)
+      }
 
-      setSearchResults((prevResults) => [...prevResults, newDonor])
-      return newDonor.id
+      const newDonor = result.donor
+      
+      if (newDonor) {
+        setSearchResults((prevResults) => [...prevResults, newDonor])
+        return newDonor.id
+      }
+      return null
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
       toast({ title: "Error creating donor", description: errorMessage, variant: "destructive" })
+      return null
     } finally {
       setLoading(false)
     }
@@ -212,52 +221,69 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
 
   /**
    * Handles the final submission of the remittance
-   * Creates donation records for each donor entry
+   * Creates donation records for each donor entry using server action
    */
   const handleSubmit = async () => {
-    setLoading(true)
+    if (loading) return; // Prevent multiple submissions
+    
+    setLoading(true);
     try {
-      const entries = await Promise.all(
-        donorEntries.map(async (entry) => {
-          const amount = Number.parseFloat(entry.amount)
-          return {
-            donor_id: entry.donorId,
-            amount,
-            missionary_id: missionaryId,
-            date: new Date().toISOString(),
-            source: "offline",
-            status: "completed",
-          }
-        }),
-      )
+      const entries = donorEntries.map((entry) => {
+        const amount = Number.parseFloat(entry.amount);
+        return {
+          donor_id: entry.donorId,
+          amount,
+          missionary_id: missionaryId,
+          date: new Date().toISOString(),
+          source: "offline" as const,
+          status: "completed" as const,
+        };
+      });
 
-      const { error } = await supabase.from("donor_donations").insert(entries)
+      // Use the server action instead of client-side Supabase
+      const result = await submitDonations(entries);
 
-      if (error) throw error
+      // Display detailed logs for debugging
+      if (result.logs) {
+        console.log("Donation submission logs:", result.logs);
+      }
 
-      setSuccess(true)
+      if (!result.success) {
+        throw new Error(result.error || "Unknown error occurred");
+      }
+
+      setSuccess(true);
       setTimeout(() => {
-        setSuccess(false)
-        setStep(1)
-        setTotalAmount("")
-        setDonorEntries([{ donorId: "", amount: "" }])
-      }, 2000)
+        setSuccess(false);
+        setStep(1);
+        setTotalAmount("");
+        setDonorEntries([{ donorId: "", amount: "" }]);
+      }, 2000);
 
-      toast({
-        title: "Remittance submitted successfully!",
-        description: "The donations have been recorded.",
-      })
+      // Show different success messages based on the result
+      if (result.partialSuccess) {
+        toast({
+          title: "Partial success",
+          description: `${result.insertedCount} of ${result.totalCount} donations were successfully recorded.`,
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Remittance submitted successfully!",
+          description: "All donations have been recorded.",
+        });
+      }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       toast({
         title: "Submission failed",
         description: errorMessage,
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -367,6 +393,8 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
                         variant="outline"
                         size="sm"
                         onClick={async () => {
+                          if (!searchTerm.trim() || loading) return;
+                          
                           const newDonorId = await handleCreateDonor(searchTerm)
                           if (newDonorId) {
                             const newDonor = searchResults.find((d) => d.id === newDonorId)
@@ -406,7 +434,13 @@ export function ManualRemittanceWizard({ missionaryId }: ManualRemittanceWizardP
                 </Button>
 
                 <Button size="lg" className="flex-1" onClick={handleSubmit} disabled={!validateStep2() || loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit Remittance"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
+                    </>
+                  ) : (
+                    "Submit Remittance"
+                  )}
                 </Button>
               </div>
 

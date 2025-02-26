@@ -18,6 +18,7 @@
     - Implement dynamic imports for code splitting and optimization.
     - Use responsive design with a mobile-first approach.
     - Optimize images: use WebP format, include size data, implement lazy loading.
+    - When using supabase and SQL, just ask user to use SQL editor on supabase studio instead of trying to run it on your own. 
 
     ### Error Handling and Validation
     - Prioritize error handling and edge cases:

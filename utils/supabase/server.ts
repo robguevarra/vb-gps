@@ -18,6 +18,12 @@ export const createClient = async () => {
         async remove(name: string, options: CookieOptions) {
           ;(await cookieStore).set({ name, value: '', ...options });
         }
+      },
+      // Enable RLS bypass with service role
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
       }
     }
   );
