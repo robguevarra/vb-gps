@@ -5,6 +5,15 @@ import RecentDonations from "@/components/RecentDonations";
 import { LeaveRequestModal } from "@/components/LeaveRequestModal";
 import { SurplusRequestModal } from "@/components/SurplusRequestModal";
 
+// Define the donation interface to match RecentDonations component requirements
+interface Donation {
+  id: string | number;
+  donor_name: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
 interface OverviewTabProps {
   missionaryId: string;
   profileData: Profile;
@@ -20,8 +29,38 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
   startOfCurrentMonth.setDate(1);
   startOfCurrentMonth.setHours(0, 0, 0, 0);
   
-  // Fetch only the data needed for overview
-  const [currentDonorsResult, previousDonorsResult, donationsResult] = await Promise.all([
+  // Fetch donation data without join since we're having join issues
+  const donationsResult = await supabase
+    .from("donor_donations")
+    .select("id, amount, date, donor_id, notes")
+    .eq("missionary_id", missionaryId)
+    .order("date", { ascending: false })
+    .limit(5);
+  
+  // Get donor names separately to avoid join issues
+  // Using a Map instead of a plain object to avoid TypeScript issues
+  const donorNamesMap = new Map<number, string>();
+  
+  if (donationsResult.data && donationsResult.data.length > 0) {
+    // Extract unique donor IDs
+    const donorIds = [...new Set(donationsResult.data.map(d => d.donor_id))];
+    
+    // Fetch donor details separately
+    const donorsResult = await supabase
+      .from("donors")
+      .select("id, name")
+      .in("id", donorIds);
+    
+    // Create a map of donor_id to donor name
+    if (donorsResult.data) {
+      donorsResult.data.forEach(donor => {
+        donorNamesMap.set(donor.id, donor.name);
+      });
+    }
+  }
+  
+  // Get current and previous donors with proper error handling
+  const [currentDonorsResult, previousDonorsResult, currentMonthDonationsResult] = await Promise.all([
     supabase
       .from('donor_donations')
       .select('donor_id')
@@ -34,28 +73,35 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
       .eq('missionary_id', missionaryId)
       .lt('date', startOfCurrentMonth.toISOString()),
     supabase
-      .from("donor_donations")
-      .select("id, amount, date, donor_id, donors!inner(id, name), notes")
-      .eq("missionary_id", missionaryId)
-      .order("date", { ascending: false })
-      .limit(5)
+      .from('donor_donations')
+      .select('amount')
+      .eq('missionary_id', missionaryId)
+      .gte('date', startOfCurrentMonth.toISOString())
+      .lte('date', today)
   ]);
 
-  // Calculate stats
-  const currentDonorIds = new Set(currentDonorsResult.data?.map(d => d.donor_id) || []);
-  const previousDonorIds = new Set(previousDonorsResult.data?.map(d => d.donor_id) || []);
+  // Calculate stats with null checks
+  const currentDonorIds = new Set(currentDonorsResult?.data?.map(d => d.donor_id) || []);
+  const previousDonorIds = new Set(previousDonorsResult?.data?.map(d => d.donor_id) || []);
   const currentPartnersCount = currentDonorIds.size;
   const newPartnersCount = Array.from(currentDonorIds).filter(id => !previousDonorIds.has(id)).length;
 
-  const recentDonations = donationsResult.data?.map(d => ({
-    id: d.id,
-    donor_name: d.donors?.name || "Unknown",
-    amount: d.amount,
-    date: new Date(d.date).toLocaleDateString(),
-    notes: d.notes || "",
-  })) || [];
+  // Process donation data by matching with donor names from our separate query
+  const recentDonations: Donation[] = donationsResult.data?.map(d => {
+    // Get donor name from our Map, or use a fallback
+    const donorName = donorNamesMap.get(d.donor_id) || `Donor #${d.donor_id}`;
+    
+    return {
+      id: d.id,
+      donor_name: donorName,
+      amount: Number(d.amount),
+      date: new Date(d.date).toLocaleDateString(),
+      notes: d.notes || "",
+    };
+  }) || [];
 
-  const currentDonations = recentDonations.reduce((acc, d) => acc + d.amount, 0);
+  // Calculate current donations from all donations in the current month
+  const currentDonations = currentMonthDonationsResult?.data?.reduce((acc, d) => acc + Number(d.amount), 0) || 0;
 
   return (
     <div className="space-y-8">
