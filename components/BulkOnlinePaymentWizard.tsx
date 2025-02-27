@@ -259,7 +259,12 @@ export function BulkOnlinePaymentWizard({
       phone: donor.phone || ""
     };
     setDonorEntries(newEntries);
-    setSearchTerms([...searchTerms.slice(0, index), "", ...searchTerms.slice(index + 1)]);
+    
+    // Update the search term to show the selected donor name
+    const newSearchTerms = [...searchTerms];
+    newSearchTerms[index] = donor.name;
+    setSearchTerms(newSearchTerms);
+    
     setSearchResults([]);
   };
 
@@ -409,6 +414,12 @@ export function BulkOnlinePaymentWizard({
       // Move to step 2 to show success message
       setStep(2);
       
+      // Automatically open the payment link in a new tab
+      if (data.invoiceUrl) {
+        // Open with specific parameters to ensure all payment options are available
+        window.open(data.invoiceUrl, '_blank', 'noopener,noreferrer');
+      }
+      
       // Call onSuccess callback if provided
       if (onSuccess) {
         onSuccess();
@@ -433,13 +444,14 @@ export function BulkOnlinePaymentWizard({
     // Save current state to localStorage before navigating
     if (step === 2) {
       localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify({
+        missionaryId: missionaryId,
         step: step,
         totalAmount: totalAmount,
         timestamp: new Date().toISOString()
       }));
       
-      // Navigate to payment page in the same window
-      window.location.href = paymentLink;
+      // Open payment page in a new tab with specific parameters to ensure all payment options are available
+      window.open(paymentLink, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -567,71 +579,102 @@ export function BulkOnlinePaymentWizard({
                       <div className="space-y-2">
                         <Label htmlFor={`donor-${index}`}>Select Partner</Label>
                         <div className="relative">
-                          <Input
-                            id={`donor-${index}`}
-                            placeholder="Search partners..."
-                            value={searchTerms[index] || ""}
-                            onChange={(e) => {
-                              handleSearchPartners(e.target.value, index);
-                            }}
-                            onFocus={() => setActiveSearchIndex(index)}
-                          />
-                          {activeSearchIndex === index && searchResults.length > 0 && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
-                              {searchLoading ? (
-                                <div className="p-2 text-center">
-                                  <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                                </div>
-                              ) : (
-                                <>
-                                  {searchResults.map((donor) => (
-                                    <div
-                                      key={donor.id}
-                                      className="p-2 hover:bg-gray-100 cursor-pointer"
-                                      onClick={() => {
-                                        handleSelectDonor(index, donor);
-                                        // Clear only the search term for this index
-                                        const newSearchTerms = [...searchTerms];
-                                        newSearchTerms[index] = "";
-                                        setSearchTerms(newSearchTerms);
-                                        setSearchResults([]);
-                                      }}
-                                    >
-                                      <div className="font-medium">{donor.name}</div>
-                                      {donor.email && (
-                                        <div className="text-xs text-gray-500">
-                                          {donor.email}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                  <div
-                                    className="p-2 hover:bg-gray-100 cursor-pointer border-t"
-                                    onClick={() => {
-                                      setNewDonorForm({
-                                        ...newDonorForm,
-                                        showForm: true,
-                                      });
-                                      // Clear the search term for the active index
-                                      if (activeSearchIndex !== null) {
-                                        const newSearchTerms = [...searchTerms];
-                                        newSearchTerms[activeSearchIndex] = "";
-                                        setSearchTerms(newSearchTerms);
-                                      }
-                                      setSearchResults([]);
-                                    }}
-                                  >
-                                    <div className="flex items-center text-primary">
-                                      <Plus className="h-4 w-4 mr-2" />
-                                      Create New Partner
-                                    </div>
-                                  </div>
-                                </>
-                              )}
+                          {entry.donorId ? (
+                            <div className="flex items-center">
+                              <Input
+                                id={`donor-${index}`}
+                                value={entry.donorName || ""}
+                                className="pr-10"
+                                readOnly
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full"
+                                onClick={() => {
+                                  // Clear the donor selection
+                                  const newEntries = [...donorEntries];
+                                  newEntries[index] = {
+                                    ...newEntries[index],
+                                    donorId: "",
+                                    donorName: "",
+                                    email: "",
+                                    phone: ""
+                                  };
+                                  setDonorEntries(newEntries);
+                                  
+                                  // Clear the search term
+                                  const newSearchTerms = [...searchTerms];
+                                  newSearchTerms[index] = "";
+                                  setSearchTerms(newSearchTerms);
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
+                          ) : (
+                            <>
+                              <Input
+                                id={`donor-${index}`}
+                                placeholder="Search partners..."
+                                value={searchTerms[index] || ""}
+                                onChange={(e) => {
+                                  handleSearchPartners(e.target.value, index);
+                                }}
+                                onFocus={() => setActiveSearchIndex(index)}
+                              />
+                              {activeSearchIndex === index && searchResults.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                                  {searchLoading ? (
+                                    <div className="p-2 text-center">
+                                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {searchResults.map((donor) => (
+                                        <div
+                                          key={donor.id}
+                                          className="p-2 hover:bg-gray-100 cursor-pointer"
+                                          onClick={() => handleSelectDonor(index, donor)}
+                                        >
+                                          <div className="font-medium">{donor.name}</div>
+                                          {donor.email && (
+                                            <div className="text-xs text-gray-500">
+                                              {donor.email}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                      <div
+                                        className="p-2 hover:bg-gray-100 cursor-pointer border-t"
+                                        onClick={() => {
+                                          setNewDonorForm({
+                                            ...newDonorForm,
+                                            showForm: true,
+                                          });
+                                          // Clear the search term for the active index
+                                          if (activeSearchIndex !== null) {
+                                            const newSearchTerms = [...searchTerms];
+                                            newSearchTerms[activeSearchIndex] = "";
+                                            setSearchTerms(newSearchTerms);
+                                          }
+                                          setSearchResults([]);
+                                        }}
+                                      >
+                                        <div className="flex items-center text-primary">
+                                          <Plus className="h-4 w-4 mr-2" />
+                                          Create New Partner
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
-                        {entry.donorName && (
+                        {entry.donorName && !entry.donorId && (
                           <div className="text-sm font-medium mt-1">
                             {entry.donorName}
                           </div>
@@ -784,13 +827,13 @@ export function BulkOnlinePaymentWizard({
                 <span>Total from Partners:</span>
                 <span
                   className={
-                    getTotalFromDonors() !== parseFloat(totalAmount)
+                    getTotalFromDonors() !== parseFloat(totalAmount) && !isNaN(parseFloat(totalAmount))
                       ? "text-red-500 font-medium"
                       : "font-medium"
                   }
                 >
                   ₱{getTotalFromDonors().toLocaleString()}
-                  {getTotalFromDonors() !== parseFloat(totalAmount) && (
+                  {getTotalFromDonors() !== parseFloat(totalAmount) && !isNaN(parseFloat(totalAmount)) && (
                     <span className="ml-2 text-xs">
                       (Mismatch: ₱
                       {Math.abs(
@@ -854,7 +897,7 @@ export function BulkOnlinePaymentWizard({
               <div>
                 <p className="font-medium">Payment Link Generated</p>
                 <p className="text-sm">
-                  Click the "Pay Now" button below to proceed to the payment page.
+                  A payment page has been opened in a new tab. If it didn't open automatically or you're experiencing issues with payment options, please click the "Pay Now" button below to try again.
                 </p>
               </div>
             </div>
@@ -910,20 +953,6 @@ export function BulkOnlinePaymentWizard({
                 >
                   <Share2 className="mr-2 h-4 w-4" />
                   Share
-                </Button>
-                
-                <Button 
-                  className="flex-1" 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    if (paymentLink) {
-                      window.open(paymentLink, '_blank');
-                    }
-                  }}
-                >
-                  <LinkIcon className="mr-2 h-4 w-4" />
-                  Open in New Tab
                 </Button>
               </div>
               
