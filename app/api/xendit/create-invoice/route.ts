@@ -142,14 +142,23 @@ export async function POST(req: NextRequest) {
     
     // 6. Create invoice item record without donor_donation reference
     // This will store the intent to create a donation once payment is confirmed
-    await supabase.from("invoice_items").insert({
+    const { data: invoiceItem, error: invoiceItemError } = await supabase.from("invoice_items").insert({
       invoice_id: null, // Initially null, will be updated with Xendit invoice ID
-      reference_id: referenceId, // Store in reference_id field for easier lookup
       donation_id: null, // We don't have a donation_id yet
       amount: amount,
       missionary_id: recipientId, // Always use missionary_id regardless of type
       donor_id: donorId,
-    });
+    }).select("id").single();
+    
+    if (invoiceItemError) {
+      console.error("Failed to create invoice item:", invoiceItemError);
+      return NextResponse.json(
+        { error: "Failed to create invoice item", details: invoiceItemError },
+        { status: 500 }
+      );
+    }
+    
+    console.log(`Created invoice item with ID ${invoiceItem?.id}`);
     
     // 7. Call Xendit API to create invoice
     // Check if the environment variables for Xendit are properly set
@@ -207,6 +216,8 @@ export async function POST(req: NextRequest) {
     try {
       const invoice = await xenditService.createInvoice(invoiceParams);
       
+      console.log(`Xendit invoice created: ${invoice.id}, external_id: ${invoice.external_id}`);
+      
       // 8. Update payment_transactions with invoice details
       await supabase
         .from("payment_transactions")
@@ -218,13 +229,28 @@ export async function POST(req: NextRequest) {
         .eq("id", transaction.id);
         
       // 9. Update invoice_items with Xendit invoice ID
-      await supabase
+      const { error: updateItemError } = await supabase
         .from("invoice_items")
         .update({
           invoice_id: invoice.id,
         })
-        .eq("reference_id", referenceId); // Use reference_id for lookup instead
+        .eq("id", invoiceItem.id); // Use the invoice item ID instead of reference_id
         
+      if (updateItemError) {
+        console.error(`Failed to update invoice item with invoice_id ${invoice.id}:`, updateItemError);
+      } else {
+        console.log(`Updated invoice item with invoice_id ${invoice.id}`);
+      }
+      
+      // Double-check that the invoice item was updated correctly
+      const { data: updatedItem } = await supabase
+        .from("invoice_items")
+        .select("id, invoice_id")
+        .eq("id", invoiceItem.id)
+        .single();
+        
+      console.log(`Verified invoice item update:`, JSON.stringify(updatedItem || {}, null, 2));
+      
       // 10. Return success with invoice URL
       return NextResponse.json({
         success: true,

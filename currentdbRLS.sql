@@ -1,277 +1,202 @@
 [
   {
-    "schema_name": "public",
     "table_name": "donor_donations",
     "policy_name": "donor_donations_insert_policy",
-    "command": "a",
+    "command": "INSERT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": null,
-    "with_check_expression": "((recorded_by = auth.uid()) OR (missionary_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['campus_director'::text, 'lead_pastor'::text, 'finance_officer'::text, 'superadmin'::text]))))))",
-    "roles": [
-      0
-    ]
+    "check_expression": "((recorded_by = auth.uid()) OR (missionary_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['campus_director'::text, 'lead_pastor'::text, 'finance_officer'::text, 'superadmin'::text]))))))"
   },
   {
-    "schema_name": "public",
     "table_name": "donor_donations",
     "policy_name": "donor_donations_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "((missionary_id = auth.uid()) OR (recorded_by = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles admin\n  WHERE ((admin.id = auth.uid()) AND (admin.role = ANY (ARRAY['campus_director'::text, 'lead_pastor'::text])) AND (donor_donations.missionary_id IN ( SELECT profiles.id\n           FROM profiles\n          WHERE (profiles.local_church_id = admin.local_church_id)))))) OR (EXISTS ( SELECT 1\n   FROM profiles admin2\n  WHERE ((admin2.id = auth.uid()) AND (admin2.role = ANY (ARRAY['finance_officer'::text, 'superadmin'::text]))))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "donor_donations",
     "policy_name": "donor_donations_xendit_update_policy",
-    "command": "w",
+    "command": "UPDATE",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "true",
-    "with_check_expression": "true",
-    "roles": [
-      0
-    ]
+    "check_expression": "true"
   },
   {
-    "schema_name": "public",
     "table_name": "donors",
     "policy_name": "donors_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND ((p.role = ANY (ARRAY['finance_officer'::text, 'superadmin'::text])) OR ((p.role = 'missionary'::text) AND (EXISTS ( SELECT 1\n           FROM donor_donations dd\n          WHERE ((dd.donor_id = donors.id) AND (dd.missionary_id = p.id))))) OR ((p.role = ANY (ARRAY['campus_director'::text, 'lead_pastor'::text])) AND (EXISTS ( SELECT 1\n           FROM (donor_donations dd\n             JOIN profiles p2 ON ((p2.id = dd.missionary_id)))\n          WHERE ((dd.donor_id = donors.id) AND (p2.local_church_id = p.local_church_id)))))))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "invoice_items",
     "policy_name": "invoice_items_insert_policy",
-    "command": "a",
+    "command": "INSERT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": null,
-    "with_check_expression": "((EXISTS ( SELECT 1\n   FROM payment_transactions\n  WHERE (((payment_transactions.invoice_id)::text = (invoice_items.invoice_id)::text) AND (payment_transactions.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['superadmin'::text, 'finance_officer'::text]))))))",
-    "roles": [
-      0
-    ]
+    "check_expression": "((EXISTS ( SELECT 1\n   FROM payment_transactions\n  WHERE (((payment_transactions.invoice_id)::text = (invoice_items.invoice_id)::text) AND (payment_transactions.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['superadmin'::text, 'finance_officer'::text]))))))"
   },
   {
-    "schema_name": "public",
     "table_name": "invoice_items",
     "policy_name": "invoice_items_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "((EXISTS ( SELECT 1\n   FROM payment_transactions\n  WHERE (((payment_transactions.invoice_id)::text = (invoice_items.invoice_id)::text) AND (payment_transactions.created_by = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM donor_donations\n  WHERE ((donor_donations.id = invoice_items.donation_id) AND (donor_donations.missionary_id = auth.uid())))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['superadmin'::text, 'finance_officer'::text, 'lead_pastor'::text]))))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "leave_requests",
     "policy_name": "Lead pastors can view their church requests",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles pastor\n     JOIN profiles missionary ON ((missionary.local_church_id = pastor.local_church_id)))\n  WHERE ((pastor.id = auth.uid()) AND (pastor.role = 'lead_pastor'::text) AND (leave_requests.requester_id = missionary.id))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "leave_requests",
     "policy_name": "insert_own_leave_requests",
-    "command": "a",
+    "command": "INSERT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": null,
-    "with_check_expression": "((requester_id = auth.uid()) OR (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = 'superadmin'::text))",
-    "roles": [
-      0
-    ]
+    "check_expression": "((requester_id = auth.uid()) OR (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = 'superadmin'::text))"
   },
   {
-    "schema_name": "public",
     "table_name": "leave_requests",
     "policy_name": "select_leave_requests",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "((requester_id = auth.uid()) OR (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = 'superadmin'::text))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "local_churches",
     "policy_name": "local_churches_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND ((profiles.role = ANY (ARRAY['superadmin'::text, 'finance_officer'::text])) OR (profiles.local_church_id = local_churches.id)))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "payment_transactions",
     "policy_name": "payment_transactions_insert_policy",
-    "command": "a",
+    "command": "INSERT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": null,
-    "with_check_expression": "(auth.uid() = created_by)",
-    "roles": [
-      0
-    ]
+    "check_expression": "(auth.uid() = created_by)"
   },
   {
-    "schema_name": "public",
     "table_name": "payment_transactions",
     "policy_name": "payment_transactions_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "((auth.uid() = created_by) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['superadmin'::text, 'finance_officer'::text, 'lead_pastor'::text]))))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "profiles",
     "policy_name": "campus_director_view_church_profiles",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = 'campus_director'::text) AND (profiles.local_church_id = ur.local_church_id))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "profiles",
     "policy_name": "finance_officer_view_church_profiles",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = 'finance_officer'::text) AND (profiles.local_church_id = ur.local_church_id))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "profiles",
     "policy_name": "lead_pastor_view_church_profiles",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = 'lead_pastor'::text) AND (profiles.local_church_id = ur.local_church_id))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "profiles",
     "policy_name": "read_own_profile",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(id = auth.uid())",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "profiles",
     "policy_name": "superadmin_access_profiles",
-    "command": "*",
+    "command": "ALL",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM user_roles ur\n  WHERE ((ur.user_id = auth.uid()) AND (ur.role = 'superadmin'::text))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "surplus_requests",
     "policy_name": "approve_surplus_requests",
-    "command": "w",
+    "command": "UPDATE",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (((p.role = 'campus_director'::text) AND (EXISTS ( SELECT 1\n           FROM profiles m\n          WHERE ((m.id = surplus_requests.missionary_id) AND (m.local_church_id = p.local_church_id))))) OR ((p.role = 'lead_pastor'::text) AND (EXISTS ( SELECT 1\n           FROM profiles m\n          WHERE ((m.id = surplus_requests.missionary_id) AND (m.local_church_id = p.local_church_id))))) OR (p.role = 'superadmin'::text)))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "surplus_requests",
     "policy_name": "insert_own_surplus_requests",
-    "command": "a",
+    "command": "INSERT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": null,
-    "with_check_expression": "(missionary_id = auth.uid())",
-    "roles": [
-      0
-    ]
+    "check_expression": "(missionary_id = auth.uid())"
   },
   {
-    "schema_name": "public",
     "table_name": "surplus_requests",
     "policy_name": "select_own_surplus_requests",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(missionary_id = auth.uid())",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "surplus_requests",
     "policy_name": "view_surplus_requests",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "((missionary_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (((p.role = ANY (ARRAY['campus_director'::text, 'lead_pastor'::text])) AND (EXISTS ( SELECT 1\n           FROM profiles m\n          WHERE ((m.id = surplus_requests.missionary_id) AND (m.local_church_id = p.local_church_id))))) OR (p.role = 'superadmin'::text))))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "system_settings",
     "policy_name": "Superadmin access only",
-    "command": "*",
+    "command": "ALL",
+    "is_permissive": "RESTRICTIVE",
     "using_expression": "(auth.uid() IN ( SELECT profiles.id\n   FROM profiles\n  WHERE (profiles.role = 'superadmin'::text)))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "user_roles",
     "policy_name": "user_roles_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(user_id = auth.uid())",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   },
   {
-    "schema_name": "public",
     "table_name": "webhook_logs",
     "policy_name": "webhook_logs_insert_policy",
-    "command": "a",
+    "command": "INSERT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": null,
-    "with_check_expression": "true",
-    "roles": [
-      0
-    ]
+    "check_expression": "true"
   },
   {
-    "schema_name": "public",
     "table_name": "webhook_logs",
     "policy_name": "webhook_logs_select_policy",
-    "command": "r",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
     "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'superadmin'::text))))",
-    "with_check_expression": null,
-    "roles": [
-      0
-    ]
+    "check_expression": null
   }
 ]

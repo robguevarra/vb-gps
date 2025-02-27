@@ -108,12 +108,13 @@ export async function POST(req: NextRequest) {
 async function handleInvoicePaid(payload: any, supabase: any, systemUserId: string) {
   // Extract the invoice ID from the payload
   const invoiceId = payload.id;
+  const externalId = payload.external_id;
   
   if (!invoiceId) {
     throw new Error("Missing invoice ID in webhook payload");
   }
   
-  console.log(`Processing paid invoice: ${invoiceId}`);
+  console.log(`Processing paid invoice: ${invoiceId}, external_id: ${externalId}`);
   
   // Update webhook log status
   await supabase
@@ -134,7 +135,7 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
       throw new Error(`Payment transaction not found for invoice ${invoiceId}`);
     }
     
-    console.log(`Found transaction ${transaction.id} with status ${transaction.status}`);
+    console.log(`Found transaction ${transaction.id} with status ${transaction.status}, reference_id: ${transaction.reference_id}`);
     
     // Only update if not already paid to prevent duplicate processing
     if (transaction.status !== "paid") {
@@ -160,35 +161,20 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
       
       console.log(`Updated transaction ${transaction.id} to status "paid"`);
       
-      // 3. Find associated invoice items - FIRST try by invoice_id
+      // DEBUG: Check all invoice items to see if any match our invoice_id
+      const { data: allInvoiceItems, error: allItemsError } = await supabase
+        .from("invoice_items")
+        .select("id, invoice_id, missionary_id, donor_id")
+        .order("created_at", { ascending: false })
+        .limit(10);
+        
+      console.log(`DEBUG - Recent invoice items:`, JSON.stringify(allInvoiceItems || [], null, 2));
+      
+      // 3. Find associated invoice items by invoice_id
       let { data: invoiceItems, error: itemsError } = await supabase
         .from("invoice_items")
         .select("id, missionary_id, donor_id, amount")
         .eq("invoice_id", invoiceId);
-      
-      // If no items found by invoice_id, try using the reference_id from the transaction
-      if ((!invoiceItems || invoiceItems.length === 0) && transaction.reference_id) {
-        console.log(`No invoice items found by invoice_id, trying reference_id: ${transaction.reference_id}`);
-        
-        const { data: itemsByReference, error: referenceError } = await supabase
-          .from("invoice_items")
-          .select("id, missionary_id, donor_id, amount")
-          .eq("reference_id", transaction.reference_id);
-          
-        if (!referenceError && itemsByReference && itemsByReference.length > 0) {
-          console.log(`Found ${itemsByReference.length} invoice items using reference_id`);
-          invoiceItems = itemsByReference;
-          
-          // Update these items with the correct invoice_id for future lookups
-          for (const item of itemsByReference) {
-            await supabase
-              .from("invoice_items")
-              .update({ invoice_id: invoiceId })
-              .eq("id", item.id);
-          }
-          console.log(`Updated invoice items with correct Xendit invoice_id: ${invoiceId}`);
-        }
-      }
       
       if (itemsError) {
         console.error(`Error finding invoice items for invoice ${invoiceId}:`, itemsError);
@@ -199,11 +185,37 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
       
       if (!invoiceItems || invoiceItems.length === 0) {
         console.error(`No invoice items found for invoice ${invoiceId}`);
+        
+        // As a last resort, try to create a donation record using payment_details from the transaction
+        const paymentDetails = transaction.payment_details || {};
+        if (paymentDetails.recipientId && paymentDetails.donorId) {
+          console.log(`Attempting to create donation using payment_details: ${JSON.stringify(paymentDetails)}`);
+          
+          // Use direct SQL query to bypass materialized view refresh
+          const { error: donationError } = await supabase.rpc(
+            'insert_single_donation',
+            {
+              donor_id: paymentDetails.donorId,
+              amount: transaction.amount,
+              missionary_id: paymentDetails.recipientId,
+              donation_date: new Date().toISOString(),
+              source: 'online',
+              status: 'completed',
+              notes: "Created from payment_details as fallback (no invoice item found)"
+            }
+          );
+          
+          if (donationError) {
+            console.error(`Error creating fallback donation record:`, donationError);
+          } else {
+            console.log(`Created fallback donation from payment_details using insert_single_donation function`);
+          }
+        }
       } else {
         // Process each invoice item and create a donation record
         for (const item of invoiceItems) {
           if (!item.missionary_id || !item.donor_id) {
-            console.warn(`Skipping invoice item with missing data`);
+            console.warn(`Skipping invoice item with missing data: ${JSON.stringify(item)}`);
             continue;
           }
           
@@ -212,39 +224,24 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
           // Extract donation details from transaction's payment_details
           const paymentDetails = transaction.payment_details || {};
           
-          // Create donor_donations record with status="completed"
-          const { data: donation, error: donationError } = await supabase
-            .from("donor_donations")
-            .insert({
-              missionary_id: item.missionary_id,
+          // Use direct SQL query to bypass materialized view refresh
+          const { error: donationError } = await supabase.rpc(
+            'insert_single_donation',
+            {
               donor_id: item.donor_id,
-              amount: item.amount,
-              date: new Date().toISOString(),
-              source: "online",
-              status: "completed", // Directly create as completed
-              recorded_by: systemUserId,
-              payment_id: transaction.id,
-              payment_status: "paid",
-              payment_method: payload.payment_method || "unknown",
-              payment_channel: payload.payment_channel || "unknown",
-              invoice_id: invoiceId,
-            })
-            .select("id")
-            .single();
+              amount: item.amount || transaction.amount,
+              missionary_id: item.missionary_id,
+              donation_date: new Date().toISOString(),
+              source: 'online',
+              status: 'completed',
+              notes: `Payment via ${payload.payment_method || "unknown"} (${payload.payment_channel || "unknown"})`
+            }
+          );
           
           if (donationError) {
             console.error(`Error creating donation record:`, donationError);
-            continue; // Try other items even if one fails
-          }
-          
-          // Update invoice_item with the newly created donation_id
-          if (donation) {
-            await supabase
-              .from("invoice_items")
-              .update({ donation_id: donation.id })
-              .eq("id", item.id);
-              
-            console.log(`Created donation ${donation.id} and updated invoice item`);
+          } else {
+            console.log(`Created donation for missionary ${item.missionary_id} and donor ${item.donor_id} using insert_single_donation function`);
           }
         }
       }
@@ -329,47 +326,19 @@ async function handleInvoiceExpired(payload: any, supabase: any) {
       
       console.log(`Updated transaction ${transaction.id} to status "expired"`);
       
-      // 3. Update any invoice items to indicate expiration
-      // First try by invoice_id
-      let { data: invoiceItems, error: itemsError } = await supabase
+      // 3. Find invoice items associated with this invoice
+      const { data: invoiceItems, error: itemsError } = await supabase
         .from("invoice_items")
         .select("id")
         .eq("invoice_id", invoiceId);
       
-      // If no items found by invoice_id, try using the reference_id from the transaction
-      if ((!invoiceItems || invoiceItems.length === 0) && transaction.reference_id) {
-        console.log(`No invoice items found by invoice_id, trying reference_id: ${transaction.reference_id}`);
-        
-        const { data: itemsByReference, error: referenceError } = await supabase
-          .from("invoice_items")
-          .select("id")
-          .eq("reference_id", transaction.reference_id);
-          
-        if (!referenceError && itemsByReference && itemsByReference.length > 0) {
-          console.log(`Found ${itemsByReference.length} invoice items using reference_id`);
-          invoiceItems = itemsByReference;
-          
-          // Update these items with the correct invoice_id for future lookups
-          for (const item of itemsByReference) {
-            await supabase
-              .from("invoice_items")
-              .update({ 
-                invoice_id: invoiceId,
-                status: "expired" 
-              })
-              .eq("id", item.id);
-          }
-          console.log(`Updated invoice items with correct Xendit invoice_id: ${invoiceId} and status: expired`);
-        }
+      if (itemsError) {
+        console.error(`Error finding invoice items for invoice ${invoiceId}:`, itemsError);
       } else if (invoiceItems && invoiceItems.length > 0) {
-        // Update existing items found by invoice_id
-        for (const item of invoiceItems) {
-          await supabase
-            .from("invoice_items")
-            .update({ status: "expired" })
-            .eq("id", item.id);
-        }
-        console.log(`Updated ${invoiceItems.length} invoice items with status: expired`);
+        console.log(`Found ${invoiceItems.length} invoice items for expired invoice ${invoiceId}`);
+        
+        // We don't need to update the invoice items since there's no status field
+        // Just log that we found them
       } else {
         console.log(`No invoice items found for expired invoice ${invoiceId}`);
       }

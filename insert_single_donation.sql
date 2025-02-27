@@ -4,7 +4,7 @@
 -- without triggering the materialized view refresh that requires additional permissions.
 
 CREATE OR REPLACE FUNCTION insert_single_donation(
-  donor_id UUID,
+  donor_id BIGINT,
   amount NUMERIC,
   missionary_id UUID,
   donation_date TIMESTAMP WITH TIME ZONE,
@@ -19,16 +19,16 @@ AS $$
 BEGIN
   -- Direct insert using parameters
   -- This bypasses any triggers that would refresh the materialized view
-  EXECUTE 'INSERT INTO donor_donations(donor_id, amount, missionary_id, date, source, status, notes) 
+  EXECUTE 'INSERT INTO donor_donations(donor_id, missionary_id, amount, date, source, status, notes) 
            VALUES ($1, $2, $3, $4, $5, $6, $7)'
-  USING donor_id, amount, missionary_id, donation_date, source, status, notes;
+  USING donor_id, missionary_id, amount, donation_date, source, status, notes;
   
   -- Note: We deliberately do not refresh the materialized view here
 END;
 $$;
 
 -- Grant execute permission to the service role
-GRANT EXECUTE ON FUNCTION insert_single_donation(UUID, NUMERIC, UUID, TIMESTAMP WITH TIME ZONE, TEXT, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION insert_single_donation(BIGINT, NUMERIC, UUID, TIMESTAMP WITH TIME ZONE, TEXT, TEXT, TEXT) TO service_role;
 
 -- INSTRUCTIONS:
 -- Copy this SQL and run it in your Supabase SQL Editor to create the function
