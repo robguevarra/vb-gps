@@ -35,8 +35,9 @@ This document tracks the progress of implementing Xendit payment gateway integra
 - [x] Fix schema compatibility issues
 - [x] Fix status field constraint issues
 - [x] Fix payment flow to correctly mark donations as pending until payment
+- [x] Implement custom database function to bypass materialized view refresh
 
-### 3. Frontend Implementation (90%)
+### 3. Frontend Implementation (100%)
 
 #### 3.1 Public Giving Page
 - [x] Create `app/giving/page.tsx`
@@ -72,15 +73,16 @@ This document tracks the progress of implementing Xendit payment gateway integra
 - [x] Test payment flow with test cards
 - [x] Verify database consistency
 
-### 6. Documentation (50%)
+### 6. Documentation (100%)
 - [x] Create technical documentation (in code)
-- [ ] Update user documentation
+- [x] Update user documentation
 - [x] Document API endpoints
 - [x] Document database schema changes
+- [x] Document materialized view permission solution
 
 ## Current Focus
-- Documentation for users and administrators
 - Monitoring system in production
+- Potential performance optimizations
 
 ## Recent Activity
 - Created progress tracking document
@@ -98,17 +100,20 @@ This document tracks the progress of implementing Xendit payment gateway integra
 - Fixed payment flow to correctly mark donations as pending until payment is confirmed via webhook
 - Fixed webhook handler to properly update transaction and donation statuses
 - Added detailed logging throughout the payment process
+- Created custom database function `insert_single_donation` to bypass materialized view refresh
+- Modified webhook handler to use the custom function for donation creation
+- Successfully tested end-to-end payment flow with webhook processing
 
 ## Next Steps
-1. Create user documentation for missionaries and donors
-2. Monitor payment flows in production
-3. Consider enhancements for future versions
+1. Monitor payment flows in production
+2. Consider enhancements for future versions
+3. Implement periodic materialized view refresh as a scheduled job
 
 ## Blockers / Issues
 - ✅ RESOLVED: Foreign key constraint on `created_by` field - Fixed by using a valid system user ID
 - ✅ RESOLVED: Schema mismatch with `local_church_id` field - Fixed by using `missionary_id` for all recipient types
 - ✅ RESOLVED: Check constraint on `status` field - Fixed by using valid values
-- ✅ RESOLVED: Permission issue with materialized view - Fixed by using a custom database function with elevated privileges
+- ✅ RESOLVED: Permission issue with materialized view - Fixed by creating a custom database function with SECURITY DEFINER privilege
 - ✅ RESOLVED: Incorrect donation status flow - Fixed by marking donations as "pending" initially and only updating to "completed" after payment confirmation
 
 ## Environment Setup
@@ -126,18 +131,21 @@ To work on this integration, engineers need:
    ```
 3. ngrok or similar tool for testing webhooks locally
 4. Valid system user ID (currently: `fa5060a6-3996-46ea-ae5f-bd3fed7e251a`)
+5. SQL function `insert_single_donation` installed in the database
 
 ## Database Schema Notes
 - The `donor_donations` table uses `missionary_id` for all recipient types (both missionaries and churches)
 - For church donations, we add a prefix in the description to indicate it's a church donation
 - Future enhancement: Consider adding a `recipient_type` field to distinguish between missionary and church donations
 - The `status` field in `donor_donations` has a check constraint limiting values to specific options
+- The `missionary_monthly_stats` materialized view is refreshed by a trigger on the `donor_donations` table
+- We use a custom function with SECURITY DEFINER to bypass the materialized view refresh when creating donations via webhook
 
 ## Payment Flow Process
 1. **Invoice Creation:**
    - User submits donation form
    - System creates payment_transaction record with status="pending"
-   - System creates donor_donation record with status="pending"
+   - System creates invoice_item record linking the transaction to potential donation
    - System generates Xendit invoice and provides payment URL
    - User is redirected to Xendit payment page
 
@@ -146,13 +154,23 @@ To work on this integration, engineers need:
    - Xendit sends webhook with event="invoice.paid" to our webhook endpoint
    - System verifies webhook signature
    - System updates payment_transaction record to status="paid"
-   - System updates donor_donation record to status="completed"
+   - System creates donor_donation record with status="completed" using the custom function
+   - System updates invoice_item with the donation reference
 
 3. **Payment Expiration:**
    - If payment is not completed within expiry time, Xendit sends webhook with event="invoice.expired"
    - System verifies webhook signature
    - System updates payment_transaction record to status="expired"
-   - System updates donor_donation record to status="failed"
+   - No donor_donation record is created for expired payments
+
+## Materialized View Solution
+To solve the permission issue with the `missionary_monthly_stats` materialized view, we implemented:
+
+1. A custom SQL function `insert_single_donation` with SECURITY DEFINER privilege
+2. This function runs with the privileges of its creator (database owner)
+3. The webhook handler calls this function via RPC instead of directly inserting into the donor_donations table
+4. This bypasses the trigger that would refresh the materialized view
+5. The materialized view can be refreshed separately on a schedule
 
 ## System User and RLS Notes
 - The application uses a dedicated "system user" ID for recording transactions that don't have an authenticated user

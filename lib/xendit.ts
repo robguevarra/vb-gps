@@ -263,20 +263,18 @@ export class XenditService {
       
       // If no signature provided, verification fails
       if (!headerSignature) {
+        console.error('No signature provided in webhook request');
         return false;
       }
       
-      // For testing and development, we can bypass signature verification
-      // This is useful when testing with sample payloads
-      if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_WEBHOOK_VERIFICATION === 'true') {
-        console.warn('Bypassing webhook signature verification in development mode');
-        return true;
-      }
-      
       console.log('Verifying webhook signature:', {
-        headerSignature,
+        headerSignatureLength: headerSignature.length,
+        headerSignaturePrefix: headerSignature.substring(0, 4) + '...',
         webhookSecretLength: this.webhookSecret.length,
-        payloadSample: JSON.stringify(payload).substring(0, 100) + '...'
+        webhookSecretPrefix: this.webhookSecret.substring(0, 4) + '...',
+        payloadSample: JSON.stringify(payload).substring(0, 100) + '...',
+        payloadType: typeof payload,
+        payloadKeys: Object.keys(payload),
       });
       
       // Xendit callback verification - using their token-based approach
@@ -300,8 +298,11 @@ export class XenditService {
           .digest('hex');
         
         console.log('Signature comparison:', {
-          computed: computedSignature,
-          received: headerSignature
+          computedSignatureLength: computedSignature.length,
+          computedSignaturePrefix: computedSignature.substring(0, 8) + '...',
+          receivedSignatureLength: headerSignature.length,
+          receivedSignaturePrefix: headerSignature.substring(0, 8) + '...',
+          match: computedSignature === headerSignature
         });
         
         // Simple string comparison (Xendit might not use timing-safe comparison)
@@ -313,7 +314,7 @@ export class XenditService {
         console.error('Error during HMAC verification:', hmacError);
       }
       
-      console.warn('Webhook signature verification failed');
+      console.warn('Webhook signature verification failed - all verification methods exhausted');
       return false;
     } catch (error) {
       console.error('Error verifying webhook signature:', error);

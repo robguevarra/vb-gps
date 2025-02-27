@@ -18,6 +18,14 @@ export async function POST(req: NextRequest) {
     const headers = Object.fromEntries(req.headers.entries());
     console.log("Webhook headers:", headers);
     
+    // Log the webhook secret for debugging (redacted for security)
+    console.log("Webhook verification details:", {
+      callbackTokenLength: callbackToken.length,
+      callbackTokenPrefix: callbackToken.substring(0, 4) + "...",
+      webhookSecretConfigured: !!process.env.XENDIT_WEBHOOK_SECRET,
+      webhookSecretLength: (process.env.XENDIT_WEBHOOK_SECRET || "").length,
+    });
+    
     // 2. Create Supabase client with service role to bypass RLS and permission issues
     const supabase = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,37 +46,43 @@ export async function POST(req: NextRequest) {
       created_by: systemUserId,
     });
     
-    // 3. Skip verification in development if bypassing is enabled
+    // 3. Verify webhook signature - always verify in all environments
     let isValid = false;
     
-    if (process.env.NODE_ENV !== 'production' && process.env.BYPASS_WEBHOOK_VERIFICATION === 'true') {
-      console.warn('Bypassing webhook signature verification in development mode');
-      isValid = true;
-    } else {
-      // Verify webhook signature
-      const xenditService = new XenditService(
-        process.env.XENDIT_SECRET_KEY || "",
-        process.env.XENDIT_WEBHOOK_SECRET || "",
-        process.env.XENDIT_CALLBACK_URL || "",
-        process.env.XENDIT_SUCCESS_REDIRECT_URL || "",
-        process.env.XENDIT_FAILURE_REDIRECT_URL || ""
-      );
-      
-      isValid = xenditService.verifyWebhookSignature(payload, callbackToken);
-    }
+    // Verify webhook signature
+    const xenditService = new XenditService(
+      process.env.XENDIT_SECRET_KEY || "",
+      process.env.XENDIT_WEBHOOK_SECRET || "",
+      process.env.XENDIT_CALLBACK_URL || "",
+      process.env.XENDIT_SUCCESS_REDIRECT_URL || "",
+      process.env.XENDIT_FAILURE_REDIRECT_URL || ""
+    );
+    
+    isValid = xenditService.verifyWebhookSignature(payload, callbackToken);
     
     if (!isValid) {
-      console.error("Invalid webhook signature");
+      console.error("Invalid webhook signature", {
+        callbackTokenLength: callbackToken.length,
+        callbackTokenPrefix: callbackToken ? callbackToken.substring(0, 4) + "..." : "none",
+        payloadSample: JSON.stringify(payload).substring(0, 100) + "...",
+        eventType: payload.event || payload.status || "unknown",
+      });
       
       // Update webhook log status
       await supabase
         .from("webhook_logs")
-        .update({ status: "invalid_signature" })
+        .update({ 
+          status: "invalid_signature",
+          processing_errors: "Webhook signature verification failed"
+        })
         .eq("webhook_id", payload.id || "unknown");
         
       // Still return 200 to prevent Xendit from retrying
       return NextResponse.json({ status: "invalid_signature" }, { status: 200 });
     }
+    
+    // Log successful verification
+    console.log("Webhook signature verified successfully");
     
     // 4. Extract payment information
     // The payload structure depends on the event type
