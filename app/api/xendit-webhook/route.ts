@@ -202,7 +202,41 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
         
         // As a last resort, try to create a donation record using payment_details from the transaction
         const paymentDetails = transaction.payment_details || {};
-        if (paymentDetails.recipientId && paymentDetails.donorId) {
+        
+        // Check if this is a bulk donation
+        if (paymentDetails.isBulkDonation && Array.isArray(paymentDetails.donors) && paymentDetails.donors.length > 0) {
+          console.log(`Processing bulk donation with ${paymentDetails.donors.length} donors`);
+          
+          // Process each donor in the bulk donation
+          for (const donor of paymentDetails.donors) {
+            if (!donor.donorId || !donor.amount) {
+              console.warn(`Skipping donor with missing data: ${JSON.stringify(donor)}`);
+              continue;
+            }
+            
+            console.log(`Creating donation for bulk donor (missionary: ${paymentDetails.recipientId}, donor: ${donor.donorId}, amount: ${donor.amount})`);
+            
+            // Use direct SQL query to bypass materialized view refresh
+            const { error: donationError } = await supabase.rpc(
+              'insert_single_donation',
+              {
+                donor_id: donor.donorId,
+                amount: donor.amount,
+                missionary_id: paymentDetails.recipientId,
+                donation_date: new Date().toISOString(),
+                source: 'online',
+                status: 'completed',
+                notes: `Bulk payment via ${payload.payment_method || "unknown"} (${payload.payment_channel || "unknown"})`
+              }
+            );
+            
+            if (donationError) {
+              console.error(`Error creating bulk donation record:`, donationError);
+            } else {
+              console.log(`Created bulk donation for missionary ${paymentDetails.recipientId} and donor ${donor.donorId} using insert_single_donation function`);
+            }
+          }
+        } else if (paymentDetails.recipientId && paymentDetails.donorId) {
           console.log(`Attempting to create donation using payment_details: ${JSON.stringify(paymentDetails)}`);
           
           // Use direct SQL query to bypass materialized view refresh

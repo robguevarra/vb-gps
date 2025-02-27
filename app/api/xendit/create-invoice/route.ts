@@ -1,3 +1,5 @@
+// app/api/xendit/create-invoice/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -17,6 +19,22 @@ const createInvoiceSchema = z.object({
     phone: z.string().optional(),
   }),
   isAnonymous: z.boolean().optional().default(false),
+  // Add optional payment_details field for bulk donations
+  payment_details: z.object({
+    isBulkDonation: z.boolean().optional(),
+    donors: z.array(
+      z.object({
+        donorId: z.string(),
+        donorName: z.string().optional(),
+        amount: z.number().positive(),
+        email: z.string().email().optional(),
+        phone: z.string().optional(),
+      })
+    ).optional(),
+    recipientId: z.string().uuid().optional(),
+    recipientName: z.string().optional(),
+  }).optional(),
+  notes: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -32,7 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const { donationType, recipientId, amount, donor, isAnonymous } = validationResult.data;
+    const { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes } = validationResult.data;
     
     // 2. Create a Supabase client with service role to bypass RLS and permission issues
     const supabase = createServiceClient(
@@ -125,6 +143,8 @@ export async function POST(req: NextRequest) {
           donorId,
           isAnonymous,
           date: new Date().toISOString(),
+          // Include any additional payment details from the request
+          ...(payment_details || {}),
         },
       })
       .select("id")
@@ -141,24 +161,35 @@ export async function POST(req: NextRequest) {
     // It will be created by the webhook handler when payment is confirmed.
     
     // 6. Create invoice item record without donor_donation reference
-    // This will store the intent to create a donation once payment is confirmed
-    const { data: invoiceItem, error: invoiceItemError } = await supabase.from("invoice_items").insert({
-      invoice_id: null, // Initially null, will be updated with Xendit invoice ID
-      donation_id: null, // We don't have a donation_id yet
-      amount: amount,
-      missionary_id: recipientId, // Always use missionary_id regardless of type
-      donor_id: donorId,
-    }).select("id").single();
+    // For bulk donations, we don't create invoice items since we'll use payment_details
+    const isBulkDonation = payment_details?.isBulkDonation === true;
     
-    if (invoiceItemError) {
-      console.error("Failed to create invoice item:", invoiceItemError);
-      return NextResponse.json(
-        { error: "Failed to create invoice item", details: invoiceItemError },
-        { status: 500 }
-      );
+    // Declare invoiceItem variable outside the conditional block
+    let invoiceItem: { id: string } | null = null;
+    
+    if (!isBulkDonation) {
+      // Only create invoice item for regular (non-bulk) donations
+      const { data, error: invoiceItemError } = await supabase.from("invoice_items").insert({
+        invoice_id: null, // Initially null, will be updated with Xendit invoice ID
+        donation_id: null, // We don't have a donation_id yet
+        amount: amount,
+        missionary_id: recipientId, // Always use missionary_id regardless of type
+        donor_id: donorId,
+      }).select("id").single();
+      
+      if (invoiceItemError) {
+        console.error("Failed to create invoice item:", invoiceItemError);
+        return NextResponse.json(
+          { error: "Failed to create invoice item", details: invoiceItemError },
+          { status: 500 }
+        );
+      }
+      
+      invoiceItem = data;
+      console.log(`Created invoice item with ID ${invoiceItem?.id}`);
+    } else {
+      console.log(`Bulk donation detected - skipping invoice item creation, using payment_details instead`);
     }
-    
-    console.log(`Created invoice item with ID ${invoiceItem?.id}`);
     
     // 7. Call Xendit API to create invoice
     // Check if the environment variables for Xendit are properly set
@@ -179,42 +210,34 @@ export async function POST(req: NextRequest) {
     }
     
     const xenditService = new XenditService(
-      process.env.XENDIT_SECRET_KEY || "",
-      process.env.XENDIT_WEBHOOK_SECRET || "",
-      process.env.XENDIT_CALLBACK_URL || "",
-      process.env.XENDIT_SUCCESS_REDIRECT_URL || "",
-      process.env.XENDIT_FAILURE_REDIRECT_URL || ""
+      process.env.XENDIT_SECRET_KEY!,
+      process.env.XENDIT_WEBHOOK_SECRET!,
+      `${process.env.NEXT_PUBLIC_APP_URL}/api/xendit-webhook`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/donation/success?ref=${referenceId}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/donation/failed?ref=${referenceId}`
     );
     
-    // Create a more descriptive donation description
-    const donationDescription = isAnonymous
-      ? `Donation to ${donationType === "church" ? "Church: " : ""}${recipientName}`
-      : `Donation to ${donationType === "church" ? "Church: " : ""}${recipientName} from ${donor.name}`;
-    
-    // Make sure amount is a valid number with 2 decimal places  
-    const formattedAmount = parseFloat(amount.toFixed(2));
-    
-    // Simplify - don't attach query parameters to redirect URLs 
-    // (this can cause issues with some payment gateways)
-    const successUrl = process.env.XENDIT_SUCCESS_REDIRECT_URL;
-    const failureUrl = process.env.XENDIT_FAILURE_REDIRECT_URL;
-    
-    const invoiceParams: CreateInvoiceParams = {
-      externalId: referenceId,
-      amount: formattedAmount, // Make sure amount is properly formatted with 2 decimal places
-      payerEmail: donor.email,
-      payerName: donor.name,
-      description: donationDescription,
-      successRedirectUrl: successUrl,
-      failureRedirectUrl: failureUrl,
-      // Remove items for simplicity - this can sometimes cause validation errors
-    };
-    
-    // Log the Xendit params for debugging
-    console.log("Xendit Invoice Params:", JSON.stringify(invoiceParams, null, 2));
-    
     try {
-      const invoice = await xenditService.createInvoice(invoiceParams);
+      // Create invoice with Xendit
+      const invoice = await xenditService.createInvoice({
+        externalId: referenceId,
+        amount: amount,
+        payerEmail: donor.email,
+        payerName: donor.name,
+        description: `Donation to ${recipientName}${isAnonymous ? ' (Anonymous)' : ''}`,
+        // For all donations, we need to ensure we have all payment methods available
+        // Remove payment methods configuration to use defaults from Xendit Dashboard
+        currency: "PHP", // Always set currency to PHP
+        shouldSendEmail: true,
+        items: payment_details?.isBulkDonation ? undefined : [
+          {
+            name: `Donation to ${recipientName}`,
+            quantity: 1,
+            price: amount,
+            category: donationType
+          }
+        ]
+      });
       
       console.log(`Xendit invoice created: ${invoice.id}, external_id: ${invoice.external_id}`);
       
@@ -229,27 +252,31 @@ export async function POST(req: NextRequest) {
         .eq("id", transaction.id);
         
       // 9. Update invoice_items with Xendit invoice ID
-      const { error: updateItemError } = await supabase
-        .from("invoice_items")
-        .update({
-          invoice_id: invoice.id,
-        })
-        .eq("id", invoiceItem.id); // Use the invoice item ID instead of reference_id
+      if (invoiceItem?.id) {
+        const { error: updateItemError } = await supabase
+          .from("invoice_items")
+          .update({
+            invoice_id: invoice.id,
+          })
+          .eq("id", invoiceItem.id);
+          
+        if (updateItemError) {
+          console.error(`Failed to update invoice item with invoice_id ${invoice.id}:`, updateItemError);
+        } else {
+          console.log(`Updated invoice item with invoice_id ${invoice.id}`);
+        }
         
-      if (updateItemError) {
-        console.error(`Failed to update invoice item with invoice_id ${invoice.id}:`, updateItemError);
+        // Double-check that the invoice item was updated correctly
+        const { data: updatedItem } = await supabase
+          .from("invoice_items")
+          .select("id, invoice_id")
+          .eq("id", invoiceItem.id)
+          .single();
+          
+        console.log(`Verified invoice item update:`, JSON.stringify(updatedItem || {}, null, 2));
       } else {
-        console.log(`Updated invoice item with invoice_id ${invoice.id}`);
+        console.log(`No invoice item to update - bulk donation using payment_details`);
       }
-      
-      // Double-check that the invoice item was updated correctly
-      const { data: updatedItem } = await supabase
-        .from("invoice_items")
-        .select("id, invoice_id")
-        .eq("id", invoiceItem.id)
-        .single();
-        
-      console.log(`Verified invoice item update:`, JSON.stringify(updatedItem || {}, null, 2));
       
       // 10. Return success with invoice URL
       return NextResponse.json({
@@ -262,15 +289,28 @@ export async function POST(req: NextRequest) {
       console.error("Xendit API error:", xenditError);
       // Try to extract more detailed error message from Xendit
       let errorDetails = "Unknown error";
+      let statusCode = 500;
+      
       if (xenditError instanceof Error) {
         errorDetails = xenditError.message;
         // Log the full error stack for debugging
         console.error("Full error:", xenditError.stack);
+        
+        // Check for specific Xendit error types
+        if (xenditError.name === 'XenditError' && 'xenditErrorCode' in xenditError) {
+          const xenditSpecificError = xenditError as any;
+          
+          // Handle payment method errors specifically
+          if (xenditSpecificError.xenditErrorCode === 'UNAVAILABLE_PAYMENT_METHOD_ERROR') {
+            errorDetails = "Some payment methods are currently unavailable. This is likely a configuration issue with the payment gateway. Please try again later or contact support.";
+            statusCode = 400;
+          }
+        }
       }
       
       return NextResponse.json(
         { error: "Failed to create invoice", details: errorDetails },
-        { status: 500 }
+        { status: statusCode }
       );
     }
     

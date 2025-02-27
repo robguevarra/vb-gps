@@ -6,6 +6,7 @@
  * webhooks, and checking invoice status.
  */
 
+//lib/xendit.ts
 import crypto from 'crypto';
 
 // Types for Xendit API
@@ -28,6 +29,8 @@ export interface CreateInvoiceParams {
     type: string;
     value: number;
   }>;
+  shouldSendEmail?: boolean;
+  currency?: string;
 }
 
 export interface XenditInvoice {
@@ -162,11 +165,20 @@ export class XenditService {
         success_redirect_url: params.successRedirectUrl || this.successUrl,
         failure_redirect_url: params.failureRedirectUrl || this.failureUrl,
         callback_url: this.callbackUrl,
-        currency: 'PHP',
+        currency: params.currency || 'PHP',
       };
       
       if (params.payerName) {
         payload.payer_name = params.payerName;
+      }
+      
+      // We're no longer using payment methods or channel preferences
+      // Let Xendit use the default payment methods from the dashboard
+      console.log("Using default payment methods from Xendit Dashboard");
+      
+      // Add shouldSendEmail if specified
+      if (params.shouldSendEmail !== undefined) {
+        payload.should_send_email = params.shouldSendEmail;
       }
       
       // Only add items if they exist and have the required fields
@@ -223,6 +235,22 @@ export class XenditService {
           statusText: response.statusText,
           data
         });
+        
+        // Enhanced error handling for payment method errors
+        if (data.error_code === 'UNAVAILABLE_PAYMENT_METHOD_ERROR') {
+          console.error("Payment method error details:", {
+            message: data.message || 'Some payment methods are not available',
+          });
+          
+          // Provide a more helpful error message based on documentation
+          const errorMsg = "Some payment methods are not available. Using default payment methods from Xendit Dashboard.";
+          throw new XenditError(
+            errorMsg,
+            response.status,
+            data.error_code,
+            data
+          );
+        }
         
         throw new XenditError(
           data.message || 'Failed to create invoice',
@@ -367,4 +395,4 @@ export class XenditService {
       );
     }
   }
-} 
+}
