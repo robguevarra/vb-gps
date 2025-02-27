@@ -3,7 +3,34 @@
 ## 1. Xendit Integration
 
 ### Overview
-Integration with Xendit payment gateway to enable online donations through the website and manual remittance flows.
+Integration with Xendit payment gateway to enable online donations through the website and manual remittance flows. This integration will support three key scenarios:
+1. Public missionary donations
+2. Public church/ministry donations
+3. Staff manual remittance processing
+
+### Current System Context
+The Staff Portal currently supports manual donation entry and tracking, but lacks online payment capabilities. Key limitations include:
+- Only supports manual donation entry
+- No online payment processing
+- Finance officers must manually record all donations
+- No automated receipt generation
+- Limited donor engagement options
+
+### Integration Points
+1. **Public Giving Page**
+   - New component at `app/giving/page.tsx`
+   - Allows public visitors to donate to missionaries or churches
+   - Redirects to Xendit payment page and handles callbacks
+
+2. **Manual Remittance Wizard Enhancement**
+   - Extends existing component at `components/ManualRemittanceWizard.tsx`
+   - Adds online payment option for partners
+   - Generates payment links that can be shared with partners
+
+3. **Finance Dashboard Integration**
+   - Enhances existing dashboard at `app/dashboard/finance/page.tsx`
+   - Adds payment transaction history and status tracking
+   - Implements reconciliation tools for online payments
 
 ### Technical Requirements
 
@@ -54,6 +81,19 @@ CREATE TABLE invoice_items (
   created_at timestamptz default now()
 );
 
+-- Create webhook_logs table for tracking all webhook events
+CREATE TABLE webhook_logs (
+  id uuid primary key default gen_random_uuid(),
+  webhook_id varchar(100),
+  event_type varchar(50),
+  payload jsonb,
+  signature varchar(255),
+  ip_address inet,
+  status varchar(20),
+  processing_errors text,
+  created_at timestamptz default now()
+);
+
 -- Add indexes
 CREATE INDEX idx_payment_transactions_reference ON payment_transactions(reference_id);
 CREATE INDEX idx_payment_transactions_invoice ON payment_transactions(invoice_id);
@@ -61,53 +101,23 @@ CREATE INDEX idx_payment_transactions_status ON payment_transactions(status);
 CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoice_id);
 CREATE INDEX idx_invoice_items_donation ON invoice_items(donation_id);
 CREATE INDEX idx_donor_donations_payment ON donor_donations(payment_id);
+CREATE INDEX idx_webhook_logs_webhook_id ON webhook_logs(webhook_id);
+CREATE INDEX idx_webhook_logs_created_at ON webhook_logs(created_at);
 ```
 
 #### 1.2 Backend Implementation
 
-1. **API Endpoints**
-
-   1. **Create Invoice Endpoint**
-   ```typescript
-   // app/api/xendit/create-invoice/route.ts
-   export async function POST(req: Request) {
-     // Validate request
-     // Create transaction record with pending status
-     // Call Xendit API to create invoice
-     // Store invoice details
-     // Return invoice URL for redirection
-   }
-   ```
-
-   2. **Webhook Endpoint**
-   ```typescript
-   // app/api/xendit/webhook/route.ts
-   export async function POST(req: Request) {
-     // Verify Xendit signature
-     // Extract transaction details
-     // Update payment_transactions record
-     // Update associated donor_donations records
-     // Trigger notifications
-     // Return acknowledgment
-   }
-   ```
-
-   3. **Invoice Status Endpoint**
-   ```typescript
-   // app/api/xendit/invoice-status/[invoiceId]/route.ts
-   export async function GET(req: Request, { params }: { params: { invoiceId: string } }) {
-     // Fetch latest status from database
-     // Optionally verify with Xendit API
-     // Return status and related information
-   }
-   ```
-
-2. **Xendit Service**
+1. **Xendit Service**
    ```typescript
    // lib/xendit.ts
    export class XenditService {
-     // Initialize with API keys
-     constructor(apiKey: string, callbackToken: string) { /* ... */ }
+     constructor(
+       private apiKey: string,
+       private webhookSecret: string,
+       private callbackUrl: string,
+       private successUrl: string,
+       private failureUrl: string
+     ) {}
      
      // Create an invoice
      async createInvoice({
@@ -122,67 +132,97 @@ CREATE INDEX idx_donor_donations_payment ON donor_donations(payment_id);
      }: CreateInvoiceParams): Promise<XenditInvoice>;
      
      // Verify webhook signature
-     verifyWebhookSignature(payload: any, signature: string): boolean;
+     verifyWebhookSignature(payload: any, headerSignature: string): boolean;
      
      // Get invoice status
      async getInvoiceStatus(invoiceId: string): Promise<XenditInvoiceStatus>;
    }
    ```
 
+2. **API Endpoints**
+
+   1. **Create Invoice Endpoint**
+   ```typescript
+   // app/api/xendit/create-invoice/route.ts
+   export async function POST(req: Request) {
+     // 1. Validate request body (missionary/church ID, donor info, amount, type)
+     // 2. Create payment_transactions record with pending status
+     // 3. Create donor record if not exists
+     // 4. Create pending donor_donations record
+     // 5. Create invoice_items linking donations to transaction
+     // 6. Call Xendit API to create invoice
+     // 7. Update payment_transactions with invoice details
+     // 8. Return invoice URL for redirection
+   }
+   ```
+
+   2. **Webhook Endpoint**
+   ```typescript
+   // app/api/xendit-webhook/route.ts
+   export async function POST(req: Request) {
+     // 1. Verify Xendit signature from headers
+     // 2. Log webhook payload to webhook_logs
+     // 3. Extract payment details (status, amount, payment method)
+     // 4. Update payment_transactions status
+     // 5. If payment successful, update donor_donations status to completed
+     // 6. If payment failed, update donor_donations status to failed
+     // 7. Return 200 OK response
+   }
+   ```
+
+   3. **Invoice Status Endpoint**
+   ```typescript
+   // app/api/xendit/invoice-status/[invoiceId]/route.ts
+   export async function GET(req: Request, { params }: { params: { invoiceId: string } }) {
+     // 1. Validate invoice ID
+     // 2. Fetch transaction from database
+     // 3. Return status and payment details
+   }
+   ```
+
 3. **Environment Variables**
    ```env
-   XENDIT_SECRET_KEY=
-   XENDIT_PUBLIC_KEY=
-   XENDIT_WEBHOOK_TOKEN=
-   XENDIT_CALLBACK_URL=https://your-domain.com/api/xendit/webhook
+   XENDIT_SECRET_KEY=your_secret_key
+   XENDIT_PUBLIC_KEY=your_public_key
+   XENDIT_WEBHOOK_SECRET=your_webhook_secret
+   XENDIT_CALLBACK_URL=https://your-domain.com/api/xendit-webhook
    XENDIT_SUCCESS_REDIRECT_URL=https://your-domain.com/payment/success
    XENDIT_FAILURE_REDIRECT_URL=https://your-domain.com/payment/failure
    ```
 
 #### 1.3 Frontend Components
 
-1. **Payment Flow Components**
-
-   1. **Single Donation Payment Modal**
+1. **Public Donation Form**
    ```typescript
-   // components/payments/SingleDonationModal.tsx
+   // app/giving/page.tsx
    "use client"
    
-   interface SingleDonationModalProps {
-     missionaryId: string;
-     missionaryName: string;
-     onSuccess?: () => void;
-     onCancel?: () => void;
-   }
-   
-   export function SingleDonationModal({ missionaryId, missionaryName, onSuccess, onCancel }: SingleDonationModalProps) {
-     // Handle donation form
-     // Call create-invoice API
-     // Redirect to Xendit payment page
-     // Handle payment status checks
+   export default function GivingPage() {
+     // 1. Form state for donation details
+     // 2. Dropdown for missionary/church selection
+     // 3. Input fields for donor info and amount
+     // 4. Radio buttons for one-time/recurring
+     // 5. Submit handler to call create-invoice API
+     // 6. Loading state during API call
+     // 7. Redirect to Xendit URL on success
    }
    ```
 
-   2. **Enhanced ManualRemittanceWizard**
+2. **Enhanced ManualRemittanceWizard**
    ```typescript
-   // components/payments/EnhancedRemittanceWizard.tsx
+   // components/ManualRemittanceWizard.tsx
    "use client"
    
-   interface EnhancedRemittanceWizardProps {
-     missionaryId: string;
-     onSuccess?: () => void;
-     onCancel?: () => void;
-   }
-   
-   export function EnhancedRemittanceWizard({ missionaryId, onSuccess, onCancel }: EnhancedRemittanceWizardProps) {
-     // Extend existing ManualRemittanceWizard
-     // Add payment processing step
-     // Handle Xendit redirect
-     // Process payment confirmation
+   // Extend existing wizard with online payment option
+   export function ManualRemittanceWizard() {
+     // 1. Add payment method selection (offline/online)
+     // 2. If online selected, prepare for Xendit redirect
+     // 3. Submit handler to call create-invoice API
+     // 4. Redirect to Xendit URL on success
    }
    ```
 
-   3. **Payment Status Component**
+3. **Payment Status Component**
    ```typescript
    // components/payments/PaymentStatusIndicator.tsx
    "use client"
@@ -199,7 +239,7 @@ CREATE INDEX idx_donor_donations_payment ON donor_donations(payment_id);
    }
    ```
 
-2. **Payment Success/Failure Pages**
+4. **Payment Success/Failure Pages**
    ```typescript
    // app/payment/success/page.tsx
    // app/payment/failure/page.tsx
@@ -211,34 +251,98 @@ CREATE INDEX idx_donor_donations_payment ON donor_donations(payment_id);
    - Encrypt sensitive payment data
    - Implement proper validation for all inputs
    - Follow PCI DSS guidelines for payment handling
+   - Never log or store full credit card details
 
 2. **API Security**
    - Validate Xendit callbacks using webhook signatures
    - Implement rate limiting on payment endpoints
    - Use HTTPS for all communications
    - Implement proper error handling with secure error messages
+   - Store webhook secret securely in environment variables
 
 3. **Fraud Prevention**
    - Implement transaction limits
    - Monitor for suspicious activity
    - Add logging for all payment operations
+   - Implement idempotency for duplicate webhooks
+
+4. **RLS Policy Compliance**
+   - For authenticated users, set `recorded_by` to their user ID
+   - For public donations, use a server action with service role to bypass RLS
+   - Create a system user for recording public donations
+   - Implement proper validation to ensure RLS compliance
 
 #### 1.5 Testing Strategy
 
-1. **Unit Tests**
-   - Test Xendit service functions
-   - Test webhook signature validation
-   - Test payment status handling
+1. **Local Development Testing**
+   - Configure Xendit sandbox environment
+   - Set up ngrok for webhook testing
+   - Configure test API keys in environment variables
+   - Test form validation and invoice creation
+   - Test webhook handling and error scenarios
 
-2. **Integration Tests**
-   - Test end-to-end payment flow
-   - Test webhook handling
-   - Test database updates
-
-3. **Sandbox Testing**
-   - Use Xendit sandbox environment
-   - Test various payment methods
+2. **Sandbox Testing**
+   - Test Credit Cards:
+     - Success: 4000000000000002
+     - Failure: 4000000000000036
+     - Authentication Required: 4000000000000028
+   - Test E-wallets and Bank Accounts
+   - Verify payment status updates
    - Test success and failure scenarios
+
+3. **Production Testing**
+   - Start with small test transactions
+   - Monitor logs and database for issues
+   - Verify webhook handling in production
+   - Check payment reconciliation
+
+#### 1.6 User Scenarios
+
+1. **Public Missionary Donation**
+   - User selects missionary from dropdown
+   - Enters donation amount and personal details
+   - Submits form and is redirected to Xendit payment page
+   - Completes payment and returns to success page
+   - System automatically records donation in database
+
+2. **Church Donation**
+   - User selects church from dropdown
+   - Enters donation amount and personal details
+   - Submits form and is redirected to Xendit payment page
+   - Completes payment and returns to success page
+   - System automatically records donation in database
+
+3. **Manual Remittance with Online Payment**
+   - Missionary logs into dashboard
+   - Opens Manual Remittance Wizard
+   - Enters donor information and amounts
+   - Selects "Generate Payment Link" option
+   - System creates pending donation records
+   - System generates payment link
+   - Missionary shares link with donor
+   - Donor completes payment through Xendit
+   - System receives webhook and updates records
+   - Missionary sees updated donation status in dashboard
+
+#### 1.7 Implementation Timeline
+1. **Week 1: Backend Implementation**
+   - Implement XenditService
+   - Create API endpoints
+   - Set up webhook handling
+   - Implement database operations
+
+2. **Week 2: Frontend Implementation**
+   - Implement public giving form
+   - Enhance ManualRemittanceWizard
+   - Create success/failure pages
+   - Implement payment status indicators
+
+3. **Week 3: Testing and Refinement**
+   - Conduct unit and integration testing
+   - Test edge cases and security
+   - Refine error handling
+   - Optimize performance
+   - Document the implementation
 
 ## 2. Email Notification System
 
