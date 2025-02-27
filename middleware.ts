@@ -17,13 +17,20 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options })
+          // Set a 24-hour expiration for all auth cookies
+          const cookieOptions = {
+            ...options,
+            maxAge: 60 * 60 * 24, // 24 hours in seconds
+            expires: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24 hours from now
+          }
+          
+          request.cookies.set({ name, value, ...cookieOptions })
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           })
-          response.cookies.set({ name, value, ...options })
+          response.cookies.set({ name, value, ...cookieOptions })
         },
         remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: '', ...options })
@@ -39,7 +46,8 @@ export async function middleware(request: NextRequest) {
   )
 
   // Refresh session if expired - required for Server Components
-  const { data: { user }, error } = await supabase.auth.getUser()
+  // This will update the session cookie if it exists but is expired
+  await supabase.auth.getSession()
 
   return response
 }

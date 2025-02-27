@@ -13,7 +13,14 @@ export const createClient = async () => {
           return (await cookieStore).get(name)?.value;
         },
         async set(name: string, value: string, options: CookieOptions) {
-          ;(await cookieStore).set({ name, value, ...options });
+          // Set a 24-hour expiration for all auth cookies
+          const cookieOptions = {
+            ...options,
+            maxAge: 60 * 60 * 24, // 24 hours in seconds
+            expires: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24 hours from now
+          };
+          
+          ;(await cookieStore).set({ name, value, ...cookieOptions });
         },
         async remove(name: string, options: CookieOptions) {
           ;(await cookieStore).set({ name, value: '', ...options });
@@ -21,8 +28,8 @@ export const createClient = async () => {
       },
       // Enable RLS bypass with service role
       auth: {
-        autoRefreshToken: false,
-        persistSession: false,
+        autoRefreshToken: true, // Enable token refresh
+        persistSession: true,   // Enable session persistence
         detectSessionInUrl: false
       }
     }
