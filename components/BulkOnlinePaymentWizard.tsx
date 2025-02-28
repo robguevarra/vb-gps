@@ -897,7 +897,7 @@ export function BulkOnlinePaymentWizard({
               <div>
                 <p className="font-medium">Payment Link Generated</p>
                 <p className="text-sm">
-                  A payment page has been opened in a new tab. If it didn't open automatically or you're experiencing issues with payment options, please click the "Pay Now" button below to try again.
+                  A payment page has been opened in a new tab with all available payment options from Xendit. If it didn't open automatically or you need to access it again, please click the "Pay Now" button below.
                 </p>
               </div>
             </div>

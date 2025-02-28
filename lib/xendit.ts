@@ -176,6 +176,10 @@ export class XenditService {
       // Let Xendit use the default payment methods from the dashboard
       console.log("Using default payment methods from Xendit Dashboard");
       
+      // Remove explicit payment methods list to allow Xendit to use dashboard configuration
+      // This should resolve the inconsistent payment options issue based on other app's implementation
+      // payload.payment_methods = [...] - removed this section
+      
       // Add shouldSendEmail if specified
       if (params.shouldSendEmail !== undefined) {
         payload.should_send_email = params.shouldSendEmail;
