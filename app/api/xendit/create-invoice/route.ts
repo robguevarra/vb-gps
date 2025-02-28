@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
       }).select("id").single();
       
       if (invoiceItemError) {
-        console.error("Failed to create invoice item:", invoiceItemError);
+        console.error("Failed to create invoice item");
         return NextResponse.json(
           { error: "Failed to create invoice item", details: invoiceItemError },
           { status: 500 }
@@ -186,9 +186,9 @@ export async function POST(req: NextRequest) {
       }
       
       invoiceItem = data;
-      console.log(`Created invoice item with ID ${invoiceItem?.id}`);
+      console.log(`Created invoice item successfully`);
     } else {
-      console.log(`Bulk donation detected - skipping invoice item creation, using payment_details instead`);
+      console.log(`Bulk donation detected - skipping invoice item creation`);
     }
     
     // 7. Call Xendit API to create invoice
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
         ]
       });
       
-      console.log(`Xendit invoice created: ${invoice.id}, external_id: ${invoice.external_id}`);
+      console.log(`Xendit invoice created successfully`);
       
       // 8. Update payment_transactions with invoice details
       await supabase
@@ -261,9 +261,9 @@ export async function POST(req: NextRequest) {
           .eq("id", invoiceItem.id);
           
         if (updateItemError) {
-          console.error(`Failed to update invoice item with invoice_id ${invoice.id}:`, updateItemError);
+          console.error(`Failed to update invoice item:`, updateItemError.code);
         } else {
-          console.log(`Updated invoice item with invoice_id ${invoice.id}`);
+          console.log(`Updated invoice item successfully`);
         }
         
         // Double-check that the invoice item was updated correctly
@@ -273,9 +273,9 @@ export async function POST(req: NextRequest) {
           .eq("id", invoiceItem.id)
           .single();
           
-        console.log(`Verified invoice item update:`, JSON.stringify(updatedItem || {}, null, 2));
+        console.log(`Verified invoice item update`);
       } else {
-        console.log(`No invoice item to update - bulk donation using payment_details`);
+        console.log(`No invoice item to update - bulk donation mode`);
       }
       
       // 10. Return success with invoice URL
@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
         expiryDate: invoice.expiry_date,
       });
     } catch (xenditError) {
-      console.error("Xendit API error:", xenditError);
+      console.error("Xendit API error occurred");
       // Try to extract more detailed error message from Xendit
       let errorDetails = "Unknown error";
       let statusCode = 500;
@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
       if (xenditError instanceof Error) {
         errorDetails = xenditError.message;
         // Log the full error stack for debugging
-        console.error("Full error:", xenditError.stack);
+        console.error("Error details:", xenditError.name);
         
         // Check for specific Xendit error types
         if (xenditError.name === 'XenditError' && 'xenditErrorCode' in xenditError) {

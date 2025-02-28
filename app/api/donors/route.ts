@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     // Get the request body
     const body = await req.json();
     
-    console.log('Creating new donor:', body);
+    console.log('Creating new donor request received');
     
     // Validate required fields
     if (!body.name || !body.name.trim()) {
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    console.log('Donor created successfully:', donor);
+    console.log('Donor created successfully with ID:', donor.id);
     
     return NextResponse.json(donor, { status: 201 });
   } catch (error) {

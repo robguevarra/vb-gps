@@ -202,15 +202,7 @@ export class XenditService {
         payload.fees = params.fees;
       }
       
-      console.log("Xendit API Request:", {
-        url: `${this.apiUrl}/v2/invoices`,
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic **********', // Redacted for security
-          'Content-Type': 'application/json'
-        },
-        payload: JSON.stringify(payload)
-      });
+      console.log("Preparing Xendit API request");
       
       // Make the API request
       const response = await fetch(`${this.apiUrl}/v2/invoices`, {
@@ -225,26 +217,19 @@ export class XenditService {
       // Parse the response
       const data = await response.json();
       
-      console.log("Xendit API Response:", {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        data
-      });
+      console.log("Xendit API response received");
       
       // Handle error responses
       if (!response.ok) {
         console.error("Xendit API Error:", {
           status: response.status,
           statusText: response.statusText,
-          data
+          error_code: data.error_code || 'unknown'
         });
         
         // Enhanced error handling for payment method errors
         if (data.error_code === 'UNAVAILABLE_PAYMENT_METHOD_ERROR') {
-          console.error("Payment method error details:", {
-            message: data.message || 'Some payment methods are not available',
-          });
+          console.error("Payment method error detected");
           
           // Provide a more helpful error message based on documentation
           const errorMsg = "Some payment methods are not available. Using default payment methods from Xendit Dashboard.";
@@ -270,7 +255,7 @@ export class XenditService {
         throw error;
       }
       
-      console.error("Unexpected error in Xendit createInvoice:", error);
+      console.error("Unexpected error in Xendit createInvoice");
       
       throw new XenditError(
         error instanceof Error ? error.message : 'Unknown error creating invoice'
@@ -299,21 +284,13 @@ export class XenditService {
         return false;
       }
       
-      console.log('Verifying webhook signature:', {
-        headerSignatureLength: headerSignature.length,
-        headerSignaturePrefix: headerSignature.substring(0, 4) + '...',
-        webhookSecretLength: this.webhookSecret.length,
-        webhookSecretPrefix: this.webhookSecret.substring(0, 4) + '...',
-        payloadSample: JSON.stringify(payload).substring(0, 100) + '...',
-        payloadType: typeof payload,
-        payloadKeys: Object.keys(payload),
-      });
+      console.log('Verifying webhook signature');
       
       // Xendit callback verification - using their token-based approach
       // In some implementations, Xendit simply expects you to compare the
       // callback token with your configured webhook secret
       if (headerSignature === this.webhookSecret) {
-        console.log('Signature verified using direct token comparison');
+        console.log('Signature verification successful');
         return true;
       }
       
@@ -329,27 +306,21 @@ export class XenditService {
           .update(stringPayload)
           .digest('hex');
         
-        console.log('Signature comparison:', {
-          computedSignatureLength: computedSignature.length,
-          computedSignaturePrefix: computedSignature.substring(0, 8) + '...',
-          receivedSignatureLength: headerSignature.length,
-          receivedSignaturePrefix: headerSignature.substring(0, 8) + '...',
-          match: computedSignature === headerSignature
-        });
+        console.log('Attempting alternative signature verification method');
         
         // Simple string comparison (Xendit might not use timing-safe comparison)
         if (computedSignature === headerSignature) {
-          console.log('Signature verified using HMAC validation');
+          console.log('Signature verification successful');
           return true;
         }
       } catch (hmacError) {
-        console.error('Error during HMAC verification:', hmacError);
+        console.error('Error during signature verification');
       }
       
-      console.warn('Webhook signature verification failed - all verification methods exhausted');
+      console.warn('Webhook signature verification failed');
       return false;
     } catch (error) {
-      console.error('Error verifying webhook signature:', error);
+      console.error('Error verifying webhook signature');
       return false;
     }
   }
@@ -379,7 +350,7 @@ export class XenditService {
       // Handle error responses
       if (!response.ok) {
         throw new XenditError(
-          data.message || `Failed to get invoice status for ${invoiceId}`,
+          data.message || `Failed to get invoice status`,
           response.status,
           data.error_code,
           data
@@ -395,7 +366,7 @@ export class XenditService {
       throw new XenditError(
         error instanceof Error 
           ? error.message 
-          : `Unknown error getting invoice status for ${invoiceId}`
+          : `Unknown error getting invoice status`
       );
     }
   }

@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true });
 
   } catch (err: any) {
-    console.error("Deletion error:", err);
+    console.error("User deletion error");
     return NextResponse.json(
       { error: err.message || "Failed to delete user" },
       { status: 500 }

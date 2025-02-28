@@ -219,7 +219,7 @@ export function BulkOnlinePaymentWizard({
       }
       
       const result = await response.json();
-      console.log("Search results:", result.donors);
+      console.log("Search results count:", result.donors?.length || 0);
       setSearchResults(result.donors || []);
     } catch (error) {
       console.error("Partner search error:", error);
@@ -262,7 +262,7 @@ export function BulkOnlinePaymentWizard({
         }
         
         const result = await response.json();
-        console.log("Debounced search results:", result.donors);
+        console.log("Debounced search results count:", result.donors?.length || 0);
         setSearchResults(result.donors || []);
       } catch (error) {
         console.error("Partner search error:", error);
@@ -456,7 +456,7 @@ export function BulkOnlinePaymentWizard({
       // The API might return either { donor } or the donor object directly
       const newDonor = responseData.donor || responseData;
       
-      console.log("New partner created:", newDonor);
+      console.log("New partner created successfully");
       
       // Get the index where we want to add the new donor
       const targetIndex = formOriginIndex !== null ? formOriginIndex : 0;
@@ -542,11 +542,7 @@ export function BulkOnlinePaymentWizard({
         ...(entry.phone ? { phone: entry.phone } : {})
       }));
       
-      console.log("Creating invoice with donor details:", {
-        donorCount: donorDetails.length,
-        totalAmount: parseFloat(totalAmount),
-        missionaryId
-      });
+      console.log("Creating invoice with donor count:", donorEntries.length);
       
       // Create the invoice with donor details stored in payment_details
       // Use the missionary's profile as the primary contact
@@ -598,16 +594,13 @@ export function BulkOnlinePaymentWizard({
       }
 
       const data = await response.json();
-      console.log("Received payment data from API:", {
-        invoiceUrl: data.invoiceUrl ? `${data.invoiceUrl.substring(0, 30)}...` : "none",
-        invoiceId: data.invoiceId || "none"
-      });
+      console.log("Received payment data from API - status:", data.status || "unknown");
       
       setPaymentLink(data.invoiceUrl);
       
       // Store the invoice ID for status checking
       if (data.invoiceId) {
-        console.log(`Storing invoice ID in localStorage: ${data.invoiceId}`);
+        console.log(`Storing invoice ID in localStorage`);
         
         // Save payment info with both key formats to ensure compatibility
         const paymentInfo = {
@@ -630,7 +623,7 @@ export function BulkOnlinePaymentWizard({
         };
         localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify(paymentState));
         
-        console.log("Payment state saved with both key formats");
+        console.log("Payment state saved successfully");
       }
       
       // Move to step 2 to show success message
@@ -638,7 +631,7 @@ export function BulkOnlinePaymentWizard({
       
       // Automatically open the payment link in a new tab
       if (data.invoiceUrl) {
-        console.log(`Opening payment link in new tab: ${data.invoiceUrl.substring(0, 30)}...`);
+        console.log(`Opening payment link in new tab`);
         // Open with specific parameters to ensure all payment options are available
         window.open(data.invoiceUrl, '_blank', 'noopener,noreferrer');
       }
@@ -664,12 +657,12 @@ export function BulkOnlinePaymentWizard({
   const handlePayNow = () => {
     if (!paymentLink) return;
     
-    console.log(`Handling Pay Now with payment link: ${paymentLink}`);
+    console.log(`Handling Pay Now request`);
     
     // Extract invoice ID from payment link
     // The link format is typically: https://checkout-staging.xendit.co/web/[invoice_id]
     const invoiceId = paymentLink.split('/').pop();
-    console.log(`Extracted invoice ID: ${invoiceId}`);
+    console.log(`Invoice ID extracted`);
     
     // Save current state to localStorage before navigating
     if (step === 2) {
@@ -681,7 +674,7 @@ export function BulkOnlinePaymentWizard({
         invoiceId: invoiceId
       };
       
-      console.log(`Saving payment state to localStorage:`, paymentState);
+      console.log(`Saving payment state to localStorage`);
       localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify(paymentState));
       
       // Set payment status to pending
@@ -690,11 +683,11 @@ export function BulkOnlinePaymentWizard({
         timestamp: new Date().toISOString()
       };
       
-      console.log(`Setting payment status to pending:`, paymentStatus);
+      console.log(`Payment status set to pending`);
       localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify(paymentStatus));
       
       // Open payment page in a new tab with specific parameters to ensure all payment options are available
-      console.log(`Opening payment link in new tab: ${paymentLink}`);
+      console.log(`Opening payment link in new tab`);
       window.open(paymentLink, '_blank', 'noopener,noreferrer');
       
       // Start polling for payment status
@@ -715,7 +708,7 @@ export function BulkOnlinePaymentWizard({
         const paymentState = JSON.parse(paymentStateStr);
         if (paymentState.invoiceId) {
           invoiceId = paymentState.invoiceId;
-          console.log(`Found invoice ID in payment_state: ${invoiceId}`);
+          console.log(`Found invoice ID in payment_state`);
         }
       } catch (err) {
         console.error("Error parsing payment_state:", err);
@@ -732,7 +725,7 @@ export function BulkOnlinePaymentWizard({
           const paymentInfo = JSON.parse(paymentInfoStr);
           if (paymentInfo.invoiceId) {
             invoiceId = paymentInfo.invoiceId;
-            console.log(`Found invoice ID in payment_info: ${invoiceId}`);
+            console.log(`Found invoice ID in payment_info`);
           }
         } catch (err) {
           console.error("Error parsing payment_info:", err);
@@ -745,7 +738,7 @@ export function BulkOnlinePaymentWizard({
     // If still no invoice ID, try to extract from payment link
     if (!invoiceId && paymentLink) {
       invoiceId = paymentLink.split('/').pop();
-      console.log(`Extracted invoice ID from payment link: ${invoiceId}`);
+      console.log(`Extracted invoice ID from payment link`);
     }
     
     if (!invoiceId) {
@@ -753,18 +746,18 @@ export function BulkOnlinePaymentWizard({
       return;
     }
     
-    console.log(`Starting payment status polling for invoice ID: ${invoiceId}`);
+    console.log(`Starting payment status polling`);
     
     // Clear any existing interval first
     const existingPollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
     if (existingPollingId) {
       clearInterval(parseInt(existingPollingId));
-      console.log(`Cleared existing polling interval: ${existingPollingId}`);
+      console.log(`Cleared existing polling interval`);
     }
     
     // Set up an interval to check payment status every 5 seconds
     const intervalId = window.setInterval(async () => {
-      console.log(`Polling payment status for invoice ID: ${invoiceId}`);
+      console.log(`Polling payment status`);
       try {
         // First check payment_transactions table
         const { data: transactionData, error: transactionError } = await supabase
@@ -776,7 +769,7 @@ export function BulkOnlinePaymentWizard({
         if (transactionError) {
           // If the error is a 406 (Not Acceptable) or 404 (Not Found), it might mean the transaction hasn't been created yet
           if (transactionError.code === "406" || transactionError.code === "404" || transactionError.code === "PGRST116") {
-            console.log("Transaction not found yet in payment_transactions (expected during payment processing)");
+            console.log("Transaction not found yet (expected during payment processing)");
             
             // Try to check the status directly from Xendit API
             await checkXenditPaymentStatus(invoiceId);
@@ -784,11 +777,11 @@ export function BulkOnlinePaymentWizard({
             console.error("Error checking payment_transactions:", transactionError);
           }
         } else if (transactionData) {
-          console.log(`Found transaction data:`, transactionData);
+          console.log(`Found transaction with status: ${transactionData.status}`);
           
           // If payment is completed, update localStorage
           if (transactionData.status === "paid") {
-            console.log(`Payment completed for invoice ${invoiceId}`);
+            console.log(`Payment completed successfully`);
             localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
               status: "completed",
               timestamp: new Date().toISOString()
@@ -800,7 +793,7 @@ export function BulkOnlinePaymentWizard({
             console.log("Polling stopped: payment completed");
             return;
           } else if (transactionData.status === "expired" || transactionData.status === "failed") {
-            console.log(`Payment failed or expired for invoice ${invoiceId}`);
+            console.log(`Payment failed or expired`);
             localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
               status: "failed",
               timestamp: new Date().toISOString()
@@ -827,7 +820,7 @@ export function BulkOnlinePaymentWizard({
         if (webhookError) {
           console.error("Error checking webhooks table:", webhookError);
         } else if (webhookData && webhookData.length > 0) {
-          console.log(`Found ${webhookData.length} recent webhooks, checking for our invoice ID`);
+          console.log(`Found ${webhookData.length} recent webhooks to check`);
           
           // Check if any of the webhooks contain our invoice ID
           for (const webhook of webhookData) {
@@ -837,10 +830,10 @@ export function BulkOnlinePaymentWizard({
                 : webhook.payload;
                 
               if (payload && payload.id === invoiceId) {
-                console.log(`Found matching webhook for invoice ${invoiceId}:`, payload);
+                console.log(`Found matching webhook`);
                 
                 if (payload.status === "PAID") {
-                  console.log(`Webhook confirms payment completed for invoice ${invoiceId}`);
+                  console.log(`Webhook confirms payment completed`);
                   localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
                     status: "completed",
                     timestamp: new Date().toISOString()
@@ -868,7 +861,7 @@ export function BulkOnlinePaymentWizard({
     // Function to check payment status directly from Xendit API
     const checkXenditPaymentStatus = async (invoiceId: string) => {
       try {
-        console.log(`Checking Xendit API directly for invoice ID: ${invoiceId}`);
+        console.log(`Checking Xendit API for payment status`);
         
         // Call our API endpoint to check the invoice status
         const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
@@ -879,12 +872,7 @@ export function BulkOnlinePaymentWizard({
         }
         
         const data = await response.json();
-        console.log(`Xendit API response:`, {
-          id: data.id,
-          status: data.status,
-          paid_amount: data.paid_amount,
-          payment_method: data.payment_method,
-        });
+        console.log(`Xendit API response status: ${data.status}`);
         
         if (data.status === "PAID") {
           console.log("Payment is completed according to Xendit API");
@@ -899,7 +887,7 @@ export function BulkOnlinePaymentWizard({
           console.log("Polling stopped: payment completed (from Xendit API)");
           return true;
         } else if (data.status === "EXPIRED" || data.status === "FAILED") {
-          console.log(`Payment ${data.status.toLowerCase()} according to Xendit API`);
+          console.log(`Payment ${data.status.toLowerCase()}`);
           localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
             status: "failed",
             timestamp: new Date().toISOString()
@@ -908,7 +896,7 @@ export function BulkOnlinePaymentWizard({
           // Clear the interval
           clearInterval(intervalId);
           localStorage.removeItem(`payment_polling_${missionaryId}`);
-          console.log(`Polling stopped: payment ${data.status.toLowerCase()} (from Xendit API)`);
+          console.log(`Polling stopped: payment ${data.status.toLowerCase()}`);
           return true;
         }
         
@@ -921,7 +909,7 @@ export function BulkOnlinePaymentWizard({
     
     // Store the interval ID in localStorage so it can be cleared if needed
     localStorage.setItem(`payment_polling_${missionaryId}`, intervalId.toString());
-    console.log(`Stored polling interval ID: ${intervalId}`);
+    console.log(`Polling interval started`);
     
     // Clear the interval after 10 minutes (600000 ms)
     setTimeout(() => {

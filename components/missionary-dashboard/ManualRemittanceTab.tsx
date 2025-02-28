@@ -164,7 +164,7 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
             timestamp: new Date().toISOString()
           }));
         } else {
-          console.log(`Payment status from Xendit API: ${data.status}`);
+          console.log(`Payment status from Xendit API received`);
         }
       } catch (error) {
         console.error("Error checking Xendit API:", error);

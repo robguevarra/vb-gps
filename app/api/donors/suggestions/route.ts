@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     .ilike('name', `%${search}%`);
 
   if (error) {
-    console.error('Error fetching donor suggestions:', error);
+    console.error('Error fetching donor suggestions');
     return NextResponse.json({ donors: [] }, { status: 200 });
   }
 

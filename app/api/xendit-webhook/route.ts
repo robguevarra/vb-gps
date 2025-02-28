@@ -9,21 +9,19 @@ export async function POST(req: NextRequest) {
     const payload = await req.json();
     
     // Log the full webhook payload for debugging
-    console.log("Received Xendit webhook:", JSON.stringify(payload, null, 2));
+    console.log("Received Xendit webhook event");
     
     // Get the callback token for verification
     const callbackToken = req.headers.get("x-callback-token") || "";
     
     // Log all headers for debugging
     const headers = Object.fromEntries(req.headers.entries());
-    console.log("Webhook headers:", headers);
+    console.log("Webhook request received");
     
     // Log the webhook secret for debugging (redacted for security)
     console.log("Webhook verification details:", {
-      callbackTokenLength: callbackToken.length,
-      callbackTokenPrefix: callbackToken.substring(0, 4) + "...",
-      webhookSecretConfigured: !!process.env.XENDIT_WEBHOOK_SECRET,
-      webhookSecretLength: (process.env.XENDIT_WEBHOOK_SECRET || "").length,
+      callbackTokenConfigured: callbackToken.length > 0,
+      webhookSecretConfigured: !!process.env.XENDIT_WEBHOOK_SECRET
     });
     
     // 2. Create Supabase client with service role to bypass RLS and permission issues
@@ -64,7 +62,6 @@ export async function POST(req: NextRequest) {
       console.error("Invalid webhook signature", {
         callbackTokenLength: callbackToken.length,
         callbackTokenPrefix: callbackToken ? callbackToken.substring(0, 4) + "..." : "none",
-        payloadSample: JSON.stringify(payload).substring(0, 100) + "...",
         eventType: payload.event || payload.status || "unknown",
       });
       
@@ -105,7 +102,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "success" }, { status: 200 });
     
   } catch (error) {
-    console.error("Error processing webhook:", error);
+    console.error("Error processing webhook");
     
     // Always return 200 OK to acknowledge receipt, even on errors
     // This prevents Xendit from retrying the webhook unnecessarily
@@ -128,7 +125,7 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
     throw new Error("Missing invoice ID in webhook payload");
   }
   
-  console.log(`Processing paid invoice: ${invoiceId}, external_id: ${externalId}`);
+  console.log(`Processing paid invoice`);
   
   // Update webhook log status
   await supabase
@@ -145,11 +142,11 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
       .single();
     
     if (transactionError || !transaction) {
-      console.error(`Error finding transaction for invoice ${invoiceId}:`, transactionError);
-      throw new Error(`Payment transaction not found for invoice ${invoiceId}`);
+      console.error(`Error finding transaction:`, transactionError?.code || "Not found");
+      throw new Error(`Payment transaction not found`);
     }
     
-    console.log(`Found transaction ${transaction.id} with status ${transaction.status}, reference_id: ${transaction.reference_id}`);
+    console.log(`Found transaction`);
     
     // Only update if not already paid to prevent duplicate processing
     if (transaction.status !== "paid") {
@@ -169,11 +166,11 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
         .eq("invoice_id", invoiceId);
       
       if (updateError) {
-        console.error(`Error updating transaction for invoice ${invoiceId}:`, updateError);
-        throw new Error(`Failed to update payment transaction for invoice ${invoiceId}`);
+        console.error(`Error updating transaction:`, updateError?.code || "Unknown error");
+        throw new Error(`Failed to update payment transaction`);
       }
       
-      console.log(`Updated transaction ${transaction.id} to status "paid"`);
+      console.log(`Updated transaction to status "paid"`);
       
       // DEBUG: Check all invoice items to see if any match our invoice_id
       const { data: allInvoiceItems, error: allItemsError } = await supabase
@@ -182,7 +179,7 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
         .order("created_at", { ascending: false })
         .limit(10);
         
-      console.log(`DEBUG - Recent invoice items:`, JSON.stringify(allInvoiceItems || [], null, 2));
+      console.log(`Checking recent invoice items`);
       
       // 3. Find associated invoice items by invoice_id
       let { data: invoiceItems, error: itemsError } = await supabase
@@ -191,30 +188,30 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
         .eq("invoice_id", invoiceId);
       
       if (itemsError) {
-        console.error(`Error finding invoice items for invoice ${invoiceId}:`, itemsError);
-        throw new Error(`Failed to find invoice items for invoice ${invoiceId}`);
+        console.error(`Error finding invoice items:`, itemsError?.code || "Unknown error");
+        throw new Error(`Failed to find invoice items`);
       }
       
-      console.log(`Found ${invoiceItems?.length || 0} invoice items for invoice ${invoiceId}`);
+      console.log(`Found ${invoiceItems?.length || 0} invoice items`);
       
       if (!invoiceItems || invoiceItems.length === 0) {
-        console.error(`No invoice items found for invoice ${invoiceId}`);
+        console.error(`No invoice items found`);
         
         // As a last resort, try to create a donation record using payment_details from the transaction
         const paymentDetails = transaction.payment_details || {};
         
         // Check if this is a bulk donation
         if (paymentDetails.isBulkDonation && Array.isArray(paymentDetails.donors) && paymentDetails.donors.length > 0) {
-          console.log(`Processing bulk donation with ${paymentDetails.donors.length} donors`);
+          console.log(`Processing bulk donation`);
           
           // Process each donor in the bulk donation
           for (const donor of paymentDetails.donors) {
             if (!donor.donorId || !donor.amount) {
-              console.warn(`Skipping donor with missing data: ${JSON.stringify(donor)}`);
+              console.warn(`Skipping donor with missing data`);
               continue;
             }
             
-            console.log(`Creating donation for bulk donor (missionary: ${paymentDetails.recipientId}, donor: ${donor.donorId}, amount: ${donor.amount})`);
+            console.log(`Creating donation for bulk donor`);
             
             // Use direct SQL query to bypass materialized view refresh
             const { error: donationError } = await supabase.rpc(
@@ -231,13 +228,13 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
             );
             
             if (donationError) {
-              console.error(`Error creating bulk donation record:`, donationError);
+              console.error(`Error creating bulk donation record:`, donationError?.code || "Unknown error");
             } else {
-              console.log(`Created bulk donation for missionary ${paymentDetails.recipientId} and donor ${donor.donorId} using insert_single_donation function`);
+              console.log(`Created bulk donation successfully`);
             }
           }
         } else if (paymentDetails.recipientId && paymentDetails.donorId) {
-          console.log(`Attempting to create donation using payment_details: ${JSON.stringify(paymentDetails)}`);
+          console.log(`Attempting to create donation using payment_details`);
           
           // Use direct SQL query to bypass materialized view refresh
           const { error: donationError } = await supabase.rpc(
@@ -249,25 +246,25 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
               donation_date: new Date().toISOString(),
               source: 'online',
               status: 'completed',
-              notes: "Created from payment_details as fallback (no invoice item found)"
+              notes: "Created from payment_details as fallback"
             }
           );
           
           if (donationError) {
-            console.error(`Error creating fallback donation record:`, donationError);
+            console.error(`Error creating fallback donation record:`, donationError?.code || "Unknown error");
           } else {
-            console.log(`Created fallback donation from payment_details using insert_single_donation function`);
+            console.log(`Created fallback donation successfully`);
           }
         }
       } else {
         // Process each invoice item and create a donation record
         for (const item of invoiceItems) {
           if (!item.missionary_id || !item.donor_id) {
-            console.warn(`Skipping invoice item with missing data: ${JSON.stringify(item)}`);
+            console.warn(`Skipping invoice item with missing data`);
             continue;
           }
           
-          console.log(`Creating donation for invoice item (missionary: ${item.missionary_id}, donor: ${item.donor_id})`);
+          console.log(`Creating donation for invoice item`);
           
           // Extract donation details from transaction's payment_details
           const paymentDetails = transaction.payment_details || {};
@@ -287,14 +284,14 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
           );
           
           if (donationError) {
-            console.error(`Error creating donation record:`, donationError);
+            console.error(`Error creating donation record:`, donationError?.code || "Unknown error");
           } else {
-            console.log(`Created donation for missionary ${item.missionary_id} and donor ${item.donor_id} using insert_single_donation function`);
+            console.log(`Created donation successfully`);
           }
         }
       }
     } else {
-      console.log(`Transaction ${transaction.id} already marked as paid, skipping update`);
+      console.log(`Transaction already marked as paid, skipping update`);
     }
     
     // 4. Update webhook log status
@@ -303,11 +300,11 @@ async function handleInvoicePaid(payload: any, supabase: any, systemUserId: stri
       .update({ status: "completed" })
       .eq("webhook_id", payload.id || "unknown");
     
-    console.log(`Webhook processing completed for invoice ${invoiceId}`);
+    console.log(`Webhook processing completed`);
       
   } catch (error) {
     // Log the error but don't rethrow - we still want to return 200 OK
-    console.error("Error processing invoice.paid webhook:", error);
+    console.error("Error processing webhook");
     
     await supabase
       .from("webhook_logs")
@@ -330,7 +327,7 @@ async function handleInvoiceExpired(payload: any, supabase: any) {
     throw new Error("Missing invoice ID in webhook payload");
   }
   
-  console.log(`Processing expired invoice: ${invoiceId}`);
+  console.log(`Processing expired invoice`);
   
   // Update webhook log status
   await supabase
@@ -347,11 +344,11 @@ async function handleInvoiceExpired(payload: any, supabase: any) {
       .single();
     
     if (transactionError || !transaction) {
-      console.error(`Error finding transaction for invoice ${invoiceId}:`, transactionError);
-      throw new Error(`Payment transaction not found for invoice ${invoiceId}`);
+      console.error(`Error finding transaction:`, transactionError?.code || "Not found");
+      throw new Error(`Payment transaction not found`);
     }
     
-    console.log(`Found transaction ${transaction.id} with status ${transaction.status}`);
+    console.log(`Found transaction`);
     
     // Only update if not already expired to prevent duplicate processing
     if (transaction.status !== "expired") {
@@ -368,33 +365,27 @@ async function handleInvoiceExpired(payload: any, supabase: any) {
         .eq("invoice_id", invoiceId);
       
       if (updateError) {
-        console.error(`Error updating transaction for invoice ${invoiceId}:`, updateError);
-        throw new Error(`Failed to update payment transaction for invoice ${invoiceId}`);
+        console.error(`Error updating transaction:`, updateError?.code || "Unknown error");
+        throw new Error(`Failed to update payment transaction`);
       }
       
-      console.log(`Updated transaction ${transaction.id} to status "expired"`);
+      console.log(`Updated transaction to status "expired"`);
       
       // 3. Find invoice items associated with this invoice
       const { data: invoiceItems, error: itemsError } = await supabase
         .from("invoice_items")
         .select("id")
         .eq("invoice_id", invoiceId);
-      
-      if (itemsError) {
-        console.error(`Error finding invoice items for invoice ${invoiceId}:`, itemsError);
-      } else if (invoiceItems && invoiceItems.length > 0) {
-        console.log(`Found ${invoiceItems.length} invoice items for expired invoice ${invoiceId}`);
         
-        // We don't need to update the invoice items since there's no status field
-        // Just log that we found them
+      if (itemsError) {
+        console.error(`Error finding invoice items:`, itemsError?.code || "Unknown error");
+      } else if (invoiceItems && invoiceItems.length > 0) {
+        console.log(`Found invoice items for expired invoice`);
       } else {
-        console.log(`No invoice items found for expired invoice ${invoiceId}`);
+        console.log(`No invoice items found for expired invoice`);
       }
-      
-      // For expired invoices, we don't create any donor_donations records
-      // since no payment was made
     } else {
-      console.log(`Transaction ${transaction.id} already marked as expired, skipping update`);
+      console.log(`Transaction already marked as expired, skipping update`);
     }
     
     // 4. Update webhook log status
@@ -403,11 +394,11 @@ async function handleInvoiceExpired(payload: any, supabase: any) {
       .update({ status: "completed" })
       .eq("webhook_id", payload.id || "unknown");
     
-    console.log(`Webhook processing completed for invoice ${invoiceId}`);
+    console.log(`Webhook processing completed`);
       
   } catch (error) {
     // Log the error but don't rethrow - we still want to return 200 OK
-    console.error("Error processing invoice.expired webhook:", error);
+    console.error("Error processing webhook");
     
     await supabase
       .from("webhook_logs")

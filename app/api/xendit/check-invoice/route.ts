@@ -11,20 +11,16 @@ import { XenditService } from "@/lib/xendit";
 export async function GET(req: NextRequest) {
   try {
     // Get the invoice ID from the query parameters
-    const url = new URL(req.url);
-    const invoiceId = url.searchParams.get("invoiceId");
+    const { searchParams } = new URL(req.url);
+    const invoiceId = searchParams.get('invoiceId');
     
-    // Validate the invoice ID
     if (!invoiceId) {
-      return NextResponse.json(
-        { error: "Missing invoice ID parameter" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing invoice ID" }, { status: 400 });
     }
     
-    console.log(`Checking invoice status for ID: ${invoiceId}`);
+    console.log("Checking invoice status");
     
-    // Initialize the Xendit service
+    // Initialize Xendit service
     const xenditService = new XenditService(
       process.env.XENDIT_SECRET_KEY || "",
       process.env.XENDIT_WEBHOOK_SECRET || "",
@@ -33,26 +29,16 @@ export async function GET(req: NextRequest) {
       process.env.XENDIT_FAILURE_REDIRECT_URL || ""
     );
     
-    // Get the invoice status from Xendit
+    // Get invoice status from Xendit
     const invoiceStatus = await xenditService.getInvoiceStatus(invoiceId);
     
-    console.log(`Invoice status response:`, {
-      id: invoiceStatus.id,
-      status: invoiceStatus.status,
-      paid_amount: invoiceStatus.paid_amount,
-      payment_method: invoiceStatus.payment_method,
-    });
+    console.log(`Invoice status received: ${invoiceStatus.status}`);
     
-    // Return the invoice status
     return NextResponse.json(invoiceStatus);
   } catch (error) {
-    console.error("Error checking invoice status:", error);
-    
+    console.error("Error checking invoice status");
     return NextResponse.json(
-      { 
-        error: "Failed to check invoice status",
-        details: error instanceof Error ? error.message : "Unknown error" 
-      },
+      { error: "Failed to check invoice status", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

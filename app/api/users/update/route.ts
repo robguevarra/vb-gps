@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   try {
     const { id, email } = await request.json();
     if (!id || !email) {
-      console.error("Missing id or email in payload", { id, email });
+      console.error("Missing required fields in payload");
       return NextResponse.json({ error: "Missing id or email" }, { status: 400 });
     }
     
@@ -29,14 +29,14 @@ export async function POST(request: Request) {
     
     if (error) {
       return NextResponse.json(
-        { error: error.error_description || error.message || error.msg || "Unknown error" },
+        { error: error.message || "Unknown error" },
         { status: 500 }
       );
     }
     
     return NextResponse.json({ data });
   } catch (err: any) {
-    console.error("Caught error in API route:", err.message);
+    console.error("Caught error in API route");
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

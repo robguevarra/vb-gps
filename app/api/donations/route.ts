@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       notes,
       source, // optional field: can be 'online' or 'offline'
     } = payload;
-    console.log("[API] Received payload:", payload);
+    console.log("[API] Received donation request");
 
     // Validate required fields
     if (!donor_name || !amount || !date || !missionary_id) {
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       console.error("[API] Authentication error:", authError?.message || "No authenticated user");
       return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     }
-    console.log("[API] Authenticated user:", authUser);
+    console.log("[API] Authentication successful");
 
     // Override any client-provided recorded_by with the authenticated user's id.
     const recorded_by = authUser.id;
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     let donorId;
     if (existingDonor && existingDonor.id) {
       donorId = existingDonor.id;
-      console.log("[API] Found existing donor with id:", donorId);
+      console.log("[API] Found existing donor");
       // Update donor info if provided and different
       if (
         (donor_email && donor_email !== existingDonor.email) ||
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         if (updateError) {
           console.error("[API] Failed to update donor info:", updateError.message);
         } else {
-          console.log("[API] Updated donor info for donor id:", donorId);
+          console.log("[API] Updated donor info successfully");
         }
       }
     } else {
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: newDonorError ? newDonorError.message : 'Failed to create donor' }, { status: 500 });
       }
       donorId = newDonor.id;
-      console.log("[API] Created new donor with id:", donorId);
+      console.log("[API] Created new donor successfully");
     }
 
     // Build the donation record with the authenticated user's ID for recorded_by.
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
       recorded_by, // Force recorded_by to the authenticated user's ID
     };
 
-    console.log("[API] Inserting donation record:", donationRecord);
+    console.log("[API] Preparing to insert donation record");
 
     // Insert donation record into donor_donations table
     const { data: donation, error: donationError } = await supabase
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: donationError.message }, { status: 500 });
     }
 
-    console.log("[API] Donation inserted successfully:", donation);
+    console.log("[API] Donation inserted successfully");
     return NextResponse.json({ donation }, { status: 200 });
   } catch (error: any) {
     console.error("[API] Unexpected error:", error.message);
