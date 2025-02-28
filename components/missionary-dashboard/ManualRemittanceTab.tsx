@@ -21,7 +21,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
   useEffect(() => {
     const fetchMissionaryName = async () => {
       try {
-        console.log(`Fetching missionary name for ID: ${missionaryId}`);
         const supabase = createClient();
         const { data, error } = await supabase
           .from("profiles")
@@ -35,10 +34,7 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
         }
         
         if (data) {
-          console.log(`Found missionary name: ${data.full_name}`);
           setMissionaryName(data.full_name);
-        } else {
-          console.log("No missionary profile found");
         }
       } catch (err) {
         console.error("Exception in fetchMissionaryName:", err);
@@ -52,27 +48,21 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
   useEffect(() => {
     const checkPaymentStatus = async () => {
       try {
-        console.log(`Checking payment status for missionary ID: ${missionaryId}`);
-        
         // Get payment state from localStorage
         const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
         if (!paymentStateStr) {
-          console.log("No payment state found in localStorage");
           return;
         }
         
-        console.log(`Found payment state: ${paymentStateStr}`);
         const paymentState = JSON.parse(paymentStateStr);
         
         // Check if the payment state is for the current missionary
         if (paymentState.missionaryId !== missionaryId) {
-          console.log(`Payment state missionary ID (${paymentState.missionaryId}) doesn't match current missionary ID (${missionaryId})`);
           return;
         }
         
         // Set the last payment timestamp
         setLastPaymentTimestamp(paymentState.timestamp);
-        console.log(`Last payment timestamp: ${paymentState.timestamp}`);
         
         // Check if there's a recent payment (within the last 30 minutes)
         const paymentTime = new Date(paymentState.timestamp).getTime();
@@ -80,35 +70,24 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
         const timeDiff = currentTime - paymentTime;
         const thirtyMinutesInMs = 30 * 60 * 1000;
         
-        console.log(`Time difference: ${timeDiff}ms (${Math.round(timeDiff/60000)} minutes)`);
-        
         if (timeDiff < thirtyMinutesInMs) {
-          console.log("Payment is recent (within 30 minutes)");
-          
           // Check if there's a payment status in localStorage
           const paymentStatusStr = localStorage.getItem(`payment_status_${missionaryId}`);
           let status = null;
           
           if (paymentStatusStr) {
-            console.log(`Found payment status in localStorage: ${paymentStatusStr}`);
             status = JSON.parse(paymentStatusStr);
             setPaymentStatus(status.status);
-            console.log(`Set payment status to: ${status.status}`);
           } else {
-            console.log("No payment status found in localStorage, setting to pending");
             // If no status is found but there's a recent payment, set status to pending
             setPaymentStatus("pending");
           }
           
           // If status is still pending, check the database directly
           if (!status || status.status === "pending") {
-            console.log("Payment status is pending, checking database directly");
-            
             // Get the invoice ID from payment state
             const invoiceId = paymentState.invoiceId;
             if (invoiceId) {
-              console.log(`Checking payment_transactions for invoice ID: ${invoiceId}`);
-              
               // First try to check the payment_transactions table
               const supabase = createClient();
               const { data, error } = await supabase
@@ -120,18 +99,13 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
               if (error) {
                 // Check if this is a 406 Not Acceptable error, which means the record doesn't exist yet
                 if (error.code === "406" || error.code === "PGRST116") {
-                  console.log(`No transaction found yet for invoice ID: ${invoiceId} (expected during payment processing)`);
-                  
                   // If no transaction is found in the database, try to check the status directly from Xendit API
                   await checkXenditPaymentStatus(invoiceId);
                 } else {
                   console.error("Error checking payment_transactions:", error);
                 }
               } else if (data) {
-                console.log(`Found transaction in database with status: ${data.status}`);
-                
                 if (data.status === "paid") {
-                  console.log("Payment is completed according to database");
                   setPaymentStatus("completed");
                   
                   // Update localStorage
@@ -140,7 +114,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
                     timestamp: new Date().toISOString()
                   }));
                 } else if (data.status === "expired" || data.status === "failed") {
-                  console.log("Payment failed according to database");
                   setPaymentStatus("failed");
                   
                   // Update localStorage
@@ -150,17 +123,11 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
                   }));
                 }
               } else {
-                console.log("No transaction found in database");
-                
                 // If no transaction is found in the database, try to check the status directly from Xendit API
                 await checkXenditPaymentStatus(invoiceId);
               }
-            } else {
-              console.log("No invoice ID found in payment state");
             }
           }
-        } else {
-          console.log("Payment is older than 30 minutes, ignoring");
         }
       } catch (error) {
         console.error("Error checking payment status:", error);
@@ -170,8 +137,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
     // Function to check payment status directly from Xendit API
     const checkXenditPaymentStatus = async (invoiceId: string) => {
       try {
-        console.log(`Checking Xendit API directly for invoice ID: ${invoiceId}`);
-        
         // Call our API endpoint to check the invoice status
         const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
         
@@ -181,10 +146,8 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
         }
         
         const data = await response.json();
-        console.log(`Xendit API response:`, data);
         
         if (data.status === "PAID") {
-          console.log("Payment is completed according to Xendit API");
           setPaymentStatus("completed");
           
           // Update localStorage
@@ -193,7 +156,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
             timestamp: new Date().toISOString()
           }));
         } else if (data.status === "EXPIRED" || data.status === "FAILED") {
-          console.log(`Payment ${data.status.toLowerCase()} according to Xendit API`);
           setPaymentStatus("failed");
           
           // Update localStorage
@@ -214,7 +176,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
     
     // Check payment status when window gets focus
     const handleFocus = () => {
-      console.log("Window focused, checking payment status");
       checkPaymentStatus();
     };
     
@@ -226,7 +187,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
       // Clear any polling intervals when component unmounts
       const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
       if (pollingId) {
-        console.log(`Clearing polling interval ${pollingId} on unmount`);
         clearInterval(parseInt(pollingId));
         localStorage.removeItem(`payment_polling_${missionaryId}`);
       }

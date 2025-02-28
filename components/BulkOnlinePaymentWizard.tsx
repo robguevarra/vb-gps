@@ -14,7 +14,7 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -107,6 +107,43 @@ export function BulkOnlinePaymentWizard({
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
+  // Add state to track which partner box initiated the form
+  const [formOriginIndex, setFormOriginIndex] = useState<number | null>(null);
+
+  // Use an array of refs for dropdowns
+  const dropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Update refs array when donor entries change
+  useEffect(() => {
+    // Resize the refs array to match the number of donor entries
+    dropdownRefs.current = dropdownRefs.current.slice(0, donorEntries.length);
+    // Fill with nulls if needed
+    while (dropdownRefs.current.length < donorEntries.length) {
+      dropdownRefs.current.push(null);
+    }
+  }, [donorEntries.length]);
+
+  // Handle clicking outside the dropdowns
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      // If clicked outside all dropdowns, close the active one
+      const clickedInsideAnyDropdown = dropdownRefs.current.some(
+        (ref) => ref && ref.contains(event.target as Node)
+      );
+      
+      if (!clickedInsideAnyDropdown) {
+        setActiveSearchIndex(null);
+      }
+    }
+
+    // Add event listener
+    document.addEventListener("mousedown", handleClickOutside);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Check authentication and get user profile on component mount
   useEffect(() => {
@@ -154,24 +191,79 @@ export function BulkOnlinePaymentWizard({
     getUserProfile();
   }, []);
 
+  // Direct search function (not debounced) for immediate results
+  const searchPartners = async (term: string) => {
+    if (!term || !term.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      // Add a stronger cache-busting mechanism with a random value
+      const timestamp = new Date().getTime();
+      const random = Math.random().toString(36).substring(2, 15);
+      
+      // Use the API endpoint with cache-busting parameters
+      const response = await fetch(`/api/donors?search=${encodeURIComponent(term.trim())}&_t=${timestamp}&_r=${random}`, {
+        // Add cache control headers
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to search partners');
+      }
+      
+      const result = await response.json();
+      console.log("Search results:", result.donors);
+      setSearchResults(result.donors || []);
+    } catch (error) {
+      console.error("Partner search error:", error);
+      toast({
+        title: "Search Error",
+        description: "Failed to search for partners",
+        variant: "destructive"
+      });
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+  
   // Debounced search function
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
-      if (!term.trim()) {
+      if (!term || !term.trim()) {
         setSearchResults([]);
         return;
       }
 
       setSearchLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("donors")
-          .select("id, name, email, phone")
-          .ilike("name", `%${term.trim()}%`)
-          .limit(10);
-
-        if (error) throw error;
-        setSearchResults(data || []);
+        // Add a stronger cache-busting mechanism with a random value
+        const timestamp = new Date().getTime();
+        const random = Math.random().toString(36).substring(2, 15);
+        
+        // Use the API endpoint with cache-busting parameters
+        const response = await fetch(`/api/donors?search=${encodeURIComponent(term.trim())}&_t=${timestamp}&_r=${random}`, {
+          // Add cache control headers
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to search partners');
+        }
+        
+        const result = await response.json();
+        console.log("Debounced search results:", result.donors);
+        setSearchResults(result.donors || []);
       } catch (error) {
         console.error("Partner search error:", error);
         toast({
@@ -247,6 +339,7 @@ export function BulkOnlinePaymentWizard({
 
   // Handler functions
   const handleSelectDonor = (index: number, donor: Donor) => {
+    // Update the donor entry
     const newEntries = [...donorEntries];
     newEntries[index] = {
       ...newEntries[index],
@@ -262,6 +355,10 @@ export function BulkOnlinePaymentWizard({
     newSearchTerms[index] = donor.name;
     setSearchTerms(newSearchTerms);
     
+    // Close the dropdown
+    setActiveSearchIndex(null);
+    
+    // Clear search results
     setSearchResults([]);
   };
 
@@ -277,49 +374,148 @@ export function BulkOnlinePaymentWizard({
 
   // Fix handleCreateDonor function
   const handleCreateDonor = async () => {
-    if (!newDonorForm.name.trim() || loading) return;
+    if (!newDonorForm.name.trim()) {
+      setNewDonorForm({
+        ...newDonorForm,
+        emailError: "Partner name is required"
+      });
+      return;
+    }
     
-    // Validate email
-    if (!newDonorForm.email || !newDonorForm.email.includes('@')) {
-      setNewDonorForm(prev => ({
-        ...prev,
+    // Validate email format if provided
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (newDonorForm.email && !emailRegex.test(newDonorForm.email)) {
+      setNewDonorForm({
+        ...newDonorForm,
         emailError: "Please enter a valid email address"
-      }));
+      });
       return;
     }
 
     setLoading(true);
     try {
-      const { data: newDonor, error } = await supabase
-        .from("donors")
-        .insert({
+      // Check if a partner with this name or email already exists
+      const searchResponse = await fetch(`/api/donors?search=${encodeURIComponent(newDonorForm.name.trim())}`);
+      
+      if (searchResponse.ok) {
+        const searchResult = await searchResponse.json();
+        const existingDonors = searchResult.donors || [];
+        
+        // Check for exact name match
+        const exactNameMatch = existingDonors.find(
+          (donor: Donor) => donor.name.toLowerCase() === newDonorForm.name.trim().toLowerCase()
+        );
+        
+        // Check for email match if email is provided
+        const emailMatch = newDonorForm.email ? 
+          existingDonors.find(
+            (donor: Donor) => donor.email && donor.email.toLowerCase() === newDonorForm.email.toLowerCase()
+          ) : null;
+          
+        if (exactNameMatch) {
+          setNewDonorForm({
+            ...newDonorForm,
+            emailError: `A partner with the name "${newDonorForm.name}" already exists. Please use a different name or select the existing partner.`
+          });
+          setLoading(false);
+          return;
+        }
+        
+        if (emailMatch) {
+          setNewDonorForm({
+            ...newDonorForm,
+            emailError: `A partner with the email "${newDonorForm.email}" already exists. Please use a different email or select the existing partner.`
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Create a new donor
+      const response = await fetch("/api/donors", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           name: newDonorForm.name,
           email: newDonorForm.email,
-          phone: newDonorForm.phone
-        })
-        .select("*")
-        .single();
+          phone: newDonorForm.phone,
+        }),
+      });
 
-      if (error) throw error;
-
-      if (newDonor) {
-        // Find the active search index or default to 0
-        const index = activeSearchIndex !== null ? activeSearchIndex : 0;
-        handleSelectDonor(index, newDonor);
-        setNewDonorForm({
-          name: "",
-          email: "",
-          phone: "",
-          showForm: false,
-          emailError: undefined
-        });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create partner");
       }
+
+      // Parse the response to get the new donor
+      const responseData = await response.json();
+      
+      // Extract the donor object from the response
+      // The API might return either { donor } or the donor object directly
+      const newDonor = responseData.donor || responseData;
+      
+      console.log("New partner created:", newDonor);
+      
+      // Get the index where we want to add the new donor
+      const targetIndex = formOriginIndex !== null ? formOriginIndex : 0;
+      
+      // Create a copy of the donor entries
+      const newDonorEntries = [...donorEntries];
+      
+      // Update the donor entry at the target index
+      newDonorEntries[targetIndex] = {
+        ...newDonorEntries[targetIndex],
+        donorId: newDonor.id,
+        donorName: newDonor.name,
+        email: newDonor.email || "",
+        phone: newDonor.phone || ""
+      };
+      
+      // Update the donor entries state
+      setDonorEntries(newDonorEntries);
+      
+      // Update the search terms to show the selected donor name
+      const newSearchTerms = [...searchTerms];
+      newSearchTerms[targetIndex] = newDonor.name;
+      setSearchTerms(newSearchTerms);
+      
+      // Reset form state
+      setNewDonorForm({
+        name: "",
+        email: "",
+        phone: "",
+        showForm: false,
+        emailError: undefined
+      });
+      
+      // Reset form origin index
+      setFormOriginIndex(null);
+      
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Partner created successfully",
+      });
+      
+      // IMPORTANT: Instead of trying to refresh the search results,
+      // we'll directly select the newly created partner
+      // This bypasses any issues with search result caching
+      handleSelectDonor(targetIndex, newDonor);
+      
+      // Also perform a search to update the search results for future searches
+      // This ensures the new partner will appear in future searches
+      setTimeout(() => {
+        searchPartners(newDonor.name);
+      }, 500);
     } catch (error) {
       console.error("Error creating partner:", error);
+      
       toast({
         title: "Error",
-        description: "Failed to create new partner. Please check your permissions or try again later.",
-        variant: "destructive"
+        description: error instanceof Error ? error.message : "Failed to create partner",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -788,6 +984,20 @@ export function BulkOnlinePaymentWizard({
     }, 0);
   };
 
+  // Add a function to handle canceling the new donor form
+  const handleCancelNewDonorForm = () => {
+    // Just reset everything related to the form
+    setNewDonorForm({
+      name: "",
+      email: "",
+      phone: "",
+      showForm: false,
+      emailError: undefined
+    });
+    setFormOriginIndex(null);
+    setLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -904,42 +1114,54 @@ export function BulkOnlinePaymentWizard({
                                 }}
                                 onFocus={() => setActiveSearchIndex(index)}
                               />
-                              {activeSearchIndex === index && searchResults.length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                              {activeSearchIndex === index && (
+                                <div 
+                                  ref={(el) => { dropdownRefs.current[index] = el; }}
+                                  className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto"
+                                >
                                   {searchLoading ? (
                                     <div className="p-2 text-center">
                                       <Loader2 className="h-4 w-4 animate-spin mx-auto" />
                                     </div>
                                   ) : (
                                     <>
-                                      {searchResults.map((donor) => (
-                                        <div
-                                          key={donor.id}
-                                          className="p-2 hover:bg-gray-100 cursor-pointer"
-                                          onClick={() => handleSelectDonor(index, donor)}
-                                        >
-                                          <div className="font-medium">{donor.name}</div>
-                                          {donor.email && (
-                                            <div className="text-xs text-gray-500">
-                                              {donor.email}
-                                            </div>
-                                          )}
+                                      {searchResults.length > 0 ? (
+                                        searchResults.map((donor) => (
+                                          <div
+                                            key={donor.id}
+                                            className="p-2 hover:bg-gray-100 cursor-pointer"
+                                            onClick={() => handleSelectDonor(index, donor)}
+                                          >
+                                            <div className="font-medium">{donor.name}</div>
+                                            {donor.email && (
+                                              <div className="text-xs text-gray-500">
+                                                {donor.email}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))
+                                      ) : searchTerms[index] ? (
+                                        <div className="p-2 text-sm text-gray-500">
+                                          No partners found
                                         </div>
-                                      ))}
+                                      ) : null}
                                       <div
                                         className="p-2 hover:bg-gray-100 cursor-pointer border-t"
                                         onClick={() => {
+                                          // Remember which search box we're creating a partner for
+                                          setFormOriginIndex(index);
+                                          
+                                          // Pre-fill the form with the search term
                                           setNewDonorForm({
-                                            ...newDonorForm,
+                                            name: searchTerms[index] || "",
+                                            email: "",
+                                            phone: "",
                                             showForm: true,
+                                            emailError: undefined
                                           });
-                                          // Clear the search term for the active index
-                                          if (activeSearchIndex !== null) {
-                                            const newSearchTerms = [...searchTerms];
-                                            newSearchTerms[activeSearchIndex] = "";
-                                            setSearchTerms(newSearchTerms);
-                                          }
-                                          setSearchResults([]);
+                                          
+                                          // Close the dropdown
+                                          setActiveSearchIndex(null);
                                         }}
                                       >
                                         <div className="flex items-center text-primary">
@@ -954,11 +1176,6 @@ export function BulkOnlinePaymentWizard({
                             </>
                           )}
                         </div>
-                        {entry.donorName && !entry.donorId && (
-                          <div className="text-sm font-medium mt-1">
-                            {entry.donorName}
-                          </div>
-                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -997,15 +1214,27 @@ export function BulkOnlinePaymentWizard({
                   </div>
                 ))}
                 
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleAddDonorEntry}
-                  disabled={donorEntries.length >= 10}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Another Partner
-                </Button>
+                {/* Only show "Add Another Partner" button when total amount doesn't match sum of partner entries */}
+                {parseFloat(totalAmount) > 0 && 
+                 getTotalFromDonors() !== parseFloat(totalAmount) && 
+                 !isNaN(parseFloat(totalAmount)) && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleAddDonorEntry}
+                    disabled={
+                      donorEntries.length >= 10 || 
+                      !donorEntries[donorEntries.length - 1]?.donorId || 
+                      !donorEntries[donorEntries.length - 1]?.amount ||
+                      isNaN(parseFloat(donorEntries[donorEntries.length - 1]?.amount || "0")) ||
+                      parseFloat(donorEntries[donorEntries.length - 1]?.amount || "0") <= 0 ||
+                      newDonorForm.showForm // Disable when the form is open
+                    }
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Another Partner
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1017,12 +1246,7 @@ export function BulkOnlinePaymentWizard({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() =>
-                      setNewDonorForm({
-                        ...newDonorForm,
-                        showForm: false,
-                      })
-                    }
+                    onClick={handleCancelNewDonorForm}
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -1081,13 +1305,29 @@ export function BulkOnlinePaymentWizard({
                     />
                   </div>
 
-                  <Button
-                    className="w-full"
-                    onClick={handleCreateDonor}
-                    disabled={!newDonorForm.name}
-                  >
-                    Create Partner
-                  </Button>
+                  <div className="flex justify-end mt-4">
+                    <Button
+                      variant="outline"
+                      className="mr-2"
+                      onClick={handleCancelNewDonorForm}
+                      disabled={loading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCreateDonor}
+                      disabled={!newDonorForm.name.trim() || !newDonorForm.email || loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Partner"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1119,11 +1359,46 @@ export function BulkOnlinePaymentWizard({
                       {Math.abs(
                         getTotalFromDonors() - parseFloat(totalAmount)
                       ).toLocaleString()}
-                      )
                     </span>
                   )}
                 </span>
               </div>
+
+              {/* Add helpful message when there's a mismatch - moved here */}
+              {parseFloat(totalAmount) > 0 && 
+               getTotalFromDonors() !== parseFloat(totalAmount) && 
+               !isNaN(parseFloat(totalAmount)) && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-4 w-4 text-amber-500 mr-2 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-amber-800">Amount Mismatch</p>
+                      <p className="text-amber-700 mt-1">
+                        {getTotalFromDonors() < parseFloat(totalAmount) 
+                          ? "The total from partners is less than the total amount. Please add more partners or adjust amounts."
+                          : "The total from partners exceeds the total amount. Please adjust partner amounts."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Add success message when amounts match - moved here */}
+              {parseFloat(totalAmount) > 0 && 
+               Math.abs(getTotalFromDonors() - parseFloat(totalAmount)) <= 0.01 && 
+               !isNaN(parseFloat(totalAmount)) && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm">
+                  <div className="flex items-start">
+                    <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-green-800">Amounts Match</p>
+                      <p className="text-green-700 mt-1">
+                        The total from partners matches the total amount. You're ready to proceed.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <Button
                 className="w-full"
@@ -1138,7 +1413,11 @@ export function BulkOnlinePaymentWizard({
                   </>
                 ) : (
                   <>
-                    <Wallet className="mr-2 h-4 w-4" />
+                    {Math.abs(getTotalFromDonors() - parseFloat(totalAmount)) <= 0.01 && !isNaN(parseFloat(totalAmount)) ? (
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Wallet className="mr-2 h-4 w-4" />
+                    )}
                     Pay Now (₱{
                       !isNaN(Number.parseFloat(totalAmount)) 
                         ? Number.parseFloat(totalAmount).toLocaleString() 
