@@ -1048,6 +1048,7 @@ The Xendit integration enables online donations through a secure payment gateway
      - Implements HMAC-based webhook verification
      - Handles various payment methods (credit card, virtual account, e-wallet)
      - Provides detailed error information for troubleshooting
+     - Implements secure logging practices without exposing sensitive data
 
 2. **API Endpoints**
    - **Create Invoice** (`app/api/xendit/create-invoice/route.ts`)
@@ -1061,7 +1062,8 @@ The Xendit integration enables online donations through a secure payment gateway
        - Uses service role client to bypass RLS
        - Sets system user ID for created records
        - Handles various edge cases and errors
-       - Provides detailed logging for troubleshooting
+       - Provides secure logging without exposing sensitive information
+       - Implements proper error handling and validation
 
    - **Webhook Handler** (`app/api/xendit-webhook/route.ts`)
      - Features:
@@ -1074,7 +1076,8 @@ The Xendit integration enables online donations through a secure payment gateway
        - Uses service role client to bypass RLS
        - Implements custom database function for donation creation
        - Handles various webhook event types
-       - Provides detailed logging for troubleshooting
+       - Provides secure logging without exposing sensitive data
+       - Implements robust error handling
 
    - **Invoice Status** (`app/api/xendit/invoice-status/[invoiceId]/route.ts`)
      - Features:
@@ -1084,6 +1087,7 @@ The Xendit integration enables online donations through a secure payment gateway
      - Implementation Notes:
        - Uses service role client to bypass RLS
        - Provides detailed status information for frontend
+       - Implements secure logging practices
 
 3. **Frontend Components**
    - **Online Payment Wizard** (`components/OnlinePaymentWizard.tsx`)
@@ -1099,6 +1103,20 @@ The Xendit integration enables online donations through a secure payment gateway
        - Implements responsive design for mobile and desktop
        - Provides real-time validation feedback
        - Handles various edge cases and errors
+       - Implements secure logging without exposing sensitive data
+
+   - **Bulk Online Payment Wizard** (`components/BulkOnlinePaymentWizard.tsx`)
+     - Features:
+       - Multiple partner entry with amounts
+       - Single payment link generation for total amount
+       - Individual donation records for each partner
+       - Real-time partner search and creation
+       - Mobile-friendly interface
+     - Implementation Notes:
+       - Implements secure logging practices
+       - Provides comprehensive error handling
+       - Uses secure storage for payment information
+       - Implements proper validation for all inputs
 
    - **Payment Status Pages**
      - **Success Page** (`app/payment/success/page.tsx`)
@@ -1240,12 +1258,22 @@ The system uses a materialized view (`missionary_monthly_stats`) to track missio
    - Minimal storage of sensitive information
    - Proper error handling to prevent information leakage
    - Audit trail via webhook logs
+   - Removal of sensitive data from logs
+   - Secure handling of payment information
 
 3. **Access Control**
    - Service role client for bypassing RLS
    - System user ID for created records
    - SECURITY DEFINER function for elevated privileges
    - Proper error handling and logging
+   - Principle of least privilege for database operations
+
+4. **Secure Logging**
+   - Removal of sensitive data from console logs
+   - Redaction of API keys and credentials
+   - Structured logging without sensitive information
+   - Proper error handling without exposing internal details
+   - Comprehensive audit trail for security events
 
 ### Payment Flow
 
@@ -1277,12 +1305,15 @@ The system uses a materialized view (`missionary_monthly_stats`) to track missio
    - Graceful error recovery
    - User-friendly error messages
    - Detailed troubleshooting information
+   - Secure error handling without exposing sensitive data
 
 2. **Security**
    - Webhook signature verification
    - Secure storage of payment details
    - Proper error handling to prevent information leakage
    - Audit trail via webhook logs
+   - Removal of sensitive data from logs
+   - Regular security audits of payment-related code
 
 3. **Performance**
    - Efficient database operations
@@ -1295,5 +1326,569 @@ The system uses a materialized view (`missionary_monthly_stats`) to track missio
    - Comprehensive documentation
    - Clear separation of concerns
    - Detailed logging for troubleshooting
+   - Secure coding practices
+
+## Frontend Developer Guide for Xendit Integration
+
+This section provides frontend developers with practical guidance on implementing Xendit payment integration in their components.
+
+### Available Components and Hooks
+
+#### 1. BulkOnlinePaymentWizard Component
+
+The `BulkOnlinePaymentWizard` is a comprehensive component for collecting donations from multiple partners using a single payment link.
+
+```tsx
+import { BulkOnlinePaymentWizard } from "@/components/BulkOnlinePaymentWizard";
+
+// Usage example
+<BulkOnlinePaymentWizard
+  missionaryId={missionaryId}
+  missionaryName={missionaryName}
+  title="Manual Remittance"
+  onSuccess={() => {
+    // Handle successful payment link generation
+    setPaymentStatus("pending");
+    toast({
+      title: "Success",
+      description: "Payment process initiated successfully",
+    });
+  }}
+  onError={(error) => {
+    // Handle error in payment link generation
+    setPaymentStatus("failed");
+    toast({
+      title: "Error",
+      description: `Payment process failed: ${error}`,
+      variant: "destructive"
+    });
+  }}
+/>
+```
+
+**Props:**
+- `missionaryId` (string): ID of the missionary generating the payment link
+- `missionaryName` (string): Name of the missionary (for display purposes)
+- `title` (string, optional): Custom title for the wizard
+- `onSuccess` (function, optional): Callback function after successful link generation
+- `onError` (function, optional): Callback function after link generation failure
+
+#### 2. ManualRemittanceTabWrapper Component
+
+This component wraps the `BulkOnlinePaymentWizard` and manages payment state, including status tracking and polling.
+
+```tsx
+import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
+
+// Usage example
+<ManualRemittanceTabWrapper missionaryId={userId} />
+```
+
+**Props:**
+- `missionaryId` (string): ID of the missionary
+
+#### 3. Payment State Management
+
+For custom implementations, you can use the following pattern to manage payment state:
+
+```tsx
+// Store payment state
+const storePaymentState = (missionaryId, invoiceId, amount) => {
+  const paymentState = {
+    missionaryId: missionaryId,
+    invoiceId: invoiceId,
+    amount: amount,
+    timestamp: new Date().toISOString()
+  };
+  localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify(paymentState));
+  
+  // Set payment status to pending
+  localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+    status: "pending",
+    timestamp: new Date().toISOString()
+  }));
+};
+
+// Retrieve payment state
+const getPaymentState = (missionaryId) => {
+  const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
+  if (!paymentStateStr) return null;
+  
+  try {
+    return JSON.parse(paymentStateStr);
+  } catch (err) {
+    console.error("Error parsing payment state:", err);
+    return null;
+  }
+};
+
+// Get payment status
+const getPaymentStatus = (missionaryId) => {
+  const statusStr = localStorage.getItem(`payment_status_${missionaryId}`);
+  if (!statusStr) return null;
+  
+  try {
+    return JSON.parse(statusStr);
+  } catch (err) {
+    console.error("Error parsing payment status:", err);
+    return null;
+  }
+};
+
+// Reset payment state
+const resetPaymentState = (missionaryId) => {
+  localStorage.removeItem(`payment_status_${missionaryId}`);
+  localStorage.removeItem(`payment_state_${missionaryId}`);
+  
+  // Clear any polling intervals
+  const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
+  if (pollingId) {
+    clearInterval(parseInt(pollingId));
+    localStorage.removeItem(`payment_polling_${missionaryId}`);
+  }
+};
+```
+
+#### 4. Payment Status Polling
+
+To implement payment status polling in your components:
+
+```tsx
+const startPaymentStatusPolling = (invoiceId, missionaryId) => {
+  // Clear any existing interval first
+  const existingPollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
+  if (existingPollingId) {
+    clearInterval(parseInt(existingPollingId));
+  }
+  
+  // Set up interval to check payment status
+  const intervalId = window.setInterval(async () => {
+    try {
+      // Check payment status using API
+      const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
+      if (!response.ok) return;
+      
+      const data = await response.json();
+      
+      if (data.status === "PAID") {
+        // Handle successful payment
+        localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+          status: "completed",
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Clear the interval
+        clearInterval(intervalId);
+        localStorage.removeItem(`payment_polling_${missionaryId}`);
+      } else if (data.status === "EXPIRED" || data.status === "FAILED") {
+        // Handle failed payment
+        localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+          status: "failed",
+          timestamp: new Date().toISOString()
+        }));
+        
+        // Clear the interval
+        clearInterval(intervalId);
+        localStorage.removeItem(`payment_polling_${missionaryId}`);
+      }
+    } catch (error) {
+      console.error("Error checking payment status:", error);
+    }
+  }, 5000); // Check every 5 seconds
+  
+  // Store interval ID for cleanup
+  localStorage.setItem(`payment_polling_${missionaryId}`, intervalId.toString());
+  
+  // Auto-cleanup after 10 minutes
+  setTimeout(() => {
+    clearInterval(intervalId);
+    localStorage.removeItem(`payment_polling_${missionaryId}`);
+  }, 600000);
+};
+```
+
+### API Endpoints for Frontend Integration
+
+#### 1. Create Invoice Endpoint
+
+```typescript
+// Example: Creating a payment invoice
+const createPaymentInvoice = async (data) => {
+  try {
+    const response = await fetch("/api/xendit/create-invoice", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        donationType: "missionary", // or "church"
+        recipientId: data.missionaryId,
+        amount: parseFloat(data.amount),
+        donor: {
+          name: data.donorName,
+          email: data.donorEmail,
+        },
+        notes: data.notes || `Donation for ${data.missionaryName}`,
+        payment_details: data.paymentDetails || {},
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to create payment");
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error creating payment:", error);
+    throw error;
+  }
+};
+```
+
+**Request Body:**
+```json
+{
+  "donationType": "missionary", // or "church"
+  "recipientId": "missionary-uuid",
+  "amount": 1000,
+  "donor": {
+    "name": "Donor Name",
+    "email": "donor@example.com"
+  },
+  "notes": "Donation notes",
+  "payment_details": {
+    // Additional metadata for the payment
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "invoiceId": "xendit-invoice-id",
+  "invoiceUrl": "https://checkout.xendit.co/web/invoice-id",
+  "status": "PENDING"
+}
+```
+
+#### 2. Check Invoice Status Endpoint
+
+```typescript
+// Example: Checking payment status
+const checkPaymentStatus = async (invoiceId) => {
+  try {
+    const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
+    
+    if (!response.ok) {
+      throw new Error("Failed to check payment status");
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error checking payment status:", error);
+    throw error;
+  }
+};
+```
+
+**Response:**
+```json
+{
+  "id": "xendit-invoice-id",
+  "external_id": "external-id",
+  "status": "PAID", // or "PENDING", "EXPIRED", "FAILED"
+  "amount": 1000
+}
+```
+
+#### 3. Bulk Payment Creation
+
+For creating payments with multiple donors:
+
+```typescript
+// Example: Creating a bulk payment
+const createBulkPayment = async (data) => {
+  try {
+    const response = await fetch("/api/xendit/create-invoice", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        donationType: "missionary",
+        recipientId: data.missionaryId,
+        amount: parseFloat(data.totalAmount),
+        donor: {
+          name: data.contactName,
+          email: data.contactEmail,
+        },
+        notes: `Bulk donation for ${data.missionaryName}`,
+        payment_details: {
+          isBulkDonation: true,
+          donors: data.donors.map(donor => ({
+            donorId: donor.id,
+            donorName: donor.name,
+            amount: parseFloat(donor.amount)
+          })),
+          recipientId: data.missionaryId,
+          recipientName: data.missionaryName
+        }
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to create bulk payment");
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error("Error creating bulk payment:", error);
+    throw error;
+  }
+};
+```
+
+### Implementation Examples
+
+#### 1. Simple Payment Form
+
+```tsx
+import { useState } from "react";
+import { toast } from "@/hooks/use-toast";
+
+export function SimplePaymentForm({ missionaryId, missionaryName }) {
+  const [amount, setAmount] = useState("");
+  const [donorName, setDonorName] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const response = await fetch("/api/xendit/create-invoice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          donationType: "missionary",
+          recipientId: missionaryId,
+          amount: parseFloat(amount),
+          donor: {
+            name: donorName,
+            email: donorEmail,
+          },
+          notes: `Donation for ${missionaryName}`,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create payment");
+      }
+      
+      const data = await response.json();
+      
+      // Store payment info for status checking
+      localStorage.setItem(`payment_${missionaryId}`, JSON.stringify({
+        invoiceId: data.invoiceId,
+        amount: amount,
+        timestamp: new Date().toISOString()
+      }));
+      
+      // Open payment page in new tab
+      window.open(data.invoiceUrl, '_blank', 'noopener,noreferrer');
+      
+      toast({
+        title: "Success",
+        description: "Payment link generated successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create payment",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="amount">Donation Amount</label>
+          <input
+            id="amount"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+            required
+          />
+        </div>
+        
+        <div>
+          <label htmlFor="donorName">Your Name</label>
+          <input
+            id="donorName"
+            type="text"
+            value={donorName}
+            onChange={(e) => setDonorName(e.target.value)}
+            placeholder="John Doe"
+            required
+          />
+        </div>
+        
+        <div>
+          <label htmlFor="donorEmail">Your Email</label>
+          <input
+            id="donorEmail"
+            type="email"
+            value={donorEmail}
+            onChange={(e) => setDonorEmail(e.target.value)}
+            placeholder="john@example.com"
+            required
+          />
+        </div>
+        
+        <button
+          type="submit"
+          disabled={loading}
+        >
+          {loading ? "Processing..." : "Donate Now"}
+        </button>
+      </div>
+    </form>
+  );
+}
+```
+
+#### 2. Payment Status Monitor
+
+```tsx
+import { useState, useEffect } from "react";
+
+export function PaymentStatusMonitor({ invoiceId, missionaryId }) {
+  const [status, setStatus] = useState("pending");
+  
+  useEffect(() => {
+    // Check status immediately
+    checkPaymentStatus();
+    
+    // Set up polling
+    const intervalId = setInterval(checkPaymentStatus, 5000);
+    
+    // Cleanup
+    return () => clearInterval(intervalId);
+    
+    async function checkPaymentStatus() {
+      try {
+        const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        
+        if (data.status === "PAID") {
+          setStatus("completed");
+          clearInterval(intervalId);
+        } else if (data.status === "EXPIRED" || data.status === "FAILED") {
+          setStatus("failed");
+          clearInterval(intervalId);
+        }
+      } catch (error) {
+        console.error("Error checking payment status:", error);
+      }
+    }
+  }, [invoiceId, missionaryId]);
+  
+  return (
+    <div>
+      {status === "pending" && (
+        <div className="bg-yellow-50 p-4 rounded-md">
+          <h3 className="text-yellow-800 font-medium">Payment in Progress</h3>
+          <p className="text-yellow-700">Please complete your payment in the opened tab.</p>
+        </div>
+      )}
+      
+      {status === "completed" && (
+        <div className="bg-green-50 p-4 rounded-md">
+          <h3 className="text-green-800 font-medium">Payment Completed</h3>
+          <p className="text-green-700">Your payment has been successfully processed.</p>
+        </div>
+      )}
+      
+      {status === "failed" && (
+        <div className="bg-red-50 p-4 rounded-md">
+          <h3 className="text-red-800 font-medium">Payment Failed</h3>
+          <p className="text-red-700">There was an issue with your payment. Please try again.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### Best Practices for Frontend Developers
+
+1. **Security**
+   - Never log sensitive payment information (API keys, card details)
+   - Don't store sensitive payment details in localStorage or sessionStorage
+   - Use environment variables for API endpoints in production
+   - Implement proper validation for all user inputs
+   - Handle errors gracefully without exposing sensitive information
+
+2. **User Experience**
+   - Provide clear loading states during API calls
+   - Display meaningful error messages when payments fail
+   - Implement proper validation with helpful error messages
+   - Offer a way to retry failed payments
+   - Provide clear instructions for completing payments
+
+3. **Performance**
+   - Implement debouncing for user inputs
+   - Use optimistic UI updates where appropriate
+   - Clean up intervals and event listeners to prevent memory leaks
+   - Implement proper error boundaries to prevent UI crashes
+
+4. **Testing**
+   - Use Xendit test cards for development:
+     - Success: 4000000000000002
+     - Failure: 4000000000000036
+     - Authentication Required: 4000000000000028
+   - Test the complete payment flow, including success and failure scenarios
+   - Test with different payment methods (credit card, e-wallet, etc.)
+   - Verify that webhooks are properly processed
+
+### Troubleshooting Common Issues
+
+1. **Payment Not Showing as Completed**
+   - Check if the webhook URL is properly configured
+   - Verify that the webhook signature verification is working
+   - Check if the payment status is correctly updated in the database
+   - Ensure that the polling mechanism is working correctly
+
+2. **Payment Link Not Working**
+   - Verify that the invoice was created successfully
+   - Check if the invoice URL is correct
+   - Ensure that the Xendit account is properly configured
+   - Verify that the payment methods are enabled in the Xendit dashboard
+
+3. **Webhook Not Receiving Events**
+   - Check if the webhook URL is accessible from the internet
+   - Verify that the webhook secret is correctly configured
+   - Check server logs for any errors in the webhook handler
+   - Use ngrok or similar tool for local testing
+
+4. **Database Errors**
+   - Check if the system user ID is correctly configured
+   - Verify that the database schema is up to date
+   - Check if the custom database function is properly installed
+   - Ensure that the RLS policies are correctly configured
 
 // ... existing code ... 

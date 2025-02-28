@@ -252,6 +252,10 @@ CREATE INDEX idx_webhook_logs_created_at ON webhook_logs(created_at);
    - Implement proper validation for all inputs
    - Follow PCI DSS guidelines for payment handling
    - Never log or store full credit card details
+   - Remove all sensitive data from console logs
+   - Implement secure error handling without exposing sensitive information
+   - Redact API keys and credentials in logs
+   - Use structured logging without sensitive information
 
 2. **API Security**
    - Validate Xendit callbacks using webhook signatures
@@ -259,18 +263,30 @@ CREATE INDEX idx_webhook_logs_created_at ON webhook_logs(created_at);
    - Use HTTPS for all communications
    - Implement proper error handling with secure error messages
    - Store webhook secret securely in environment variables
+   - Regularly audit API endpoints for security vulnerabilities
+   - Follow the principle of least privilege for API operations
 
 3. **Fraud Prevention**
    - Implement transaction limits
    - Monitor for suspicious activity
    - Add logging for all payment operations
    - Implement idempotency for duplicate webhooks
+   - Ensure secure logging without exposing sensitive data
 
 4. **RLS Policy Compliance**
    - For authenticated users, set `recorded_by` to their user ID
    - For public donations, use a server action with service role to bypass RLS
    - Create a system user for recording public donations
    - Implement proper validation to ensure RLS compliance
+   - Regularly audit RLS policies for security vulnerabilities
+
+5. **Secure Logging Practices**
+   - Remove all sensitive data from console logs
+   - Implement structured logging without sensitive information
+   - Use redaction for API keys and credentials
+   - Ensure proper error handling without exposing internal details
+   - Maintain comprehensive audit trail for security events
+   - Follow the principle of least privilege for logging operations
 
 #### 1.5 Testing Strategy
 
@@ -324,25 +340,234 @@ CREATE INDEX idx_webhook_logs_created_at ON webhook_logs(created_at);
    - System receives webhook and updates records
    - Missionary sees updated donation status in dashboard
 
-#### 1.7 Implementation Timeline
-1. **Week 1: Backend Implementation**
-   - Implement XenditService
-   - Create API endpoints
-   - Set up webhook handling
-   - Implement database operations
+#### 1.7 Frontend Developer Integration Guide
 
-2. **Week 2: Frontend Implementation**
-   - Implement public giving form
-   - Enhance ManualRemittanceWizard
-   - Create success/failure pages
-   - Implement payment status indicators
+This section provides practical guidance for frontend developers implementing Xendit payment integration in their components.
 
-3. **Week 3: Testing and Refinement**
-   - Conduct unit and integration testing
-   - Test edge cases and security
-   - Refine error handling
-   - Optimize performance
-   - Document the implementation
+##### Available Components
+
+1. **BulkOnlinePaymentWizard**
+   - **Purpose**: Multi-step wizard for collecting donations from multiple partners
+   - **Location**: `components/BulkOnlinePaymentWizard.tsx`
+   - **Usage**:
+   ```tsx
+   import { BulkOnlinePaymentWizard } from "@/components/BulkOnlinePaymentWizard";
+   
+   <BulkOnlinePaymentWizard
+     missionaryId={missionaryId}
+     missionaryName={missionaryName}
+     title="Manual Remittance"
+     onSuccess={handleSuccess}
+     onError={handleError}
+   />
+   ```
+
+2. **ManualRemittanceTabWrapper**
+   - **Purpose**: Wrapper component that manages payment state
+   - **Location**: `components/missionary-dashboard/ManualRemittanceTab.tsx`
+   - **Usage**:
+   ```tsx
+   import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
+   
+   <ManualRemittanceTabWrapper missionaryId={userId} />
+   ```
+
+##### Payment Flow Implementation
+
+1. **Basic Payment Flow**
+   ```tsx
+   // 1. Create payment invoice
+   const response = await fetch("/api/xendit/create-invoice", {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({
+       donationType: "missionary",
+       recipientId: missionaryId,
+       amount: parseFloat(amount),
+       donor: { name: donorName, email: donorEmail },
+       notes: `Donation for ${missionaryName}`
+     })
+   });
+   
+   const data = await response.json();
+   
+   // 2. Store payment state for tracking
+   localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify({
+     missionaryId: missionaryId,
+     invoiceId: data.invoiceId,
+     timestamp: new Date().toISOString()
+   }));
+   
+   // 3. Redirect to payment page
+   window.open(data.invoiceUrl, '_blank', 'noopener,noreferrer');
+   
+   // 4. Start polling for payment status
+   startPaymentStatusPolling(data.invoiceId, missionaryId);
+   ```
+
+2. **Payment Status Polling**
+   ```tsx
+   const startPaymentStatusPolling = (invoiceId, missionaryId) => {
+     // Clear any existing interval
+     const existingPollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
+     if (existingPollingId) clearInterval(parseInt(existingPollingId));
+     
+     // Set up polling interval
+     const intervalId = window.setInterval(async () => {
+       try {
+         const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
+         if (!response.ok) return;
+         
+         const data = await response.json();
+         
+         if (data.status === "PAID") {
+           // Handle successful payment
+           localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+             status: "completed",
+             timestamp: new Date().toISOString()
+           }));
+           
+           clearInterval(intervalId);
+           localStorage.removeItem(`payment_polling_${missionaryId}`);
+         } else if (data.status === "EXPIRED" || data.status === "FAILED") {
+           // Handle failed payment
+           localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+             status: "failed",
+             timestamp: new Date().toISOString()
+           }));
+           
+           clearInterval(intervalId);
+           localStorage.removeItem(`payment_polling_${missionaryId}`);
+         }
+       } catch (error) {
+         console.error("Error checking payment status:", error);
+       }
+     }, 5000);
+     
+     // Store interval ID for cleanup
+     localStorage.setItem(`payment_polling_${missionaryId}`, intervalId.toString());
+     
+     // Auto-cleanup after 10 minutes
+     setTimeout(() => {
+       clearInterval(intervalId);
+       localStorage.removeItem(`payment_polling_${missionaryId}`);
+     }, 600000);
+   };
+   ```
+
+3. **Payment Status Component**
+   ```tsx
+   function PaymentStatusIndicator({ invoiceId }) {
+     const [status, setStatus] = useState("pending");
+     
+     useEffect(() => {
+       const checkStatus = async () => {
+         try {
+           const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
+           if (!response.ok) return;
+           
+           const data = await response.json();
+           setStatus(data.status === "PAID" ? "completed" : 
+                     (data.status === "EXPIRED" || data.status === "FAILED") ? "failed" : "pending");
+         } catch (error) {
+           console.error("Error checking status:", error);
+         }
+       };
+       
+       checkStatus();
+       const interval = setInterval(checkStatus, 5000);
+       return () => clearInterval(interval);
+     }, [invoiceId]);
+     
+     return (
+       <div>
+         {status === "pending" && <p>Payment in progress...</p>}
+         {status === "completed" && <p>Payment completed!</p>}
+         {status === "failed" && <p>Payment failed or expired.</p>}
+       </div>
+     );
+   }
+   ```
+
+##### API Endpoints Reference
+
+1. **Create Invoice**
+   - **URL**: `/api/xendit/create-invoice`
+   - **Method**: POST
+   - **Request Body**:
+   ```json
+   {
+     "donationType": "missionary",
+     "recipientId": "missionary-uuid",
+     "amount": 1000,
+     "donor": {
+       "name": "Donor Name",
+       "email": "donor@example.com"
+     },
+     "notes": "Donation notes"
+   }
+   ```
+   - **Response**:
+   ```json
+   {
+     "invoiceId": "xendit-invoice-id",
+     "invoiceUrl": "https://checkout.xendit.co/web/invoice-id",
+     "status": "PENDING"
+   }
+   ```
+
+2. **Check Invoice Status**
+   - **URL**: `/api/xendit/check-invoice?invoiceId=invoice-id`
+   - **Method**: GET
+   - **Response**:
+   ```json
+   {
+     "id": "xendit-invoice-id",
+     "status": "PAID",
+     "amount": 1000
+   }
+   ```
+
+##### Best Practices
+
+1. **Security**
+   - Never log sensitive payment information
+   - Don't store sensitive details in localStorage
+   - Implement proper input validation
+   - Handle errors gracefully without exposing sensitive information
+
+2. **User Experience**
+   - Provide clear loading states
+   - Display meaningful error messages
+   - Offer retry options for failed payments
+   - Provide clear payment instructions
+
+3. **Testing**
+   - Use Xendit test cards:
+     - Success: 4000000000000002
+     - Failure: 4000000000000036
+     - Authentication Required: 4000000000000028
+   - Test complete payment flow
+   - Verify webhook processing
+
+##### Troubleshooting
+
+1. **Payment Not Showing as Completed**
+   - Check webhook configuration
+   - Verify signature verification
+   - Check database updates
+   - Ensure polling is working
+
+2. **Payment Link Not Working**
+   - Verify invoice creation
+   - Check Xendit account configuration
+   - Ensure payment methods are enabled
+
+3. **Local Development**
+   - Use ngrok for webhook testing
+   - Configure environment variables
+   - Check browser console for errors
+   - Verify network requests
 
 ## 2. Email Notification System
 
