@@ -58,8 +58,7 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     
-    // Generate a unique reference ID for tracking this transaction
-    const referenceId = `${donationType.charAt(0)}_${nanoid(10)}`;
+    
     
     // 3. Look up recipient details
     let recipientName = "";
@@ -124,7 +123,8 @@ export async function POST(req: NextRequest) {
       
       donorId = parseInt(newDonor.id); // Convert to number
     }
-    
+    // Generate a unique reference ID for tracking this transaction
+    const referenceId = `${donorId}_${Date.now()}`;
     // 5. Create payment transaction record
     const { data: transaction, error: transactionError } = await supabase
       .from("payment_transactions")
