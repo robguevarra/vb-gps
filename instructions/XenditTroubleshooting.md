@@ -44,7 +44,7 @@ const { error: donationError } = await supabase.rpc(
 - Update the webhook handler to use the correct system user ID:
 
 ```typescript
-const systemUserId = 'fa5060a6-3996-46ea-ae5f-bd3fed7e251a'; // Replace with your actual system user ID
+const systemUserId = 'ece8947d-4d2b-42fc-a860-7d77cfe81ca9'; // Replace with your actual system user ID
 ```
 
 ##### Schema Mismatch

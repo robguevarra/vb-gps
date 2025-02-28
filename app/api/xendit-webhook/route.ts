@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     );
     
     // Use the system user ID for any operations
-    const systemUserId = "fa5060a6-3996-46ea-ae5f-bd3fed7e251a";
+    const systemUserId = process.env.SYSTEM_USER_ID!;
     
     // Store webhook in logs regardless of verification
     await supabase.from("webhook_logs").insert({

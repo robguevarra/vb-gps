@@ -7,7 +7,6 @@ import ProgressBar from '@/components/progress-bar';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, FilePlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { generateMockDonations, mockProfile } from '@/utils/mockData';
 import Link from 'next/link';
 
 export default async function SuperAdminDashboard() {
