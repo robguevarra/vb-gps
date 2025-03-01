@@ -4,10 +4,13 @@ import { createClient } from "@/utils/supabase/client";
 import { useEffect, useState } from "react";
 import { Profile } from "@/types";
 import { MissionariesTable } from "@/components/reports/MissionariesTable";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatNumber } from "@/utils/numbers";
-import { useUser } from "@supabase/auth-helpers-react";
 import { MissionaryLast6Modal, FullMissionaryReportModal } from "@/components/MissionaryModals";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Users, TrendingUp, Target, AlertTriangle } from "lucide-react";
 
 interface ChurchReportsTabProps {
   churchIds: number[];
@@ -59,6 +62,39 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
       }
     }
     return out.reverse();
+  };
+
+  // Calculate summary metrics
+  const calculateSummaryMetrics = () => {
+    if (missionaries.length === 0) return null;
+    
+    // Calculate total monthly goal across all missionaries
+    const totalMonthlyGoal = missionaries.reduce((sum, m) => sum + (m.monthly_goal || 0), 0);
+    
+    // Calculate current month's total donations
+    const now = new Date();
+    const y = now.getFullYear();
+    const mo = now.getMonth();
+    const currentMonthKey = `${y}-${String(mo + 1).padStart(2, "0")}`;
+    
+    let currentMonthTotal = 0;
+    missionaries.forEach(m => {
+      currentMonthTotal += donationMap[m.id]?.[currentMonthKey] || 0;
+    });
+    
+    // Calculate overall percentage
+    const overallPercentage = totalMonthlyGoal > 0 ? (currentMonthTotal / totalMonthlyGoal) * 100 : 0;
+    
+    // Count missionaries below 80% target
+    const belowTargetCount = missionaries.filter(m => getCurrentMonthRatio(m) < 80).length;
+    
+    return {
+      totalMonthlyGoal,
+      currentMonthTotal,
+      overallPercentage,
+      belowTargetCount,
+      missionaryCount: missionaries.length
+    };
   };
 
   useEffect(() => {
@@ -152,30 +188,141 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
     setShowFullReportModal(true);
   };
 
+  const summaryMetrics = calculateSummaryMetrics();
+
   return (
-    <Card className="border shadow-sm mt-8">
-      <CardHeader>
-        <CardTitle>Church Missionary Reports</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading && <p>Loading missionaries...</p>}
-        {error && <p className="text-red-500">{error}</p>}
+    <div className="space-y-6">
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl flex items-center gap-2">
+            Staff Performance Dashboard
+          </CardTitle>
+          <CardDescription>
+            Comprehensive view of missionary performance across your churches
+          </CardDescription>
+        </CardHeader>
         
-        {!isLoading && !error && (
-          <MissionariesTable
-            missionaries={missionaries}
-            missionaryFilter={missionaryFilter}
-            setMissionaryFilter={setMissionaryFilter}
-            missionaryPage={missionaryPage}
-            setMissionaryPage={setMissionaryPage}
-            pageSize={pageSize}
-            openMissionaryModal={openMissionaryModal}
-            openFullMissionaryReport={openFullMissionaryReport}
-            getCurrentMonthRatio={getCurrentMonthRatio}
-            formatNumber={formatNumber}
-          />
-        )}
-      </CardContent>
+        {isLoading ? (
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-8 w-3/4" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        ) : error ? (
+          <CardContent>
+            <div className="p-4 rounded-lg bg-destructive/10 text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              <p>{error}</p>
+            </div>
+          </CardContent>
+        ) : summaryMetrics ? (
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Users className="h-4 w-4" />
+                  <span className="text-sm font-medium">Total Missionaries</span>
+                </div>
+                <p className="text-2xl font-bold">{summaryMetrics.missionaryCount}</p>
+              </div>
+              
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Target className="h-4 w-4" />
+                  <span className="text-sm font-medium">Monthly Goal</span>
+                </div>
+                <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.totalMonthlyGoal)}</p>
+              </div>
+              
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="text-sm font-medium">Current Month</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.currentMonthTotal)}</p>
+                  <Badge variant={summaryMetrics.overallPercentage >= 80 ? "default" : "destructive"}>
+                    {formatNumber(summaryMetrics.overallPercentage)}%
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Below Target</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="text-2xl font-bold">{summaryMetrics.belowTargetCount}</p>
+                  <Badge variant="outline" className="text-muted-foreground">
+                    {summaryMetrics.belowTargetCount > 0 
+                      ? `${Math.round((summaryMetrics.belowTargetCount / summaryMetrics.missionaryCount) * 100)}%` 
+                      : '0%'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        ) : null}
+      </Card>
+
+      <Tabs defaultValue="missionaries" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="missionaries">Missionary Performance</TabsTrigger>
+          <TabsTrigger value="trends">Trends & Analysis</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="missionaries" className="space-y-4">
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-[400px] w-full" />
+            </div>
+          ) : error ? (
+            <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
+              {error}
+            </div>
+          ) : missionaries.length === 0 ? (
+            <div className="p-8 text-center border rounded-lg bg-muted/30">
+              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium mb-2">No missionaries found</h3>
+              <p className="text-muted-foreground">There are no missionaries assigned to your churches yet.</p>
+            </div>
+          ) : (
+            <MissionariesTable
+              missionaries={missionaries}
+              missionaryFilter={missionaryFilter}
+              setMissionaryFilter={setMissionaryFilter}
+              missionaryPage={missionaryPage}
+              setMissionaryPage={setMissionaryPage}
+              pageSize={pageSize}
+              openMissionaryModal={openMissionaryModal}
+              openFullMissionaryReport={openFullMissionaryReport}
+              getCurrentMonthRatio={getCurrentMonthRatio}
+              formatNumber={formatNumber}
+            />
+          )}
+        </TabsContent>
+        
+        <TabsContent value="trends" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Performance Trends</CardTitle>
+              <CardDescription>
+                This section will show trends and analysis of missionary performance over time.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
+              Trends analysis coming soon
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Add modals */}
       <MissionaryLast6Modal
@@ -195,6 +342,6 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
         thirteenMonthKeys={thirteenMonthKeys}
         formatNumber={formatNumber}
       />
-    </Card>
+    </div>
   );
 } 
