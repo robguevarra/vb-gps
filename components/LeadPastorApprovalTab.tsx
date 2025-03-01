@@ -12,6 +12,7 @@
  * - Pagination with customizable page size
  * - Override capabilities for campus director decisions
  * - Detailed request information display
+ * - Mobile-optimized interface
  * 
  * Performance Optimizations:
  * - Memoized request filtering
@@ -33,10 +34,15 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { EmptyState } from "@/components/EmptyState"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Clock, CheckCircle, Filter, CalendarOff, WalletCards, Calendar, Wallet } from "lucide-react"
+import { Clock, CheckCircle, Filter, CalendarOff, WalletCards, Calendar, Wallet, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ApprovalTable } from "@/components/LeadPastorApprovalCard"
 import { PaginationControls } from "@/components/PaginationControls"
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from "@/components/ui/popover"
 
 /** Type definition for possible approval statuses */
 type ApprovalStatus = 'approved' | 'pending' | 'rejected'
@@ -106,6 +112,7 @@ const LeadPastorApprovalTab = ({
   const [activeRequestType, setActiveRequestType] = useState<'leave' | 'surplus'>('leave')
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   
   /**
    * Memoized base requests based on active request type
@@ -138,53 +145,129 @@ const LeadPastorApprovalTab = ({
   const endIdx = startIdx + pageSize
   const paginatedRequests = filteredRequests.slice(startIdx, endIdx)
 
+  // Clear search query
+  const clearSearch = () => {
+    setSearchQuery('')
+    setIsSearchOpen(false)
+  }
+
   return (
-    <div className="lg:ml-0 pl-0 pr-0 pt-0">
-      <div className="flex flex-col sm:flex-row justify-between gap-1 mb-4">
-        <div className="flex gap-2">
-          <Tabs value={activeRequestType} onValueChange={(v) => {
-            setActiveRequestType(v as 'leave' | 'surplus')
-            setCurrentPage(1)
-          }}>
-            <TabsList className="h-9">
-              <TabsTrigger value="leave" className="flex gap-1 px-3 text-sm">
-                <Calendar className="h-4 w-4" /> 
-                Leaves
-              </TabsTrigger>
-              <TabsTrigger value="surplus" className="flex gap-1 px-3 text-sm">
-                <Wallet className="h-4 w-4" /> 
-                Surplus
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+    <div className="w-full bg-white dark:bg-gray-900 rounded-lg shadow-sm border p-4">
+      <div className="flex flex-col space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between gap-3 sm:items-center">
+          <div className="flex-shrink-0">
+            <Tabs value={activeRequestType} onValueChange={(v) => {
+              setActiveRequestType(v as 'leave' | 'surplus')
+              setCurrentPage(1)
+            }}>
+              <TabsList className="h-9 w-full sm:w-auto grid grid-cols-2 sm:flex">
+                <TabsTrigger value="leave" className="flex gap-1 px-3 text-sm">
+                  <Calendar className="h-4 w-4" /> 
+                  <span className="hidden sm:inline">Leaves</span>
+                  <span className="sm:hidden">Leave</span>
+                </TabsTrigger>
+                <TabsTrigger value="surplus" className="flex gap-1 px-3 text-sm">
+                  <Wallet className="h-4 w-4" /> 
+                  <span>Surplus</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isSearchOpen ? (
+              <div className="relative flex-1 sm:max-w-[250px]">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search by name or reason..." 
+                  className="pl-8 pr-8 h-9 text-sm"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  autoFocus
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1 h-7 w-7 p-0"
+                    onClick={clearSearch}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9"
+                onClick={() => setIsSearchOpen(true)}
+              >
+                <Search className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Search</span>
+              </Button>
+            )}
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9">
+                  <Filter className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Filter</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-4">
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm">Filter Options</h3>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Status</label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="text-xs h-7">All</Button>
+                      <Button size="sm" variant="outline" className="text-xs h-7 bg-blue-50">CD Approved</Button>
+                      <Button size="sm" variant="outline" className="text-xs h-7">CD Rejected</Button>
+                    </div>
+                  </div>
+                  <div className="pt-2 flex justify-between">
+                    <Button variant="outline" size="sm">Reset</Button>
+                    <Button size="sm">Apply</Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
-        <div className="flex gap-1 items-center">
-          <Input 
-            placeholder="Search..." 
-            className="max-w-[180px] h-7 text-xs"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setCurrentPage(1)
-            }}
+        <div className="mt-2">
+          {searchQuery && (
+            <div className="mb-3 flex items-center">
+              <Badge variant="secondary" className="px-2 py-1">
+                Search results: {filteredRequests.length}
+              </Badge>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 ml-2 text-xs"
+                onClick={clearSearch}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+
+          <ApprovalTable
+            requests={paginatedRequests}
+            requestType={activeRequestType}
+            approvalStatus="pending"
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
           />
-          <Button variant="outline" size="sm" className="h-7">
-            <Filter className="h-3 w-3" />
-          </Button>
         </div>
       </div>
-
-      <ApprovalTable
-        requests={paginatedRequests}
-        requestType={activeRequestType}
-        approvalStatus="pending"
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-        pageSize={pageSize}
-        onPageSizeChange={setPageSize}
-      />
     </div>
   )
 }
@@ -221,12 +304,49 @@ function RequestGrid({ requests, type, isApproved = false }: RequestGridProps) {
     <ScrollArea className="h-[600px] rounded-md border">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
         {requests.map((request) => (
-          <LeadPastorApprovalCard
+          <div
             key={`${type}-${request.id}`}
-            request={request}
-            requestType={type}
-            isApproved={isApproved}
-          />
+            className="p-4 border rounded-lg shadow-sm"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h4 className="font-medium">{request.requester?.full_name}</h4>
+                <p className="text-sm text-muted-foreground">{request.date}</p>
+              </div>
+              <Badge 
+                variant={
+                  request.campusDirectorApproval === 'approved' 
+                    ? 'default' 
+                    : request.campusDirectorApproval === 'rejected'
+                    ? 'destructive'
+                    : 'outline'
+                }
+              >
+                {request.campusDirectorApproval}
+              </Badge>
+            </div>
+            <div className="mt-2">
+              <p className="text-sm"><strong>Reason:</strong> {request.reason}</p>
+              {type === 'leave' ? (
+                <p className="text-sm mt-1">
+                  <strong>Period:</strong> {request.startDate} to {request.endDate}
+                </p>
+              ) : (
+                <p className="text-sm mt-1">
+                  <strong>Amount:</strong> ₱{request.amount?.toLocaleString()}
+                </p>
+              )}
+              {request.campusDirectorNotes && (
+                <p className="text-sm mt-1 italic">
+                  <strong>CD Notes:</strong> {request.campusDirectorNotes}
+                </p>
+              )}
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button size="sm" variant="destructive">Reject</Button>
+              <Button size="sm" variant="default">Approve</Button>
+            </div>
+          </div>
         ))}
       </div>
     </ScrollArea>

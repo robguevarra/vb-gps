@@ -29,7 +29,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
           .single();
           
         if (error) {
-          console.error("Error fetching missionary name:", error);
           return;
         }
         
@@ -37,7 +36,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
           setMissionaryName(data.full_name);
         }
       } catch (err) {
-        console.error("Exception in fetchMissionaryName:", err);
       }
     };
     
@@ -102,7 +100,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
                   // If no transaction is found in the database, try to check the status directly from Xendit API
                   await checkXenditPaymentStatus(invoiceId);
                 } else {
-                  console.error("Error checking payment_transactions:", error);
                 }
               } else if (data) {
                 if (data.status === "paid") {
@@ -130,7 +127,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
           }
         }
       } catch (error) {
-        console.error("Error checking payment status:", error);
       }
     };
     
@@ -141,7 +137,6 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
         const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
         
         if (!response.ok) {
-          console.error(`Error checking Xendit API: ${response.status} ${response.statusText}`);
           return;
         }
         
@@ -164,10 +159,8 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
             timestamp: new Date().toISOString()
           }));
         } else {
-          console.log(`Payment status from Xendit API received`);
         }
       } catch (error) {
-        console.error("Error checking Xendit API:", error);
       }
     };
     
@@ -187,7 +180,10 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
       // Clear any polling intervals when component unmounts
       const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
       if (pollingId) {
-        clearInterval(parseInt(pollingId));
+        try {
+          clearInterval(parseInt(pollingId));
+        } catch (err) {
+        }
         localStorage.removeItem(`payment_polling_${missionaryId}`);
       }
     };
@@ -227,28 +223,21 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
   };
   
   const handleResetPaymentStatus = () => {
-    console.log("Resetting payment status");
     setPaymentStatus("idle");
     
     // Clear localStorage items
     localStorage.removeItem(`payment_status_${missionaryId}`);
     localStorage.removeItem(`payment_state_${missionaryId}`);
     localStorage.removeItem(`payment_${missionaryId}`);
-    console.log("Cleared payment status, state, and info from localStorage");
     
     // Clear any polling intervals
     const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
     if (pollingId) {
-      console.log(`Clearing polling interval: ${pollingId}`);
       try {
         clearInterval(parseInt(pollingId));
-        console.log("Interval cleared successfully");
       } catch (err) {
-        console.error("Error clearing interval:", err);
       }
       localStorage.removeItem(`payment_polling_${missionaryId}`);
-    } else {
-      console.log("No polling interval found to clear");
     }
   };
 

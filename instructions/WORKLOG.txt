@@ -30,4 +30,64 @@ WHERE schemaname = 'public';
 
 ngrok http --url=jay-trusty-possibly.ngrok-free.app 3000
 
+Now lets move to next tab - Staff Reports. 
 
+What it's supposed to do: is to show reports to Lead pastor of every missionary under their local church's performance. 
+1. so we want to see current percentages
+2. So we want to show the 6 months performance of every missionary
+3. and we want to show also the full 1 year report. (13 months actually)
+
+Start looking at our code and waht it does, and I wnt you to thikn of best implementation using industry best practices and standards. 
+I want you to use your UI/UX experience as a 10x senior dev to give your suggestions.  
+
+api logs. 
+remove all other logging. 
+
+---------
+Recommendations for Server-Side Logging Best Practices
+Based on my experience with secure web applications, here are my recommendations for server-side logging:
+Use a Structured Logging System:
+Implement a proper logging library like Winston, Pino, or Bunyan instead of console.log
+These libraries provide structured logging with different log levels (error, warn, info, debug)
+They can be configured to output logs in different formats (JSON, plain text)
+Log Levels and Environment-Based Configuration:
+Use different log levels for different environments:
+Production: Error and Warning logs only
+Staging: Error, Warning, and Info logs
+Development: All logs including Debug
+Configure log verbosity based on environment variables
+Sensitive Data Handling:
+Never log sensitive information like passwords, tokens, or personal identifiable information (PII)
+Implement data masking for sensitive fields (e.g., mask credit card numbers, emails)
+Be careful with error objects as they might contain sensitive stack traces
+Centralized Logging:
+Use a centralized logging service (like Datadog, New Relic, Loggly, or ELK stack)
+This allows for better monitoring, alerting, and troubleshooting across services
+Contextual Information:
+Include request IDs in logs to trace requests across services
+Log user IDs (but not personal info) to help with troubleshooting user-specific issues
+Include timestamps and service/component names
+API Call Logging:
+Log API request metadata (method, path, status code, response time)
+Don't log full request/response bodies in production as they may contain sensitive data
+For third-party API calls, log the request being made and response status (not full responses)
+Error Handling:
+Log all errors with appropriate context
+Distinguish between expected errors (e.g., validation errors) and unexpected errors
+Include stack traces for unexpected errors in non-production environments
+Security Events:
+Log authentication attempts (success/failure)
+Log access to sensitive resources
+Log security-related events (password changes, permission changes)
+Performance Metrics:
+Log performance metrics for critical operations
+Consider using APM (Application Performance Monitoring) tools
+Log Rotation and Retention:
+Implement log rotation to prevent logs from consuming too much disk space
+Define retention policies based on compliance requirements
+For your Xendit API integration specifically, I recommend:
+Logging transaction IDs and reference IDs for all payment operations
+Logging payment status changes without including full payment details
+Implementing detailed logging for webhook processing with clear transaction tracking
+Using structured logging with correlation IDs to track payment flows end-to-end
+By implementing these practices, you'll have better visibility into your application's behavior while maintaining security and performance.

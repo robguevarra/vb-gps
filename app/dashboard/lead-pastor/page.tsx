@@ -8,6 +8,9 @@ import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
 import { LeadPastorSidebar } from "@/components/LeadPastorSidebar";
 
+// Define the ApprovalStatus type to match the one in LeadPastorApprovalTab
+type ApprovalStatus = 'approved' | 'pending' | 'rejected'
+
 export default async function LeadPastorDashboard({
   searchParams,
 }: {
@@ -41,19 +44,11 @@ export default async function LeadPastorDashboard({
     .select("id, full_name, role")
     .eq("role", "lead_pastor");
 
-  if (leadPastorsError) {
-    console.error("Error fetching lead pastors", leadPastorsError);
-  }
-
   // Fetch local churches.
   const { data: localChurches, error: churchError } = await supabase
     .from('local_churches')
     .select('id, name')
     .eq('lead_pastor_id', selectedLeadPastorId);
-
-  if (churchError) {
-    console.error('Local churches fetch error:', churchError);
-  }
 
   // Get all staff (missionaries and campus directors) in the lead pastor's churches
   const { data: churchStaff } = await supabase
@@ -138,7 +133,7 @@ export default async function LeadPastorDashboard({
     startDate: string;
     endDate: string;
     reason: string;
-    status: string;
+    status: ApprovalStatus;
     date: string;
     campusDirectorApproval: string;
     campusDirectorNotes?: string;
@@ -152,7 +147,7 @@ export default async function LeadPastorDashboard({
     type: "Surplus";
     amount: number;
     reason: string;
-    status: string;
+    status: ApprovalStatus;
     date: string;
     campusDirectorApproval: string;
     campusDirectorNotes?: string;
@@ -167,7 +162,7 @@ export default async function LeadPastorDashboard({
     startDate: req.start_date,
     endDate: req.end_date,
     reason: req.reason,
-    status: req.status,
+    status: req.status as ApprovalStatus,
     date: req.created_at,
     campusDirectorApproval: req.campus_director_approval,
     campusDirectorNotes: req.campus_director_notes,
@@ -183,7 +178,7 @@ export default async function LeadPastorDashboard({
     type: "Surplus",
     amount: req.amount_requested,
     reason: req.reason,
-    status: req.status,
+    status: req.status as ApprovalStatus,
     date: req.created_at,
     campusDirectorApproval: req.campus_director_approval,
     campusDirectorNotes: req.campus_director_notes,
@@ -208,15 +203,15 @@ export default async function LeadPastorDashboard({
     <div className="min-h-screen bg-background">
       <LeadPastorSidebar />
       
-      <main className="lg:ml-64 p-6 space-y-6">
-        <header className="space-y-1">
-          <h1 className="text-3xl font-bold">{selectedLeadPastorName}</h1>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span>Assigned Churches:</span>
-            <div className="flex gap-1.5">
+      <main className="lg:ml-64 pt-20 px-4 sm:px-6 pb-6 space-y-4 sm:space-y-6">
+        <header className="space-y-2 bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm border">
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#00458d]">{selectedLeadPastorName}</h1>
+          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+            <span className="text-sm sm:text-base">Assigned Churches:</span>
+            <div className="flex flex-wrap gap-1.5">
               {localChurches?.length ? (
                 localChurches.map((ch) => (
-                  <span key={ch.id} className="badge badge-outline">
+                  <span key={ch.id} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                     {ch.name}
                   </span>
                 ))
@@ -228,12 +223,12 @@ export default async function LeadPastorDashboard({
         </header>
 
         {userRole === 'superadmin' && (
-          <div className="bg-accent/50 p-4 rounded-lg">
+          <div className="bg-accent/50 p-4 rounded-lg shadow-sm border">
             <LeadPastorSelector leadPastors={leadPastors || []} userId={selectedLeadPastorId} />
           </div>
         )}
 
-        <section className="space-y-8">
+        <section className="space-y-4 sm:space-y-8">
           <LeadPastorDashboardClient
             pendingLeaveApprovals={transformedPendingLeaveApprovals}
             approvedLeaveApprovals={transformedApprovedLeaveApprovals}

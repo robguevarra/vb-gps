@@ -86,10 +86,6 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
     .eq("status", "pending")
     .eq("campus_director_approval", "none");
     
-  if (pendingLeaveError) {
-    console.error("Error fetching pending leave requests:", pendingLeaveError);
-  }
-
   // Fetch approved leave requests
   const { data: approvedLeaveApprovalsData, error: approvedLeaveError } = await supabase
     .from("leave_requests")
@@ -107,10 +103,6 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
     .in("requester_id", subordinateIds)
     .eq("campus_director_approval", "approved");
     
-  if (approvedLeaveError) {
-    console.error("Error fetching approved leave requests:", approvedLeaveError);
-  }
-
   // Fetch pending surplus requests
   const { data: pendingSurplusApprovalsData, error: pendingSurplusError } = await supabase
     .from("surplus_requests")
@@ -127,10 +119,6 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
     .eq("status", "pending")
     .eq("campus_director_approval", "none");
     
-  if (pendingSurplusError) {
-    console.error("Error fetching pending surplus requests:", pendingSurplusError);
-  }
-
   // Fetch approved surplus requests
   const { data: approvedSurplusApprovalsData, error: approvedSurplusError } = await supabase
     .from("surplus_requests")
@@ -145,10 +133,6 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
     `)
     .in("missionary_id", subordinateIds)
     .eq("campus_director_approval", "approved");
-    
-  if (approvedSurplusError) {
-    console.error("Error fetching approved surplus requests:", approvedSurplusError);
-  }
 
   // Format leave approvals with proper typing
   const pendingLeaveApprovals: LeaveApproval[] = (pendingLeaveApprovalsData || []).map((r) => {

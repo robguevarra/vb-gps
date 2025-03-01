@@ -178,7 +178,6 @@ export async function POST(req: NextRequest) {
       }).select("id").single();
       
       if (invoiceItemError) {
-        console.error("Failed to create invoice item");
         return NextResponse.json(
           { error: "Failed to create invoice item", details: invoiceItemError },
           { status: 500 }
@@ -186,9 +185,7 @@ export async function POST(req: NextRequest) {
       }
       
       invoiceItem = data;
-      console.log(`Created invoice item successfully`);
     } else {
-      console.log(`Bulk donation detected - skipping invoice item creation`);
     }
     
     // 7. Call Xendit API to create invoice
@@ -197,12 +194,6 @@ export async function POST(req: NextRequest) {
         !process.env.XENDIT_CALLBACK_URL || 
         !process.env.XENDIT_SUCCESS_REDIRECT_URL || 
         !process.env.XENDIT_FAILURE_REDIRECT_URL) {
-      console.error("Missing Xendit environment variables:", {
-        secretKey: !!process.env.XENDIT_SECRET_KEY,
-        callbackUrl: !!process.env.XENDIT_CALLBACK_URL,
-        successUrl: !!process.env.XENDIT_SUCCESS_REDIRECT_URL,
-        failureUrl: !!process.env.XENDIT_FAILURE_REDIRECT_URL
-      });
       return NextResponse.json(
         { error: "Xendit configuration error", details: "Missing required environment variables" },
         { status: 500 }

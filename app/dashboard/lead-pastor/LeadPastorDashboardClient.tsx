@@ -5,13 +5,17 @@ import { ChurchReportsTab } from "@/components/ChurchReportsTab"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ApprovedRequestsTab } from "@/components/ApprovedRequestsTab"
 
+// Define the ApprovalStatus type to match the one in LeadPastorApprovalTab
+type ApprovalStatus = 'approved' | 'pending' | 'rejected'
+
+// Update LeaveApproval to use ApprovalStatus
 type LeaveApproval = {
   id: string
   type: "Vacation Leave" | "Sick Leave"
   startDate: string
   endDate: string
   reason: string
-  status: string
+  status: ApprovalStatus
   date: string
   campusDirectorApproval: string
   campusDirectorNotes?: string
@@ -20,12 +24,13 @@ type LeaveApproval = {
   requester?: { full_name: string }
 }
 
+// Update SurplusApproval to use ApprovalStatus
 type SurplusApproval = {
   id: string
   type: "Surplus"
   amount: number
   reason: string
-  status: string
+  status: ApprovalStatus
   date: string
   campusDirectorApproval: string
   campusDirectorNotes?: string
@@ -57,7 +62,7 @@ export default function LeadPastorDashboardClient({
 }: LeadPastorDashboardClientProps) {
   return (
     <TooltipProvider>
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-8">
         {currentTab === 'approvals' && (
           <LeadPastorApprovalTab
             pendingLeaveApprovals={pendingLeaveApprovals}
@@ -80,7 +85,7 @@ export default function LeadPastorDashboardClient({
         )}
         
         {currentTab === 'reports' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {churchIds.length > 0 ? (
               <ChurchReportsTab churchIds={churchIds} />
             ) : (

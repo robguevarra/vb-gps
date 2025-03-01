@@ -44,27 +44,18 @@ export default async function SuperAdminDashboard({
     .select("*")
     .eq("id", user.id)
     .single();
-  if (profileError) {
-    console.error("Error fetching profile data:", profileError.message);
-  }
 
   // Fetch churches for the Churches tab.
   const { data: churches, error: churchesError } = await supabase
     .from("local_churches")
     .select("id, name, lead_pastor_id")
     .order("name", { ascending: true });
-  if (churchesError) {
-    console.error("Error fetching churches:", churchesError.message);
-  }
 
   // Fetch lead pastors for the Churches modal.
   const { data: leadPastors, error: leadPastorsError } = await supabase
     .from("profiles")
     .select("id, full_name")
     .eq("role", "lead_pastor");
-  if (leadPastorsError) {
-    console.error("Error fetching lead pastors:", leadPastorsError.message);
-  }
 
   // Fetch profiles for users (excluding superadmins).
   const { data: profilesData, error: profilesError } = await supabase
@@ -72,19 +63,14 @@ export default async function SuperAdminDashboard({
     .select("id, full_name, role, local_church_id, monthly_goal")
     .neq("role", "superadmin")
     .order("full_name", { ascending: true });
-  if (profilesError) {
-    console.error("Error fetching profiles:", profilesError.message);
-  }
 
   // Fetch auth users (to get emails).
   const { data: authUsersData, error: authUsersError } =
     await supabase.auth.admin.listUsers();
-  if (authUsersError) {
-    console.error("Error fetching auth users:", authUsersError.message);
-  }
 
   // Merge profiles with auth users to attach emails.
-  let users = [];
+  let users: Array<any> = [];
+  
   if (profilesData && authUsersData && authUsersData.users) {
     users = profilesData.map((profile) => {
       const authUser = authUsersData.users.find((u) => u.id === profile.id);

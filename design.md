@@ -536,3 +536,233 @@ When implementing new features or components for the Lead Pastor Dashboard, deve
 ## Conclusion
 
 This design document serves as the definitive guide for UI/UX implementation in the Lead Pastor Dashboard. By following these guidelines, we ensure a consistent, accessible, and performant experience across all devices and screen sizes. The mobile-first approach with progressive enhancement guarantees that all users receive an optimal experience tailored to their device capabilities. 
+
+## Recent Mobile-Friendly Enhancements (2023)
+
+The Lead Pastor Dashboard has undergone significant mobile-friendly improvements to enhance usability on smaller screens. These updates focus on creating a more intuitive, touch-friendly experience while maintaining all functionality.
+
+### 1. Enhanced LeadPastorApprovalTab
+
+The approval interface has been completely redesigned for mobile with these key improvements:
+
+```typescript
+<TabsList className="h-9 w-full sm:w-auto grid grid-cols-2 sm:flex">
+  <TabsTrigger value="leave" className="flex gap-1 px-3 text-sm">
+    <Calendar className="h-4 w-4" /> 
+    <span className="hidden sm:inline">Leaves</span>
+    <span className="sm:hidden">Leave</span>
+  </TabsTrigger>
+  <TabsTrigger value="surplus" className="flex gap-1 px-3 text-sm">
+    <Wallet className="h-4 w-4" /> 
+    <span>Surplus</span>
+  </TabsTrigger>
+</TabsList>
+```
+
+**Key Mobile Improvements:**
+
+1. **Adaptive Tab Interface**:
+   - Grid-based layout on mobile (grid grid-cols-2) that spans full width
+   - Flex-based layout on desktop (sm:flex)
+   - Conditional text display (hidden sm:inline, sm:hidden) to optimize space
+   - Consistent iconography for visual recognition
+
+2. **Collapsible Search**:
+   - Toggle-able search field that expands when needed:
+   ```typescript
+   {isSearchOpen ? (
+     <div className="relative flex-1 sm:max-w-[250px]">
+       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+       <Input 
+         placeholder="Search by name or reason..." 
+         className="pl-8 pr-8 h-9 text-sm"
+         value={searchQuery}
+         onChange={(e) => {
+           setSearchQuery(e.target.value)
+           setCurrentPage(1)
+         }}
+         autoFocus
+       />
+       {searchQuery && (
+         <Button
+           variant="ghost"
+           size="sm"
+           className="absolute right-1 top-1 h-7 w-7 p-0"
+           onClick={clearSearch}
+         >
+           <X className="h-4 w-4" />
+         </Button>
+       )}
+     </div>
+   ) : (
+     <Button 
+       variant="outline" 
+       size="sm" 
+       className="h-9"
+       onClick={() => setIsSearchOpen(true)}
+     >
+       <Search className="h-4 w-4 mr-2" />
+       <span className="hidden sm:inline">Search</span>
+     </Button>
+   )}
+   ```
+   - Clear button for easy reset
+   - Auto-focus for immediate typing
+   - Space-efficient when collapsed
+
+3. **Touch-Optimized Request Cards**:
+   - Card-based layout for approval requests:
+   ```typescript
+   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+     {requests.map((request) => (
+       <div
+         key={`${type}-${request.id}`}
+         className="p-4 border rounded-lg shadow-sm"
+       >
+         {/* Card content */}
+       </div>
+     ))}
+   </div>
+   ```
+   - Single column on mobile, dual column on large screens
+   - Adequate padding and spacing for touch interaction
+   - Clear visual hierarchy with semantic grouping of information
+   - Prominent action buttons with appropriate sizing
+
+### 2. Improved ApprovedRequestsTab
+
+The approved requests interface has been enhanced with these mobile-friendly features:
+
+```typescript
+<Popover>
+  <PopoverTrigger asChild>
+    <Button variant="outline" size="sm" className="h-9">
+      <Filter className="h-4 w-4 sm:mr-2" />
+      <span className="hidden sm:inline">Filters</span>
+      {hasActiveFilters && (
+        <Badge variant="secondary" className="ml-1 rounded-full px-1 h-5 min-w-5 flex items-center justify-center">
+          !
+        </Badge>
+      )}
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 p-4">
+    {/* Filter content */}
+  </PopoverContent>
+</Popover>
+```
+
+**Key Mobile Improvements:**
+
+1. **Responsive Popover Menus**:
+   - Adaptive width calculation (w-[calc(100vw-2rem)]) for mobile
+   - Fixed width (sm:w-80) for desktop
+   - Adequate padding (p-4) for touch interaction
+   - Visual indicators for active filters
+
+2. **Simplified Mobile Controls**:
+   - Icon-only buttons on mobile with text on desktop (hidden sm:inline)
+   - Consistent height (h-9) for touch targets
+   - Badge indicators for active state awareness
+   - Compact layout that preserves functionality
+
+3. **Enhanced Filter Tags**:
+   - Compact, touch-friendly filter tags:
+   ```typescript
+   <Badge variant="outline" className="flex items-center gap-1 h-7 px-2">
+     <Calendar className="h-3 w-3" />
+     <span className="text-xs">
+       {format(dateRange.from, 'MMM d')} - {format(dateRange.to, 'MMM d')}
+     </span>
+     <Button 
+       variant="ghost" 
+       size="sm" 
+       className="h-5 w-5 p-0 ml-1 hover:bg-transparent"
+       onClick={() => setDateRange({ from: undefined, to: undefined })}
+     >
+       <X className="h-3 w-3" />
+     </Button>
+   </Badge>
+   ```
+   - Clear visual representation of active filters
+   - Individual and global clear options
+   - Compact but legible text
+
+### 3. Responsive Dashboard Layout
+
+The overall dashboard layout has been improved for mobile:
+
+```typescript
+<main className="lg:ml-64 pt-20 px-4 sm:px-6 pb-6 space-y-4 sm:space-y-6">
+  <header className="space-y-2 bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm border">
+    <h1 className="text-2xl sm:text-3xl font-bold text-[#00458d]">{selectedLeadPastorName}</h1>
+    <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+      <span className="text-sm sm:text-base">Assigned Churches:</span>
+      <div className="flex flex-wrap gap-1.5">
+        {localChurches?.length ? (
+          localChurches.map((ch) => (
+            <span key={ch.id} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+              {ch.name}
+            </span>
+          ))
+        ) : (
+          <span className="text-sm italic">No churches assigned</span>
+        )}
+      </div>
+    </div>
+  </header>
+  
+  {/* Dashboard content */}
+</main>
+```
+
+**Key Mobile Improvements:**
+
+1. **Responsive Spacing**:
+   - Adaptive padding (px-4 sm:px-6)
+   - Responsive vertical spacing (space-y-4 sm:space-y-6)
+   - Full-width layout on mobile, sidebar-adjusted on desktop (lg:ml-64)
+
+2. **Mobile-Optimized Header**:
+   - Responsive typography (text-2xl sm:text-3xl)
+   - Flexible wrapping for church tags (flex-wrap)
+   - Compact text on mobile (text-sm sm:text-base)
+   - Consistent branding with Victory Bulacan color (#00458d)
+
+3. **Touch-Friendly Church Tags**:
+   - Pill-shaped tags for clear visual separation
+   - Adequate padding (px-2.5 py-0.5) for legibility
+   - Flexible wrapping to accommodate any number of churches
+   - Semantic coloring for visual consistency
+
+### 4. Mobile UX Principles Applied
+
+These enhancements follow several key mobile UX principles:
+
+1. **Progressive Disclosure**:
+   - Information is revealed progressively as needed
+   - Complex filters and controls are hidden in popovers until required
+   - Search expands only when actively being used
+
+2. **Touch-First Interaction**:
+   - All interactive elements sized appropriately for touch (minimum 44×44px)
+   - Adequate spacing between touch targets
+   - Clear visual feedback for touch interactions
+
+3. **Content Prioritization**:
+   - Most important information displayed first
+   - Secondary information accessible through expandable interfaces
+   - Critical actions remain easily accessible
+
+4. **Visual Clarity**:
+   - Consistent use of the Victory Bulacan brand color (#00458d)
+   - Clear visual hierarchy with card-based layouts
+   - Semantic use of color for status indicators
+   - Adequate contrast for all text elements
+
+5. **Performance Considerations**:
+   - Efficient rendering with pagination
+   - Optimized re-renders with memoization
+   - Responsive image handling
+
+These mobile-friendly enhancements ensure that lead pastors can effectively manage approvals, view reports, and monitor missionary performance from any device, providing a seamless experience regardless of screen size. 

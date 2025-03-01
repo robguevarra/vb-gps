@@ -32,25 +32,12 @@ export default async function FinanceDashboard() {
     .eq("id", user.id)
     .single();
 
-  if (profileError) {
-    console.error("[FinanceDashboard] Error fetching finance profile:", profileError.message);
-    // Optionally handle this error (e.g., show a message or redirect)
-  } else {
-    console.log("[FinanceDashboard] Finance officer's local_church_id:", financeProfile.local_church_id);
-  }
-
   // Fetch missionary and campus director profiles in the same church.
   const { data: missionaryProfiles, error: missionError } = await supabase
     .from("profiles")
     .select("id, full_name, role")
     .or("role.eq.missionary,role.eq.campus_director")
     .eq("local_church_id", financeProfile?.local_church_id);  // Filtering by local church
-
-  if (missionError) {
-    console.error("[FinanceDashboard] Error fetching missionary profiles:", missionError.message);
-  } else {
-    console.log("[FinanceDashboard] Retrieved missionary profiles:", missionaryProfiles);
-  }
 
   // Fetch offline donor donation transactions recorded by the logged-in user.
   // We're filtering on "recorded_by" to ensure only manual donations recorded by this user are returned.
@@ -60,12 +47,6 @@ export default async function FinanceDashboard() {
     .eq("source", "offline")
     .eq("recorded_by", user.id) // New filter: only show donations recorded by the logged-in user.
     .order("date", { ascending: false });
-
-  if (error) {
-    console.error("[FinanceDashboard] Error fetching donations:", error.message);
-  } else {
-    console.log("[FinanceDashboard] Retrieved donor donations:", donorDonationsData);
-  }
 
   // Format donations data for the Recent Transactions Table.
   const formattedDonations = donorDonationsData?.map((d: any) => ({
