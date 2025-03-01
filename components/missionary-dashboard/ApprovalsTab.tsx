@@ -79,10 +79,12 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
       reason,
       status,
       created_at,
-      requester_id
+      requester_id,
+      campus_director_approval
     `)
     .in("requester_id", subordinateIds)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .eq("campus_director_approval", "none");
     
   if (pendingLeaveError) {
     console.error("Error fetching pending leave requests:", pendingLeaveError);
@@ -99,10 +101,11 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
       reason,
       status,
       created_at,
-      requester_id
+      requester_id,
+      campus_director_approval
     `)
     .in("requester_id", subordinateIds)
-    .eq("status", "approved");
+    .eq("campus_director_approval", "approved");
     
   if (approvedLeaveError) {
     console.error("Error fetching approved leave requests:", approvedLeaveError);
@@ -117,10 +120,12 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
       reason,
       status,
       created_at,
-      missionary_id
+      missionary_id,
+      campus_director_approval
     `)
     .in("missionary_id", subordinateIds)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .eq("campus_director_approval", "none");
     
   if (pendingSurplusError) {
     console.error("Error fetching pending surplus requests:", pendingSurplusError);
@@ -135,10 +140,11 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
       reason,
       status,
       created_at,
-      missionary_id
+      missionary_id,
+      campus_director_approval
     `)
     .in("missionary_id", subordinateIds)
-    .eq("status", "approved");
+    .eq("campus_director_approval", "approved");
     
   if (approvedSurplusError) {
     console.error("Error fetching approved surplus requests:", approvedSurplusError);
@@ -158,18 +164,21 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
     };
   });
 
-  const approvedLeaveApprovals: LeaveApproval[] = (approvedLeaveApprovalsData || []).map((r) => {
-    return {
-      id: r.id.toString(),
-      type: r.type === "sick" ? "Sick Leave" : "Vacation Leave",
-      startDate: new Date(r.start_date).toLocaleDateString(),
-      endDate: new Date(r.end_date).toLocaleDateString(),
-      reason: r.reason || "",
-      status: r.status || "approved",
-      date: new Date(r.created_at).toLocaleDateString(),
-      requester: { full_name: missionaryNames[r.requester_id] || "Unknown" }
-    };
-  });
+  // Only include requests that have been approved by the campus director
+  const approvedLeaveApprovals: LeaveApproval[] = (approvedLeaveApprovalsData || [])
+    .filter(r => r.campus_director_approval === "approved")
+    .map((r) => {
+      return {
+        id: r.id.toString(),
+        type: r.type === "sick" ? "Sick Leave" : "Vacation Leave",
+        startDate: new Date(r.start_date).toLocaleDateString(),
+        endDate: new Date(r.end_date).toLocaleDateString(),
+        reason: r.reason || "",
+        status: r.status || "approved",
+        date: new Date(r.created_at).toLocaleDateString(),
+        requester: { full_name: missionaryNames[r.requester_id] || "Unknown" }
+      };
+    });
 
   // Format surplus approvals with proper typing
   const pendingSurplusApprovals: SurplusApproval[] = (pendingSurplusApprovalsData || []).map((r) => {
@@ -184,17 +193,20 @@ export async function ApprovalsTabWrapper({ campusDirectorId }: ApprovalsTabWrap
     };
   });
 
-  const approvedSurplusApprovals: SurplusApproval[] = (approvedSurplusApprovalsData || []).map((r) => {
-    return {
-      id: r.id.toString(),
-      type: "Surplus",
-      amount_requested: parseFloat(r.amount_requested) || 0,
-      reason: r.reason || "",
-      status: r.status || "approved",
-      date: new Date(r.created_at).toLocaleDateString(),
-      requester: { full_name: missionaryNames[r.missionary_id] || "Unknown" }
-    };
-  });
+  // Only include requests that have been approved by the campus director
+  const approvedSurplusApprovals: SurplusApproval[] = (approvedSurplusApprovalsData || [])
+    .filter(r => r.campus_director_approval === "approved")
+    .map((r) => {
+      return {
+        id: r.id.toString(),
+        type: "Surplus",
+        amount_requested: parseFloat(r.amount_requested) || 0,
+        reason: r.reason || "",
+        status: r.status || "approved",
+        date: new Date(r.created_at).toLocaleDateString(),
+        requester: { full_name: missionaryNames[r.missionary_id] || "Unknown" }
+      };
+    });
 
   return (
     <div className="space-y-8">

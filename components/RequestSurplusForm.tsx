@@ -28,22 +28,48 @@ export function RequestSurplusForm({ surplusBalance }: { surplusBalance: number 
 
     setLoading(true)
 
-    const { error: submitError } = await supabase.from('surplus_requests').insert({
-      amount_requested: parseFloat(amount),
-      reason,
-      status: 'pending',
-      campus_director_approval: 'none',
-      lead_pastor_approval: 'none'
-    })
+    try {
+      // First, get the current user
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+      
+      // Get the user's role from profiles
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+        
+      if (profileError) throw profileError
+      
+      const isCampusDirector = profileData.role === 'campus_director'
+      
+      // Create the surplus request with auto-approval for campus directors
+      const { error: submitError } = await supabase.from('surplus_requests').insert({
+        missionary_id: user.id,
+        amount_requested: parseFloat(amount),
+        reason,
+        status: 'pending',
+        campus_director_approval: isCampusDirector ? 'approved' : 'none',
+        lead_pastor_approval: 'none'
+      })
 
-    if (submitError) {
-      setError(submitError.message)
-    } else {
+      if (submitError) {
+        throw submitError
+      }
+      
       router.refresh()
       setAmount('')
       setReason('')
+    } catch (err: any) {
+      console.error('Error submitting surplus request:', err)
+      setError(err.message || 'Failed to submit request')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (

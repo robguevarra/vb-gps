@@ -60,27 +60,53 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
   const supabase = createClient()
   const [isConfirming, setIsConfirming] = useState(false)
   const [pendingAction, setPendingAction] = useState<"approve" | "reject" | "override">()
+  const [overrideType, setOverrideType] = useState<"approve" | "reject">("approve")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [modalNotes, setModalNotes] = useState("")
 
-  const handleStatusUpdate = async (newStatus: string) => {
+  const handleStatusUpdate = async (newStatus: string, action: "approve" | "reject" | "override" = "approve") => {
     setIsSubmitting(true)
     try {
       const tableName = requestType === 'leave' ? 'leave_requests' : 'surplus_requests'
+      
+      // Always update the lead_pastor_approval field and status
+      const updateData = {
+        lead_pastor_approval: newStatus,
+        // For both missionaries and campus directors, Lead Pastor has final say
+        // so we can update the status directly
+        status: newStatus === 'approved' ? 'approved' : 'rejected',
+        // Include the notes from the modal
+        lead_pastor_notes: modalNotes
+      };
+      
       const { error } = await supabase
         .from(tableName)
-        .update({ 
-          lead_pastor_approval: newStatus,
-          status: newStatus === 'approved' ? 'approved' : 'rejected'
-        })
+        .update(updateData)
         .eq('id', request.id)
 
       if (error) throw error
 
+      // Customize toast message based on the action
+      let toastMessage = "";
+      if (action === "override") {
+        const cdDecision = request.campusDirectorApproval === 'approved' ? 'approval' : 
+                          request.campusDirectorApproval === 'rejected' ? 'rejection' : 'decision';
+        const lpAction = newStatus === 'approved' ? 'approved' : 'rejected';
+        
+        toastMessage = `Request ${lpAction} (Campus Director ${cdDecision} overridden)`;
+      } else {
+        toastMessage = `Request ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully`;
+      }
+
       toast({
         title: "Success!",
-        description: `Request ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully`,
+        description: toastMessage,
         variant: "success"
       })
+      
+      // Update local notes state to match what was saved
+      setLocalNotes(modalNotes)
+      
       router.refresh()
     } catch (error) {
       toast({
@@ -146,7 +172,13 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
         <TableCell className="px-3 py-3">
           <div className="flex items-center gap-2">
             <Badge 
-              variant={request.campusDirectorApproval === 'approved' ? 'default' : 'destructive'}
+              variant={
+                request.campusDirectorApproval === 'approved' 
+                  ? 'default' 
+                  : request.campusDirectorApproval === 'rejected'
+                  ? 'destructive'
+                  : 'outline'
+              }
               className="capitalize"
             >
               {request.campusDirectorApproval || 'pending'}
@@ -189,64 +221,181 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
             <div className="flex gap-2">
               {approvalStatus === 'pending' && (
                 <>
-                  <Button 
-                    variant="default" 
-                    className="bg-green-600 hover:bg-green-700 text-white h-8"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setPendingAction('approve')
-                      setIsConfirming(true)
-                    }}
-                  >
-                    <Check className="w-4 h-4 mr-1" />
-                    Approve
-                  </Button>
+                  <div className="flex gap-2">
+                    {/* Only enable regular approve button if CD has approved or not acted yet */}
+                    <Button 
+                      variant="default" 
+                      className={`${request.campusDirectorApproval === 'rejected' ? 'opacity-50 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white h-8`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPendingAction('approve')
+                        setIsConfirming(true)
+                      }}
+                      disabled={request.campusDirectorApproval === 'rejected'}
+                      title={request.campusDirectorApproval === 'rejected' ? "Cannot approve - Campus Director rejected this request" : ""}
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Approve
+                    </Button>
 
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setPendingAction('reject')
-                      setIsConfirming(true)
-                    }}
-                    className="h-8"
-                  >
-                    <X className="w-4 h-4 mr-1" />
-                    Reject
-                  </Button>
+                    {/* Always allow reject button */}
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPendingAction('reject')
+                        setIsConfirming(true)
+                      }}
+                      className="h-8"
+                      title={request.campusDirectorApproval === 'rejected' ? "Confirm Campus Director's rejection" : "Reject this request"}
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setPendingAction('override')
-                          setIsConfirming(true)
-                        }}
-                        className="h-8 gap-1"
-                      >
-                        <ArrowRightLeft className="w-4 h-4" />
-                        <span>OVERRIDE</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Override campus director decision</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <div className={`border-l pl-2 ml-1 ${request.campusDirectorApproval === 'rejected' ? 'border-amber-500' : ''}`}>
+                    <DropdownMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant={request.campusDirectorApproval === 'rejected' ? 'default' : 'outline'}
+                              size="sm"
+                              className={`h-8 gap-1 ${request.campusDirectorApproval === 'rejected' ? 'bg-amber-600 hover:bg-amber-700 text-white animate-pulse' : 'border-dashed'}`}
+                            >
+                              <ArrowRightLeft className="w-4 h-4" />
+                              <span>{request.campusDirectorApproval === 'rejected' ? 'Override Required' : 'Override'}</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{request.campusDirectorApproval === 'rejected' 
+                            ? 'Campus Director rejected this request - you must use override to approve it' 
+                            : 'Override campus director decision'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingAction('override');
+                            setOverrideType('approve');
+                            setIsConfirming(true);
+                          }}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <span>Approve (Override CD)</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingAction('override');
+                            setOverrideType('reject');
+                            setIsConfirming(true);
+                          }}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <XCircle className="w-4 h-4 text-red-600" />
+                          <span>Reject (Override CD)</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </>
               )}
 
-              <Dialog open={isConfirming} onOpenChange={setIsConfirming}>
-                <DialogContent>
+              <Dialog open={isConfirming} onOpenChange={(open) => {
+                setIsConfirming(open);
+                if (open) {
+                  // Initialize modal notes with existing notes when opening
+                  setModalNotes(localNotes);
+                }
+              }}>
+                <DialogContent className="max-w-md">
                   <DialogHeader>
-                    <DialogTitle>Confirm Action</DialogTitle>
+                    <DialogTitle>
+                      {pendingAction === 'approve' ? 'Approve Request' : 
+                       pendingAction === 'reject' ? 'Reject Request' : 
+                       'Override Campus Director Decision'}
+                    </DialogTitle>
                     <DialogDescription>
-                      Are you sure you want to {pendingAction} this request?
+                      {pendingAction === 'override' ? (
+                        <>
+                          <span className={`font-medium ${overrideType === 'approve' ? 'text-amber-600' : 'text-red-600'}`}>
+                            You are about to override a Campus Director's {request.campusDirectorApproval === 'rejected' ? 'rejection' : 'decision'} with {overrideType === 'approve' ? 'approval' : 'rejection'}.
+                          </span>
+                          {request.campusDirectorApproval === 'rejected' && overrideType === 'approve' && (
+                            <p className="mt-2 text-sm">
+                              Note: The Campus Director rejected this request. Your override will approve it despite their rejection.
+                            </p>
+                          )}
+                        </>
+                      ) : pendingAction === 'reject' && request.campusDirectorApproval === 'rejected' ? (
+                        <span>
+                          You are confirming the Campus Director's rejection of this request.
+                        </span>
+                      ) : (
+                        <>Are you sure you want to {pendingAction} this request?</>
+                      )}
                     </DialogDescription>
                   </DialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">Request Details</h4>
+                      <div className="rounded-md bg-muted p-3">
+                        <p className="text-sm">{request.reason}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">Campus Director Status</h4>
+                      <div className="rounded-md bg-muted p-3 flex items-center gap-2">
+                        <Badge 
+                          variant={
+                            request.campusDirectorApproval === 'approved' 
+                              ? 'default' 
+                              : request.campusDirectorApproval === 'rejected'
+                              ? 'destructive'
+                              : 'outline'
+                          }
+                          className="capitalize"
+                        >
+                          {request.campusDirectorApproval || 'pending'}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {request.campusDirectorApproval === 'approved' 
+                            ? 'Campus Director has approved this request' 
+                            : request.campusDirectorApproval === 'rejected'
+                            ? 'Campus Director has rejected this request'
+                            : 'Campus Director has not reviewed this request yet'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {request.campusDirectorNotes && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Campus Director Notes</h4>
+                        <div className="rounded-md bg-muted p-3">
+                          <p className="text-sm text-muted-foreground">{request.campusDirectorNotes}</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">Your Notes</h4>
+                      <textarea
+                        className="w-full p-3 border rounded-md text-sm min-h-[100px]"
+                        placeholder="Add your notes about this decision..."
+                        value={modalNotes}
+                        onChange={(e) => setModalNotes(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  
                   <DialogFooter>
                     <Button 
                       variant="outline" 
@@ -256,14 +405,29 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
                       Cancel
                     </Button>
                     <Button
-                      variant={pendingAction === 'reject' ? 'destructive' : 'default'}
-                      onClick={() => handleStatusUpdate(pendingAction === 'approve' ? 'approved' : 'rejected')}
+                      variant={pendingAction === 'reject' || (pendingAction === 'override' && overrideType === 'reject') ? 'destructive' : 'default'}
+                      onClick={() => {
+                        if (pendingAction === 'override') {
+                          handleStatusUpdate(overrideType === 'approve' ? 'approved' : 'rejected', pendingAction);
+                        } else {
+                          handleStatusUpdate(pendingAction === 'approve' ? 'approved' : 'rejected', pendingAction);
+                        }
+                      }}
                       disabled={isSubmitting}
                     >
                       {isSubmitting ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       ) : (
-                        <span>Confirm {pendingAction}</span>
+                        <>
+                          {pendingAction === 'approve' && <Check className="w-4 h-4 mr-1" />}
+                          {pendingAction === 'reject' && <X className="w-4 h-4 mr-1" />}
+                          {pendingAction === 'override' && <ArrowRightLeft className="w-4 h-4 mr-1" />}
+                          
+                          {pendingAction === 'approve' && 'Approve Request'}
+                          {pendingAction === 'reject' && 'Reject Request'}
+                          {pendingAction === 'override' && overrideType === 'approve' && 'Override with Approval'}
+                          {pendingAction === 'override' && overrideType === 'reject' && 'Override with Rejection'}
+                        </>
                       )}
                     </Button>
                   </DialogFooter>
@@ -281,6 +445,22 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
               <div>
                 <h4 className="text-sm font-medium mb-2">Request Details</h4>
                 <p className="text-sm">{request.reason}</p>
+                
+                <div className="mt-4 flex items-center gap-2">
+                  <h4 className="text-sm font-medium">Current Status:</h4>
+                  <Badge 
+                    variant={
+                      request.status === 'approved' 
+                        ? 'default' 
+                        : request.status === 'rejected'
+                        ? 'destructive'
+                        : 'outline'
+                    }
+                    className="capitalize"
+                  >
+                    {request.status}
+                  </Badge>
+                </div>
               </div>
               
               <div>
@@ -292,12 +472,13 @@ const ApprovalTableRow = ({ request, requestType, approvalStatus }: { request: A
 
               <div className="col-span-2">
                 <h4 className="text-sm font-medium mb-2">Lead Pastor Notes</h4>
-                <textarea
-                  className="w-full p-2 border rounded-md text-sm"
-                  placeholder="Add your notes..."
-                  value={localNotes}
-                  onChange={handleNotesChange}
-                />
+                <div className="bg-white p-3 rounded-md border text-sm min-h-[80px]">
+                  {localNotes ? (
+                    <p>{localNotes}</p>
+                  ) : (
+                    <p className="text-muted-foreground italic">No notes provided. Add notes when approving or rejecting.</p>
+                  )}
+                </div>
               </div>
             </div>
           </TableCell>

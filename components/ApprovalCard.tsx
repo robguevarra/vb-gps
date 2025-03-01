@@ -117,14 +117,42 @@ export function ApprovalCard({
       // Determine the approval field based on request type
       const approvalField = "campus_director_approval";
 
+      // First, get the request to check the requester's role
+      const { data: requestData, error: requestError } = await supabase
+        .from(table)
+        .select(`${idField}`)
+        .eq("id", requestId)
+        .single();
+
+      if (requestError) throw requestError;
+
+      // Get the requester's role
+      const requesterId = requestData?.[idField as keyof typeof requestData];
+      const { data: requesterData, error: requesterError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", requesterId)
+        .single();
+
+      if (requesterError) throw requesterError;
+
+      const isRequesterCampusDirector = requesterData.role === "campus_director";
+
       // Update the request status in the database
+      // If requester is a Campus Director, only Lead Pastor approval is needed
+      // If requester is a Missionary, both CD and LP approvals are needed
+      const updateData = {
+        [approvalField]: actionType === "approve" ? "approved" : "rejected",
+        campus_director_notes: notes.trim() || null,
+        // Only set status to approved/rejected if requester is a Campus Director
+        ...(isRequesterCampusDirector && { 
+          status: actionType === "approve" ? "approved" : "rejected" 
+        })
+      };
+
       const { error } = await supabase
         .from(table)
-        .update({
-          [approvalField]: actionType === "approve" ? "approved" : "rejected",
-          status: actionType === "approve" ? "approved" : "rejected",
-          campus_director_notes: notes.trim() || null
-        })
+        .update(updateData)
         .eq("id", requestId);
 
       if (error) throw error;

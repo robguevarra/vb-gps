@@ -45,6 +45,9 @@
     - Use JSDoc comments for functions and components to improve IDE intellisense.
     - DO NOT REPLACE COMMENTS. JUST EDIT THEM AND APPEND THE CHANGES. THIS WAY WE CAN ALWAYS TRACK CODE CHANGES.
 
+    ### Supabase and SQL
+    - When trying to fix RLS, database, and other things SQL related, just give the command that will be run in Supabase Studio SQL Editor. 
+
     ### Methodology
     1. **System 2 Thinking**: Approach the problem with analytical rigor. Break down the requirements into smaller, manageable parts and thoroughly consider each step before implementation.
     2. **Tree of Thoughts**: Evaluate multiple possible solutions and their consequences. Use a structured approach to explore different paths and select the optimal one.

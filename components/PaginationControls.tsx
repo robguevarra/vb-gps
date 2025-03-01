@@ -8,16 +8,18 @@ export function PaginationControls({
   totalPages,
   onPageChange,
   pageSize,
-  onPageSizeChange
+  onPageSizeChange,
+  className
 }: {
   currentPage: number
   totalPages: number
   onPageChange: (page: number) => void
   pageSize: number
   onPageSizeChange: (size: number) => void
+  className?: string
 }) {
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-4 py-3 border-t">
+    <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 px-4 py-3 border-t ${className || ''}`}>
       <div className="flex items-center gap-2 text-sm">
         <span>Rows per page:</span>
         <Select

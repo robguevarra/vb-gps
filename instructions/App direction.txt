@@ -333,3 +333,14 @@ With these **comprehensive instructions**, your AI code composer should be able 
 6. **Offer** robust superadmin management & multi-level reporting across local churches, districts, and the entire province.
 
 This blueprint covers the entire system from data schema to user flows and UI design, enabling the AI to generate a working, production-ready staff portal.
+
+
+
+
+
+surplus disbursement / calculation logic. 
+- pag nag approve ng surplus dapat bawas na sa current surplus
+- pending na dapat for release pag na approve na
+
+- so may list dapat ng lahat ng irerelease for the month with breakdown per misisonary
+

@@ -55,55 +55,113 @@ export default async function LeadPastorDashboard({
     console.error('Local churches fetch error:', churchError);
   }
 
-  // Get missionaries in the lead pastor's churches
-  const { data: churchMissionaries } = await supabase
+  // Get all staff (missionaries and campus directors) in the lead pastor's churches
+  const { data: churchStaff } = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, role, full_name')
     .in('local_church_id', localChurches?.map(ch => ch.id) || []);
 
-  // Fetch pending leave requests for these missionaries
+  // Get all staff IDs
+  const allStaffIds = churchStaff?.map(staff => staff.id) || [];
+
+  // Create a map of staff IDs to names for easier lookup
+  const staffNames = Object.fromEntries(
+    (churchStaff || []).map(staff => [staff.id, staff.full_name])
+  );
+
+  // Fetch pending leave requests for these staff members
   const { data: pendingLeaveApprovalsData } = await supabase
     .from("leave_requests")
-    .select(`
-      *,
-      requester:profiles(full_name)
-    `)
-    .in("requester_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
+    .select(`*`)
+    .in("requester_id", allStaffIds) // Filter by all church staff
     .eq("status", "pending")
+    .or(`campus_director_approval.eq.approved,campus_director_approval.eq.rejected`) // Show both approved and rejected by CD
     .order("created_at", { ascending: false });
 
   const { data: approvedLeaveApprovalsData } = await supabase
     .from("leave_requests")
-    .select(`
-      *,
-      requester:profiles(full_name)
-    `)
-    .in("requester_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
+    .select(`*`)
+    .in("requester_id", allStaffIds) // Filter by all church staff
     .eq("status", "approved")
     .order("created_at", { ascending: false });
 
-  // Fetch pending surplus requests for these missionaries
-  const { data: pendingSurplusApprovalsData } = await supabase
+  // Fetch pending surplus requests for missionaries
+  const { data: pendingSurplusMissionaryData } = await supabase
     .from("surplus_requests")
-    .select(`
-      *,
-      requester:profiles(full_name)
-    `)
-    .in("missionary_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
+    .select(`*`)
+    .in("missionary_id", allStaffIds) // Filter by all church staff
     .eq("status", "pending")
+    .or(`campus_director_approval.eq.approved,campus_director_approval.eq.rejected`) // Show both approved and rejected by CD
     .order("created_at", { ascending: false });
 
-  const { data: approvedSurplusApprovalsData } = await supabase
+  // Fetch pending surplus requests for campus directors
+  const { data: pendingSurplusCDData } = await supabase
     .from("surplus_requests")
-    .select(`
-      *,
-      requester:profiles(full_name)
-    `)
-    .in("missionary_id", churchMissionaries?.map(m => m.id) || []) // Filter by church missionaries
+    .select(`*`)
+    .in("requester_id", allStaffIds) // Filter by all church staff
+    .eq("status", "pending")
+    .or(`campus_director_approval.eq.approved,campus_director_approval.eq.rejected`) // Show both approved and rejected by CD
+    .order("created_at", { ascending: false });
+
+  // Combine the two sets of surplus requests
+  const pendingSurplusApprovalsData = [
+    ...(pendingSurplusMissionaryData || []),
+    ...(pendingSurplusCDData || [])
+  ];
+
+  // Fetch approved surplus requests for missionaries
+  const { data: approvedSurplusMissionaryData } = await supabase
+    .from("surplus_requests")
+    .select(`*`)
+    .in("missionary_id", allStaffIds) // Filter by all church staff
     .eq("status", "approved")
     .order("created_at", { ascending: false });
 
-  const transformLeave = (req: any) => ({
+  // Fetch approved surplus requests for campus directors
+  const { data: approvedSurplusCDData } = await supabase
+    .from("surplus_requests")
+    .select(`*`)
+    .in("requester_id", allStaffIds) // Filter by all church staff
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+
+  // Combine the two sets of surplus requests
+  const approvedSurplusApprovalsData = [
+    ...(approvedSurplusMissionaryData || []),
+    ...(approvedSurplusCDData || [])
+  ];
+
+  // Define the types to match LeadPastorDashboardClient props
+  type LeaveApproval = {
+    id: string;
+    type: "Vacation Leave" | "Sick Leave";
+    startDate: string;
+    endDate: string;
+    reason: string;
+    status: string;
+    date: string;
+    campusDirectorApproval: string;
+    campusDirectorNotes?: string;
+    leadPastorApproval: string;
+    leadPastorNotes?: string;
+    requester?: { full_name: string };
+  };
+
+  type SurplusApproval = {
+    id: string;
+    type: "Surplus";
+    amount: number;
+    reason: string;
+    status: string;
+    date: string;
+    campusDirectorApproval: string;
+    campusDirectorNotes?: string;
+    leadPastorApproval: string;
+    leadPastorNotes?: string;
+    requester?: { full_name: string };
+  };
+
+  const transformLeave = (req: any): LeaveApproval => ({
     id: String(req.id),
     type: req.type === "vacation" ? "Vacation Leave" : "Sick Leave",
     startDate: req.start_date,
@@ -116,13 +174,13 @@ export default async function LeadPastorDashboard({
     leadPastorApproval: req.lead_pastor_approval,
     leadPastorNotes: req.lead_pastor_notes,
     requester: {
-      full_name: req.requester?.full_name || "Unknown",
+      full_name: staffNames[req.requester_id] || "Unknown",
     },
   });
 
-  const transformSurplus = (req: any) => ({
+  const transformSurplus = (req: any): SurplusApproval => ({
     id: String(req.id),
-    type: "Surplus" as const,
+    type: "Surplus",
     amount: req.amount_requested,
     reason: req.reason,
     status: req.status,
@@ -132,14 +190,14 @@ export default async function LeadPastorDashboard({
     leadPastorApproval: req.lead_pastor_approval,
     leadPastorNotes: req.lead_pastor_notes,
     requester: {
-      full_name: req.requester?.full_name || "Unknown",
+      full_name: staffNames[req.missionary_id || req.requester_id] || "Unknown",
     },
   });
 
-  const transformedPendingLeaveApprovals = (pendingLeaveApprovalsData || []).map(transformLeave);
-  const transformedApprovedLeaveApprovals = (approvedLeaveApprovalsData || []).map(transformLeave);
-  const transformedPendingSurplusApprovals = (pendingSurplusApprovalsData || []).map(transformSurplus);
-  const transformedApprovedSurplusApprovals = (approvedSurplusApprovalsData || []).map(transformSurplus);
+  const transformedPendingLeaveApprovals: LeaveApproval[] = (pendingLeaveApprovalsData || []).map(transformLeave);
+  const transformedApprovedLeaveApprovals: LeaveApproval[] = (approvedLeaveApprovalsData || []).map(transformLeave);
+  const transformedPendingSurplusApprovals: SurplusApproval[] = (pendingSurplusApprovalsData || []).map(transformSurplus);
+  const transformedApprovedSurplusApprovals: SurplusApproval[] = (approvedSurplusApprovalsData || []).map(transformSurplus);
 
   const selectedLeadPastorName =
     leadPastors?.find((pastor) => pastor.id === selectedLeadPastorId)?.full_name || "Lead Pastor";
@@ -183,6 +241,7 @@ export default async function LeadPastorDashboard({
             approvedSurplusApprovals={transformedApprovedSurplusApprovals}
             churchIds={localChurches?.map(ch => ch.id) || []}
             currentTab={currentTab}
+            selectedLeadPastorName={selectedLeadPastorName}
           />
         </section>
       </main>
