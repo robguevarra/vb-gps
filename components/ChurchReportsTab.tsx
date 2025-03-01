@@ -9,8 +9,17 @@ import { formatNumber } from "@/utils/numbers";
 import { MissionaryLast6Modal, FullMissionaryReportModal } from "@/components/MissionaryModals";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Users, TrendingUp, Target, AlertTriangle } from "lucide-react";
+
+// Simple Skeleton component for loading states
+function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={`animate-pulse rounded-md bg-muted ${className || ''}`}
+      {...props}
+    />
+  );
+}
 
 interface ChurchReportsTabProps {
   churchIds: number[];
@@ -204,7 +213,7 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
         
         {isLoading ? (
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map(i => (
                 <div key={i} className="space-y-2">
                   <Skeleton className="h-4 w-1/2" />
@@ -222,7 +231,7 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
           </CardContent>
         ) : summaryMetrics ? (
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-muted/50 p-4 rounded-lg">
                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
                   <Users className="h-4 w-4" />
@@ -244,7 +253,7 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
                   <TrendingUp className="h-4 w-4" />
                   <span className="text-sm font-medium">Current Month</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.currentMonthTotal)}</p>
                   <Badge variant={summaryMetrics.overallPercentage >= 80 ? "default" : "destructive"}>
                     {formatNumber(summaryMetrics.overallPercentage)}%
@@ -272,9 +281,13 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
       </Card>
 
       <Tabs defaultValue="missionaries" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="missionaries">Missionary Performance</TabsTrigger>
-          <TabsTrigger value="trends">Trends & Analysis</TabsTrigger>
+        <TabsList className="w-full sm:w-auto flex">
+          <TabsTrigger value="missionaries" className="flex-1 sm:flex-initial">
+            Missionary Performance
+          </TabsTrigger>
+          <TabsTrigger value="trends" className="flex-1 sm:flex-initial">
+            Trends & Analysis
+          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="missionaries" className="space-y-4">

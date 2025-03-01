@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Profile } from "@/types"; // or your actual path to the Profile interface
-import { Search, ChevronLeft, ChevronRight, BarChart2, FileText } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, BarChart2, FileText, User, Target, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -86,113 +86,199 @@ export function MissionariesTable({
         </div>
       </div>
 
-      <Card className="overflow-hidden border shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Monthly Goal</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Current Month</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageData.map((m) => {
-                const ratio = getCurrentMonthRatio(m);
-                const statusColor = getStatusColor(ratio);
-                const textColor = getTextColor(ratio);
-                const badgeVariant = getBadgeVariant(ratio);
+      {/* Mobile Card View (visible on small screens) */}
+      <div className="md:hidden space-y-4">
+        {pageData.map((m) => {
+          const ratio = getCurrentMonthRatio(m);
+          const statusColor = getStatusColor(ratio);
+          const textColor = getTextColor(ratio);
+          const badgeVariant = getBadgeVariant(ratio);
+          
+          return (
+            <Card key={m.id} className="overflow-hidden">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium">{m.full_name}</h3>
+                    <Badge variant="outline" className="mt-1 capitalize">
+                      {m.role?.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                  <Badge variant={badgeVariant} className={`${textColor} font-medium text-lg`}>
+                    {formatNumber(ratio)}%
+                  </Badge>
+                </div>
                 
-                return (
-                  <tr key={m.id} className="border-b hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium">{m.full_name}</td>
-                    <td className="px-4 py-3 capitalize">
-                      <Badge variant="outline" className="capitalize">
-                        {m.role?.replace('_', ' ')}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">₱{formatNumber(m.monthly_goal || 0)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-full max-w-[120px] h-2 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full ${statusColor} transition-all duration-500`} 
-                            style={{ width: `${Math.min(ratio, 100)}%` }}
-                          />
-                        </div>
-                        <Badge variant={badgeVariant} className={`${textColor} font-medium`}>
-                          {formatNumber(ratio)}%
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <Target className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Monthly Goal:</span>
+                    </div>
+                    <span className="font-medium">₱{formatNumber(m.monthly_goal || 0)}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">Current Progress:</span>
+                    </div>
+                    <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full ${statusColor} transition-all duration-500`} 
+                        style={{ width: `${Math.min(ratio, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-8 gap-1"
+                    onClick={() => openMissionaryModal(m)}
+                  >
+                    <BarChart2 className="h-3.5 w-3.5" />
+                    <span>6 Months</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 h-8 gap-1"
+                    onClick={() => openFullMissionaryReport(m)}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Full Report</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+        
+        {pageData.length === 0 && (
+          <div className="p-8 text-center border rounded-lg bg-muted/30">
+            {missionaryFilter ? (
+              <>No missionaries matching "<strong>{missionaryFilter}</strong>"</>
+            ) : (
+              "No missionaries found"
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table View (hidden on small screens) */}
+      <div className="hidden md:block">
+        <Card className="overflow-hidden border shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Name</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Role</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Monthly Goal</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Current Month</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageData.map((m) => {
+                  const ratio = getCurrentMonthRatio(m);
+                  const statusColor = getStatusColor(ratio);
+                  const textColor = getTextColor(ratio);
+                  const badgeVariant = getBadgeVariant(ratio);
+                  
+                  return (
+                    <tr key={m.id} className="border-b hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 font-medium">{m.full_name}</td>
+                      <td className="px-4 py-3 capitalize">
+                        <Badge variant="outline" className="capitalize">
+                          {m.role?.replace('_', ' ')}
                         </Badge>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 gap-1"
-                              onClick={() => openMissionaryModal(m)}
-                            >
-                              <BarChart2 className="h-3.5 w-3.5" />
-                              <span>6 Months</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>View last 6 months performance</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 px-2 gap-1"
-                              onClick={() => openFullMissionaryReport(m)}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              <span>Full Report</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>View complete 13-month report</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
+                      </td>
+                      <td className="px-4 py-3">₱{formatNumber(m.monthly_goal || 0)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-full max-w-[120px] h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${statusColor} transition-all duration-500`} 
+                              style={{ width: `${Math.min(ratio, 100)}%` }}
+                            />
+                          </div>
+                          <Badge variant={badgeVariant} className={`${textColor} font-medium`}>
+                            {formatNumber(ratio)}%
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 gap-1"
+                                onClick={() => openMissionaryModal(m)}
+                              >
+                                <BarChart2 className="h-3.5 w-3.5" />
+                                <span>6 Months</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View last 6 months performance</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 gap-1"
+                                onClick={() => openFullMissionaryReport(m)}
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                <span>Full Report</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>View complete 13-month report</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {pageData.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>
+                      {missionaryFilter ? (
+                        <>No missionaries matching "<strong>{missionaryFilter}</strong>"</>
+                      ) : (
+                        "No missionaries found"
+                      )}
                     </td>
                   </tr>
-                );
-              })}
-              {pageData.length === 0 && (
-                <tr>
-                  <td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>
-                    {missionaryFilter ? (
-                      <>No missionaries matching "<strong>{missionaryFilter}</strong>"</>
-                    ) : (
-                      "No missionaries found"
-                    )}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <p className="text-sm text-muted-foreground order-2 sm:order-1">
             Showing <span className="font-medium">{startIdx + 1}</span> to{" "}
             <span className="font-medium">{Math.min(endIdx, filtered.length)}</span> of{" "}
             <span className="font-medium">{filtered.length}</span> missionaries
           </p>
           
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1 order-1 sm:order-2">
             <Button
               variant="outline"
               size="sm"
@@ -202,7 +288,8 @@ export function MissionariesTable({
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="flex items-center gap-1.5 px-2">
+            
+            <div className="hidden sm:flex items-center gap-1.5 px-2">
               {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                 // Logic to show pages around current page
                 let pageNum = i + 1;
@@ -231,6 +318,12 @@ export function MissionariesTable({
                 return null;
               })}
             </div>
+            
+            {/* Mobile page indicator */}
+            <div className="sm:hidden px-2 text-sm font-medium">
+              {missionaryPage} / {totalPages}
+            </div>
+            
             <Button
               variant="outline"
               size="sm"

@@ -24,6 +24,10 @@ export async function ReportsTabWrapper({ missionaryId }: ReportsTabWrapperProps
 
   return (
     <div className="space-y-8">
+      <h2 className="text-2xl font-bold tracking-tight">My Reports</h2>
+      <p className="text-muted-foreground">
+        Track your partner giving patterns and donation history.
+      </p>
       <ReportsTab
         missionaryId={missionaryId}
         last13MonthDonations={last13MonthDonationsResult.data?.map(d => ({

@@ -27,6 +27,7 @@ import { RequestHistoryTabWrapper } from "@/components/missionary-dashboard/Requ
 import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/ApprovalsTab";
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
 import { ReportsTabWrapper } from "@/components/missionary-dashboard/ReportsTab";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default async function MissionaryDashboard({
   searchParams: promiseSearchParams,
@@ -148,7 +149,9 @@ export default async function MissionaryDashboard({
 
         {/* Staff Reports Tab (Campus Directors Only) */}
         {currentTab === "staff-reports" && profileData.role === 'campus_director' && (
-          <ChurchReportsTab churchIds={[profileData.local_church_id]} />
+          <TooltipProvider>
+            <ChurchReportsTab churchIds={[profileData.local_church_id]} />
+          </TooltipProvider>
         )}
       </div>
     </div>

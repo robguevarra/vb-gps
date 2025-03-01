@@ -4,7 +4,8 @@ import { PartnersTable } from "@/components/reports/PartnersTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, Calendar, Mail, Phone, User } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Minus, Calendar, Mail, Phone, User, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function MissionaryLast6Modal({
   isOpen,
@@ -50,20 +51,28 @@ export function MissionaryLast6Modal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl flex items-center gap-2">
-            <span>Performance Report: {missionary.full_name}</span>
-            {trend === "improving" && <TrendingUp className="h-5 w-5 text-green-500" />}
-            {trend === "declining" && <TrendingDown className="h-5 w-5 text-red-500" />}
-            {trend === "stable" && <Minus className="h-5 w-5 text-yellow-500" />}
+      <DialogContent className="max-w-3xl w-[95vw] sm:w-auto">
+        <DialogHeader className="relative">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="absolute right-0 top-0 md:hidden" 
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+          <DialogTitle className="text-xl flex items-center gap-2 pr-8 md:pr-0">
+            <span className="line-clamp-1">Performance: {missionary.full_name}</span>
+            {trend === "improving" && <TrendingUp className="h-5 w-5 text-green-500 flex-shrink-0" />}
+            {trend === "declining" && <TrendingDown className="h-5 w-5 text-red-500 flex-shrink-0" />}
+            {trend === "stable" && <Minus className="h-5 w-5 text-yellow-500 flex-shrink-0" />}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="line-clamp-2">
             Last 6 months performance relative to monthly goal of ₱{formatNumber(missionary.monthly_goal || 0)}
           </DialogDescription>
         </DialogHeader>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-4">
           <Card>
             <CardContent className="pt-6">
               <div className="text-center">
@@ -124,7 +133,7 @@ export function MissionaryLast6Modal({
 
         <div className="space-y-4">
           {/* Performance chart (visual representation) */}
-          <div className="h-[120px] w-full flex items-end gap-1 px-1 border-b pb-1">
+          <div className="h-[120px] w-full flex items-end gap-1 px-1 border-b pb-1 overflow-x-auto sm:overflow-x-visible">
             {data.map((r, index) => {
               const height = `${Math.max(5, Math.min(100, r.ratio))}%`;
               const bgColor = r.ratio >= 100 ? "bg-green-500" : 
@@ -133,7 +142,7 @@ export function MissionaryLast6Modal({
                              r.ratio >= 40 ? "bg-orange-400" : "bg-red-500";
               
               return (
-                <div key={r.label} className="flex-1 flex flex-col items-center gap-1">
+                <div key={r.label} className="flex-1 min-w-[40px] sm:min-w-0 flex flex-col items-center gap-1">
                   <div className="text-xs font-medium">{formatNumber(r.ratio)}%</div>
                   <div className="w-full relative">
                     <div 
@@ -184,14 +193,14 @@ export function MissionaryLast6Modal({
                         <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
                           <div 
                             className={`h-full ${statusColor}`} 
-                            style={{ width: `${Math.min(r.ratio, 100)}%` }}
-                          />
-                        </div>
-                      </td>
+                          style={{ width: `${Math.min(r.ratio, 100)}%` }}
+                        />
+                      </div>
+                    </td>
                       <td className="px-4 py-3">
                         <Badge variant={badgeVariant}>{statusText}</Badge>
                       </td>
-                    </tr>
+                  </tr>
                   );
                 })}
               </tbody>
@@ -283,21 +292,29 @@ export function FullMissionaryReportModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] w-full max-h-[90vh] overflow-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl">Full Report - {missionary.full_name}</DialogTitle>
+        <DialogHeader className="relative">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="absolute right-0 top-0 md:hidden" 
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+          <DialogTitle className="text-xl pr-8 md:pr-0">Full Report - {missionary.full_name}</DialogTitle>
           <DialogDescription>
             Comprehensive 13-month donation report with partner details
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="mt-4">
-          <TabsList className="mb-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="partners">Partner Details</TabsTrigger>
+          <TabsList className="w-full sm:w-auto flex">
+            <TabsTrigger value="overview" className="flex-1 sm:flex-initial">Overview</TabsTrigger>
+            <TabsTrigger value="partners" className="flex-1 sm:flex-initial">Partner Details</TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="pt-6">
                   <div className="text-center">
@@ -330,7 +347,7 @@ export function FullMissionaryReportModal({
             <Card>
               <CardContent className="pt-6">
                 <h3 className="text-lg font-medium mb-4">Monthly Performance</h3>
-                <div className="h-[160px] w-full flex items-end gap-1 px-1 border-b pb-1">
+                <div className="h-[160px] w-full flex items-end gap-1 px-1 border-b pb-1 overflow-x-auto sm:overflow-x-visible">
                   {monthlyGoalPercentages.map((item, index) => {
                     const height = `${Math.max(5, Math.min(100, item.percentage))}%`;
                     const bgColor = item.percentage >= 100 ? "bg-green-500" : 
@@ -339,7 +356,7 @@ export function FullMissionaryReportModal({
                                    item.percentage >= 40 ? "bg-orange-400" : "bg-red-500";
                     
                     return (
-                      <div key={item.month} className="flex-1 flex flex-col items-center gap-1">
+                      <div key={item.month} className="flex-1 min-w-[40px] sm:min-w-0 flex flex-col items-center gap-1">
                         <div className="text-xs font-medium">{formatNumber(item.percentage)}%</div>
                         <div className="w-full relative">
                           <div 
@@ -405,8 +422,77 @@ export function FullMissionaryReportModal({
           </TabsContent>
           
           <TabsContent value="partners" className="space-y-6">
-            <div className="overflow-x-auto border rounded-md">
-              <table className="min-w-full text-left text-sm">
+            {/* Mobile partner cards (visible on small screens) */}
+            <div className="md:hidden space-y-4">
+              {partnerRows.length === 0 ? (
+                <div className="p-8 text-center border rounded-lg bg-muted/30">
+                  <p className="text-muted-foreground">No partners found for this missionary.</p>
+                </div>
+              ) : (
+                <>
+                  {partnerRows.map((p) => {
+                    let rowTotal = 0;
+                    thirteenMonthKeys.forEach(monthKey => {
+                      rowTotal += p.monthlySums[monthKey] || 0;
+                    });
+                    
+                    // Get the last 3 months for the mobile view
+                    const recentMonths = thirteenMonthKeys.slice(-3);
+                    
+                    return (
+                      <Card key={p.donorId} className="overflow-hidden">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-medium">{p.donorName}</h3>
+                              {p.email && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Mail className="h-3 w-3" />
+                                  <span>{p.email}</span>
+                                </div>
+                              )}
+                              {p.phone && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Phone className="h-3 w-3" />
+                                  <span>{p.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                            <Badge variant="outline" className="font-medium">
+                              ₱{formatNumber(rowTotal)}
+                            </Badge>
+                          </div>
+                          
+                          <div className="space-y-2 pt-2 border-t">
+                            <p className="text-xs font-medium text-muted-foreground">Recent Donations</p>
+                            {recentMonths.map(monthKey => {
+                              const val = p.monthlySums[monthKey] || 0;
+                              return (
+                                <div key={monthKey} className="flex justify-between text-sm">
+                                  <span>{formatMonthLabel(monthKey)}</span>
+                                  <span className="font-medium">{val > 0 ? `₱${formatNumber(val)}` : "-"}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                  
+                  <div className="p-4 rounded-lg bg-muted/50">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Total Donations</span>
+                      <span className="font-bold">₱{formatNumber(totalDonations)}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            {/* Desktop partner table (hidden on small screens) */}
+            <div className="hidden md:block overflow-x-auto border rounded-md">
+            <table className="min-w-full text-left text-sm">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground sticky left-0 bg-muted/50">
@@ -427,7 +513,7 @@ export function FullMissionaryReportModal({
                         <span>Phone</span>
                       </div>
                     </th>
-                    {thirteenMonthKeys.map((key) => (
+                  {thirteenMonthKeys.map((key) => (
                       <th key={key} className="px-4 py-3 text-left font-medium text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
@@ -436,31 +522,31 @@ export function FullMissionaryReportModal({
                       </th>
                     ))}
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {partnerRows.map((p) => {
-                    let rowTotal = 0;
-                    return (
+                </tr>
+              </thead>
+              <tbody>
+                {partnerRows.map((p) => {
+                  let rowTotal = 0;
+                  return (
                       <tr key={p.donorId} className="border-b hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3 font-medium sticky left-0 bg-white">{p.donorName}</td>
                         <td className="px-4 py-3 text-muted-foreground">{p.email || "-"}</td>
                         <td className="px-4 py-3 text-muted-foreground">{p.phone || "-"}</td>
-                        {thirteenMonthKeys.map((monthKey) => {
-                          const val = p.monthlySums[monthKey] || 0;
-                          rowTotal += val;
-                          return (
+                      {thirteenMonthKeys.map((monthKey) => {
+                        const val = p.monthlySums[monthKey] || 0;
+                        rowTotal += val;
+                        return (
                             <td key={monthKey} className="px-4 py-3">
                               {val > 0 ? `₱${formatNumber(val)}` : "-"}
-                            </td>
-                          );
-                        })}
+                          </td>
+                        );
+                      })}
                         <td className="px-4 py-3 font-semibold">
-                          ₱{formatNumber(rowTotal)}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        ₱{formatNumber(rowTotal)}
+                      </td>
+                    </tr>
+                  );
+                })}
 
                   {/* Totals row */}
                   <tr className="border-t-2 font-medium bg-muted/20">
@@ -475,19 +561,19 @@ export function FullMissionaryReportModal({
                     </td>
                   </tr>
 
-                  {partnerRows.length === 0 && (
-                    <tr>
-                      <td
+                {partnerRows.length === 0 && (
+                  <tr>
+                    <td
                         className="px-4 py-8 text-center text-muted-foreground"
-                        colSpan={thirteenMonthKeys.length + 4}
-                      >
+                      colSpan={thirteenMonthKeys.length + 4}
+                    >
                         No partners found for this missionary.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
