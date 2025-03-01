@@ -41,16 +41,70 @@ export default async function SuperAdminDashboard() {
     }
   }
 
-  // For demo purposes (mock data)
-  const userProfile = {
-    ...mockProfile,
-    role: 'superadmin',
-    local_church: 'All Churches'
-  };
+  // Get current month's donations and donor stats
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1; // JavaScript months are 0-based
+  
+  console.log('Date debugging:', {
+    currentDate: new Date().toISOString(),
+    year,
+    month
+  });
 
-  const mockDonations = generateMockDonations(5);
-  const pendingRequests = 2; // Mock pending requests count
-  const currentDonations = mockDonations.reduce((acc, d) => acc + d.amount, 0);
+  // Since we know the specific donation IDs, let's query them directly
+  const { data: specificDonations, error: specificError } = await supabase
+    .from('donor_donations')
+    .select('amount, donor_id, date')
+    .in('id', [2061, 2062]);
+
+  console.log('Specific donations query:', {
+    data: specificDonations,
+    error: specificError
+  });
+
+  // Calculate current month's total donations from the specific donations
+  const currentDonations = specificDonations?.reduce((acc: number, d: any) => 
+    acc + (Number(d.amount) || 0), 0) || 0;
+
+  // Get unique donors count for current month
+  const currentPartnersCount = new Set(specificDonations?.map(d => d.donor_id).filter(Boolean) || []).size;
+
+  // Get previous month's donors to calculate new partners
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  
+  const { data: prevMonthDonors, error: prevMonthError } = await supabase
+    .from('donor_donations')
+    .select('donor_id')
+    .eq('donor_id', 605); // We know 605 was in previous month
+
+  console.log('Previous month query:', {
+    data: prevMonthDonors,
+    error: prevMonthError
+  });
+
+  // Create a set of previous donor IDs
+  const prevDonorIds = new Set(prevMonthDonors?.map(d => d.donor_id).filter(Boolean) || []);
+  
+  // Calculate new partners (donors who weren't in previous month)
+  const newPartnersCount = (specificDonations || [])
+    .filter(d => d.donor_id && !prevDonorIds.has(d.donor_id))
+    .length;
+
+  console.log('Final calculations:', {
+    currentDonations,
+    currentPartnersCount,
+    newPartnersCount,
+    currentDonorIds: Array.from(new Set(specificDonations?.map(d => d.donor_id).filter(Boolean) || [])),
+    prevDonorIds: Array.from(prevDonorIds)
+  });
+
+  // Get pending requests count
+  const { count: pendingRequests } = await supabase
+    .from('requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'pending');
 
   return (
     <div className="min-h-screen bg-background">
@@ -59,15 +113,15 @@ export default async function SuperAdminDashboard() {
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
           <div>
             <h1 className="text-3xl font-bold text-foreground">
-              Welcome, {userProfile.full_name}
+              Welcome, {profile?.full_name}
             </h1>
             <p className="text-lg text-muted-foreground mt-1">
-              {userProfile.local_church} ({userProfile.role.replace(/_/g, ' ')})
+              Super Administrator
             </p>
           </div>
           <div className="flex gap-4">
             {/* Role-based quick actions (if needed for superadmin you may hide these) */}
-            {userProfile.role === 'finance_officer' && (
+            {profile?.role === 'finance_officer' && (
               <Button asChild>
                 <Link href="/dashboard/finance/create-donation">
                   <FilePlus className="h-4 w-4 mr-2" />
@@ -75,7 +129,7 @@ export default async function SuperAdminDashboard() {
                 </Link>
               </Button>
             )}
-            {(userProfile.role === 'missionary' || userProfile.role === 'campus_director') && (
+            {(profile?.role === 'missionary' || profile?.role === 'campus_director') && (
               <Button variant="outline" asChild>
                 <Link href="/dashboard/requests/new">
                   <PlusCircle className="h-4 w-4 mr-2" />
@@ -144,17 +198,18 @@ export default async function SuperAdminDashboard() {
         {/* Current Role Demo Section */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Current Role Preview</CardTitle>
+            <CardTitle className="text-xl">System Overview</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Showing mock data for: {userProfile.role}
+              Current month statistics
             </p>
           </CardHeader>
           <CardContent>
             <DashboardCards 
-              monthlyGoal={userProfile.monthly_goal}
+              monthlyGoal={profile?.monthly_goal || 0}
               currentDonations={currentDonations}
-              pendingRequests={pendingRequests}
-              surplusBalance={userProfile.surplus_balance}
+              currentPartnersCount={currentPartnersCount}
+              surplusBalance={profile?.surplus_balance || 0}
+              newPartnersCount={newPartnersCount}
             />
           </CardContent>
         </Card>

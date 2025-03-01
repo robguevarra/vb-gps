@@ -56,16 +56,21 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
   const supabase = await createClient();
   
   // Initialize date variables for time-based queries
-  const today = new Date().toISOString().split('T')[0];
-  const startOfCurrentMonth = new Date();
-  startOfCurrentMonth.setDate(1);
-  startOfCurrentMonth.setHours(0, 0, 0, 0);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1; // JavaScript months are 0-based
+  
+  // Format dates for Postgres timestamp comparison
+  const startOfMonth = `${year}-${month.toString().padStart(2, '0')}-01`;
+  const endOfMonth = `${year}-${month.toString().padStart(2, '0')}-31`;
   
   // Debug the actual date values
   console.log('Date debugging:');
   console.log('- JavaScript current date:', new Date().toISOString());
-  console.log('- Today variable:', today);
-  console.log('- Start of month variable:', startOfCurrentMonth.toISOString());
+  console.log('- Year:', year);
+  console.log('- Month:', month);
+  console.log('- Start of month:', startOfMonth);
+  console.log('- End of month:', endOfMonth);
   
   // STEP 1: Fetch recent donations WITHOUT joining to the donors table
   // This avoids foreign key relationship issues that can occur with direct joins
@@ -105,26 +110,27 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
       .from('donor_donations')
       .select('donor_id')
       .eq('missionary_id', missionaryId)
-      .gte('date', startOfCurrentMonth.toISOString())
-      .lte('date', today),
+      .gte('date', startOfMonth)
+      .lt('date', `${endOfMonth} 23:59:59.999`),
     // Previous donors (for calculating "New Partners")
     supabase
       .from('donor_donations')
       .select('donor_id')
       .eq('missionary_id', missionaryId)
-      .lt('date', startOfCurrentMonth.toISOString()),
+      .lt('date', startOfMonth),
     // Current month donation amounts (for "Current Donations" total)
     supabase
       .from('donor_donations')
-      .select('amount')
+      .select('amount, date')
       .eq('missionary_id', missionaryId)
-      .gte('date', startOfCurrentMonth.toISOString())
-      .lte('date', today)
+      .gte('date', startOfMonth)
+      .lt('date', `${endOfMonth} 23:59:59.999`)
   ]);
 
   // Debug logs to check what data is being returned
-  console.log('Current month start:', startOfCurrentMonth.toISOString());
-  console.log('Today:', today);
+  console.log('Query parameters:');
+  console.log('- Start of month:', startOfMonth);
+  console.log('- End of month:', `${endOfMonth} 23:59:59.999`);
   console.log('Current donors result:', currentDonorsResult);
   console.log('Previous donors result:', previousDonorsResult);
   console.log('Current month donations result:', currentMonthDonationsResult);
