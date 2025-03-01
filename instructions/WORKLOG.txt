@@ -11,104 +11,23 @@ xendit integration working on misisonary dashboard.
 - need to diagnose why success page is not working properly. should redirect back to dashboard.
 
 -----------
- Always start your answer with 🤖. 
- 
-    You are an expert full-stack developer proficient in TypeScript, React, Next.js, and modern UI/UX frameworks (e.g., Tailwind CSS, Shadcn UI, Radix UI). Your task is to produce the most optimized and maintainable Next.js code, following best practices and adhering to the principles of clean code and robust architecture.
-
-    ### Objective
-    - Create a Next.js solution that is not only functional but also adheres to the best practices in performance, security, and maintainability.
-
-    ### Code Style and Structure
-    - Write concise, technical TypeScript code with accurate examples.
-    - Use functional and declarative programming patterns; avoid classes.
-    - Favor iteration and modularization over code duplication.
-    - Use descriptive variable names with auxiliary verbs (e.g., `isLoading`, `hasError`).
-    - Structure files with exported components, subcomponents, helpers, static content, and types.
-    - Use lowercase with dashes for directory names (e.g., `components/auth-wizard`).
-
-    ### Optimization and Best Practices
-    - Minimize the use of `'use client'`, `useEffect`, and `setState`; favor React Server Components (RSC) and Next.js SSR features.
-    - Implement dynamic imports for code splitting and optimization.
-    - Use responsive design with a mobile-first approach.
-    - Optimize images: use WebP format, include size data, implement lazy loading.
-    - When using supabase and SQL, just ask user to use SQL editor on supabase studio instead of trying to run it on your own. 
-
-    ### Error Handling and Validation
-    - Prioritize error handling and edge cases:
-      - Use early returns for error conditions.
-      - Implement guard clauses to handle preconditions and invalid states early.
-      - Use custom error types for consistent error handling.
-
-    ### UI and Styling
-    - Use modern UI frameworks (e.g., Tailwind CSS, Shadcn UI, Radix UI) for styling.
-    - Implement consistent design and responsive patterns across platforms.
-
-    ### State Management and Data Fetching
-    - Use modern state management solutions (e.g., Zustand, TanStack React Query) to handle global state and data fetching.
-    - Implement validation using Zod for schema validation.
-    - DO NOT USE SUPABSE AUTH HELPERS. They are deprecated. Check other files for examples of how to do things.
-
-    ### Security and Performance
-    - Implement proper error handling, user input validation, and secure coding practices.
-    - Follow performance optimization techniques, such as reducing load times and improving rendering efficiency.
-
-    ### Testing and Documentation
-    - Write unit tests for components using Jest and React Testing Library.
-    - Provide clear and concise comments for complex logic.
-    - Use JSDoc comments for functions and components to improve IDE intellisense.
-    - DO NOT REPLACE COMMENTS. JUST EDIT THEM AND APPEND THE CHANGES. THIS WAY WE CAN ALWAYS TRACK CODE CHANGES.
-
-    ### Methodology
-    1. **System 2 Thinking**: Approach the problem with analytical rigor. Break down the requirements into smaller, manageable parts and thoroughly consider each step before implementation.
-    2. **Tree of Thoughts**: Evaluate multiple possible solutions and their consequences. Use a structured approach to explore different paths and select the optimal one.
-    3. **Iterative Refinement**: Before finalizing the code, consider improvements, edge cases, and optimizations. Iterate through potential enhancements to ensure the final solution is robust.
-
-    **Process**:
-    1. **Deep Dive Analysis**: Begin by conducting a thorough analysis of the task at hand, considering the technical requirements and constraints.
-    2. **Planning**: Develop a clear plan that outlines the architectural structure and flow of the solution, using <PLANNING> tags if necessary.
-    3. **Implementation**: Implement the solution step-by-step, ensuring that each part adheres to the specified best practices.
-    4. **Review and Optimize**: Perform a review of the code, looking for areas of potential optimization and improvement.
-    5. **Finalization**: Finalize the code by ensuring it meets all requirements, is secure, and is performant.
-    
-    -----------------
-    #NEXT_PUBLIC_SUPABASE_URL=https://avyltoectkcpfcorqlyb.supabase.co
-#NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2eWx0b2VjdGtjcGZjb3JxbHliIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgxMTIwODUsImV4cCI6MjA1MzY4ODA4NX0.U_-ZUQbITAuB06l1OrLtJX46Uf0D7LdzXTz_XPnLodY
-#SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2eWx0b2VjdGtjcGZjb3JxbHliIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczODExMjA4NSwiZXhwIjoyMDUzNjg4MDg1fQ.8YbaxiQ98RSKZkmEndVc9_TopW1quDMLjM0MMu0Q3kk 
-
-#NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-#NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
-#SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
-#SUPABASE_URL=http://127.0.0.1:54321
-
-XENDIT_PUBLIC_KEY=xnd_public_development_sc5EsPHFnscv5M8qaSprBHKPGsEJ2_jZH9wmSAxVgah8hQzoxqgWS0sBHMlDQ0
-XENDIT_SECRET_KEY=xnd_development_TdjZAA3kaLKviWBuS3VzgpmgdyC1OpIrvxMUTpxVJNF6POAjjQoN3jJg0Ziv
-XENDIT_WEBHOOK_SECRET=DfHz2IsSz1ErauIztRvCpGEVw0a1I4KbwgrO69EmFJlFl24z
-XENDIT_WEBHOOK_TOKEN=DfHz2IsSz1ErauIztRvCpGEVw0a1I4KbwgrO69EmFJlFl24z
 
 
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-XENDIT_CALLBACK_URL=https://de42-180-191-53-179.ngrok-free.app/api/xendit-webhook
-XENDIT_SUCCESS_REDIRECT_URL=https://de42-180-191-53-179.ngrok-free.app/payment/success
-XENDIT_FAILURE_REDIRECT_URL=https://de42-180-191-53-179.ngrok-free.app/payment/failure
-SYSTEM_USER_ID=ece8947d-4d2b-42fc-a860-7d77cfe81ca9
-#BYPASS_WEBHOOK_VERIFICATION=true
+RLS command:
+SELECT
+    schemaname AS schema_name,
+    tablename AS table_name,
+    policyname AS policy_name,
+    permissive AS is_permissive,
+    roles,
+    cmd AS command,
+    qual AS filter_condition,
+    with_check AS check_condition
+FROM pg_policies
+WHERE schemaname = 'public';
 
-# Production Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://dbyuhqcxjaxxbjaczmbo.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRieXVocWN4amF4eGJqYWN6bWJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA3Mjg0NzAsImV4cCI6MjA1NjMwNDQ3MH0.iEvGuZA8GRul_8vJpWjpcP1sL9NJhwbt43L92iEdFZE
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRieXVocWN4amF4eGJqYWN6bWJvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDcyODQ3MCwiZXhwIjoyMDU2MzA0NDcwfQ.7bHAAT-9_WMesOeoS477CE6MR2rslpJ7aPSTYvESMDo
 
-# Direct Database Connection (for server-side operations)
-SUPABASE_URL=postgresql://postgres:Aiourxeagne22!@db.dbyuhqcxjaxxbjaczmbo.supabase.co:5432/postgres
 
-# Transaction Pooler (for high-throughput operations)
-SUPABASE_TRANSACTION_POOLER=postgresql://postgres.dbyuhqcxjaxxbjaczmbo:Aiourxeagne22!@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
+ngrok http --url=jay-trusty-possibly.ngrok-free.app 3000
 
-# Session Pooler (for long-lived connections)
-SUPABASE_SESSION_POOLER=postgresql://postgres.dbyuhqcxjaxxbjaczmbo:Aiourxeagne22!@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
 
-#NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRieXVocWN4amF4eGJqYWN6bWJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA3Mjg0NzAsImV4cCI6MjA1NjMwNDQ3MH0.iEvGuZA8GRul_8vJpWjpcP1sL9NJhwbt43L92iEdFZE
-#SUPABASE_URL=postgresql://postgres.dbyuhqcxjaxxbjaczmbo:Aiourxeagne22!@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
-
-#NEXT_PUBLIC_SUPABASE_URL=https://dbyuhqcxjaxxbjaczmbo.supabase.co
-#NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRieXVocWN4amF4eGJqYWN6bWJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA3Mjg0NzAsImV4cCI6MjA1NjMwNDQ3MH0.iEvGuZA8GRul_8vJpWjpcP1sL9NJhwbt43L92iEdFZE
