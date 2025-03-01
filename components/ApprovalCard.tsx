@@ -110,15 +110,20 @@ export function ApprovalCard({
 
       // Determine which table to update based on request type
       const table = requestType === "leave" ? "leave_requests" : "surplus_requests";
-      const statusField = requestType === "leave" ? "campus_director_approval" : "campus_director_approval";
+      
+      // Determine the appropriate ID field based on request type
+      const idField = requestType === "leave" ? "requester_id" : "missionary_id";
+      
+      // Determine the approval field based on request type
+      const approvalField = "campus_director_approval";
 
       // Update the request status in the database
       const { error } = await supabase
         .from(table)
         .update({
-          [statusField]: actionType === "approve" ? "approved" : "rejected",
+          [approvalField]: actionType === "approve" ? "approved" : "rejected",
           status: actionType === "approve" ? "approved" : "rejected",
-          notes: notes.trim() || null
+          campus_director_notes: notes.trim() || null
         })
         .eq("id", requestId);
 
@@ -135,8 +140,25 @@ export function ApprovalCard({
     }
   };
 
+  // Format the details for display
+  const formattedDetails = () => {
+    if (requestType === 'leave') {
+      return details;
+    } else {
+      // For surplus requests, ensure the amount is properly formatted
+      // The details string typically contains "Requested Amount: ₱X. Reason: Y"
+      const amountMatch = details.match(/Requested Amount: ₱([\d,]+)/);
+      if (amountMatch) {
+        const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+        const reasonPart = details.split('Reason:')[1] || '';
+        return `Requested Amount: ₱${amount.toLocaleString()}. Reason:${reasonPart}`;
+      }
+      return details;
+    }
+  };
+
   return (
-    <div className="p-4 bg-background rounded-lg border flex justify-between items-center">
+    <div className="p-4 bg-background rounded-lg border flex justify-between items-center mb-4">
       {/* Request Information */}
       <div>
         <p className="font-medium">
@@ -151,7 +173,7 @@ export function ApprovalCard({
             ({currentStatus})
           </span>
         </p>
-        <p className="text-sm text-muted-foreground">{details}</p>
+        <p className="text-sm text-muted-foreground">{formattedDetails()}</p>
       </div>
 
       {/* Action Buttons */}
@@ -177,7 +199,7 @@ export function ApprovalCard({
           </DialogHeader>
           <div className="space-y-4">
             <p><strong>Filed by:</strong> {filedBy}</p>
-            <p><strong>Details:</strong> {details}</p>
+            <p><strong>Details:</strong> {formattedDetails()}</p>
             <div className="space-y-2">
               <Label>Optional Notes</Label>
               <Textarea

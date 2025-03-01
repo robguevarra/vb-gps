@@ -61,6 +61,12 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
   startOfCurrentMonth.setDate(1);
   startOfCurrentMonth.setHours(0, 0, 0, 0);
   
+  // Debug the actual date values
+  console.log('Date debugging:');
+  console.log('- JavaScript current date:', new Date().toISOString());
+  console.log('- Today variable:', today);
+  console.log('- Start of month variable:', startOfCurrentMonth.toISOString());
+  
   // STEP 1: Fetch recent donations WITHOUT joining to the donors table
   // This avoids foreign key relationship issues that can occur with direct joins
   const donationsResult = await supabase
@@ -116,11 +122,24 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
       .lte('date', today)
   ]);
 
+  // Debug logs to check what data is being returned
+  console.log('Current month start:', startOfCurrentMonth.toISOString());
+  console.log('Today:', today);
+  console.log('Current donors result:', currentDonorsResult);
+  console.log('Previous donors result:', previousDonorsResult);
+  console.log('Current month donations result:', currentMonthDonationsResult);
+
   // Calculate dashboard stats
   const currentDonorIds = new Set(currentDonorsResult?.data?.map(d => d.donor_id) || []);
   const previousDonorIds = new Set(previousDonorsResult?.data?.map(d => d.donor_id) || []);
   const currentPartnersCount = currentDonorIds.size;
   const newPartnersCount = Array.from(currentDonorIds).filter(id => !previousDonorIds.has(id)).length;
+
+  // Debug logs for calculated metrics
+  console.log('Current donor IDs:', Array.from(currentDonorIds));
+  console.log('Previous donor IDs:', Array.from(previousDonorIds));
+  console.log('Current partners count:', currentPartnersCount);
+  console.log('New partners count:', newPartnersCount);
 
   // STEP 4: Process donation data by matching with donor names from our separate query
   // This manually creates the joined data that would normally come from a database join
@@ -140,6 +159,11 @@ export async function OverviewTab({ missionaryId, profileData, isSuperAdmin }: O
 
   // Calculate current donations total from all current month donations
   const currentDonations = currentMonthDonationsResult?.data?.reduce((acc, d) => acc + Number(d.amount), 0) || 0;
+
+  // Debug log for current donations calculation
+  console.log('Current donations calculation:');
+  console.log('- Raw donation amounts:', currentMonthDonationsResult?.data?.map(d => d.amount));
+  console.log('- Total calculated:', currentDonations);
 
   return (
     <div className="space-y-8">

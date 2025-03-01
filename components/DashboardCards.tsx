@@ -13,9 +13,12 @@
  * - Currency formatting for monetary values
  * - Color-coded indicators
  * - Hover animations
+ * - Shows percentages above 100% when donations exceed monthly goal
  * 
  * @component
  */
+
+//components/DashboardCards.tsx
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -115,7 +118,7 @@ export default function DashboardCards({
                   card.variant === "indigo" ? "text-indigo-600" :
                   "text-teal-600"
                 )}>
-                  {Math.min(card.progress, 100).toFixed(1)}%
+                  {card.progress.toFixed(1)}%
                 </span>
               )}
             </div>

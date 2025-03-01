@@ -28,18 +28,44 @@ export function RequestHistoryTab({
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Leave Requests</h3>
             <ScrollArea className="h-[300px] pr-4">
-              {pendingLeaveRequests.map((request) => (
-                <RequestHistoryCard key={request.id} request={request} />
-              ))}
+              {pendingLeaveRequests.length > 0 ? (
+                pendingLeaveRequests.map((request) => (
+                  <RequestHistoryCard 
+                    key={request.id} 
+                    request={{
+                      ...request,
+                      type: request.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
+                      date: new Date(request.created_at).toLocaleDateString(),
+                      startDate: new Date(request.start_date).toLocaleDateString(),
+                      endDate: new Date(request.end_date).toLocaleDateString(),
+                      isLeave: true
+                    }} 
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No pending leave requests</p>
+              )}
             </ScrollArea>
           </div>
           
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Surplus Requests</h3>
             <ScrollArea className="h-[300px] pr-4">
-              {pendingSurplusRequests.map((request) => (
-                <RequestHistoryCard key={request.id} request={request} />
-              ))}
+              {pendingSurplusRequests.length > 0 ? (
+                pendingSurplusRequests.map((request) => (
+                  <RequestHistoryCard 
+                    key={request.id} 
+                    request={{
+                      ...request,
+                      type: 'Surplus',
+                      date: new Date(request.created_at).toLocaleDateString(),
+                      isLeave: false
+                    }} 
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No pending surplus requests</p>
+              )}
             </ScrollArea>
           </div>
         </div>
@@ -50,18 +76,44 @@ export function RequestHistoryTab({
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Approved Leaves</h3>
             <ScrollArea className="h-[300px] pr-4">
-              {approvedLeaveRequests.map((request) => (
-                <RequestHistoryCard key={request.id} request={request} />
-              ))}
+              {approvedLeaveRequests.length > 0 ? (
+                approvedLeaveRequests.map((request) => (
+                  <RequestHistoryCard 
+                    key={request.id} 
+                    request={{
+                      ...request,
+                      type: request.type === 'sick' ? 'Sick Leave' : 'Vacation Leave',
+                      date: new Date(request.created_at).toLocaleDateString(),
+                      startDate: new Date(request.start_date).toLocaleDateString(),
+                      endDate: new Date(request.end_date).toLocaleDateString(),
+                      isLeave: true
+                    }} 
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No approved leave requests</p>
+              )}
             </ScrollArea>
           </div>
           
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Approved Surplus</h3>
             <ScrollArea className="h-[300px] pr-4">
-              {approvedSurplusRequests.map((request) => (
-                <RequestHistoryCard key={request.id} request={request} />
-              ))}
+              {approvedSurplusRequests.length > 0 ? (
+                approvedSurplusRequests.map((request) => (
+                  <RequestHistoryCard 
+                    key={request.id} 
+                    request={{
+                      ...request,
+                      type: 'Surplus',
+                      date: new Date(request.created_at).toLocaleDateString(),
+                      isLeave: false
+                    }} 
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No approved surplus requests</p>
+              )}
             </ScrollArea>
           </div>
         </div>
@@ -75,7 +127,7 @@ function RequestHistoryCard({ request }: { request: any }) {
     <div className="p-4 mb-4 bg-background rounded-lg border">
       <div className="flex justify-between items-start">
         <div>
-          <p className="font-medium">{request.type} Request</p>
+          <p className="font-medium">{request.type}</p>
           <p className="text-sm text-muted-foreground">
             {request.date}
           </p>
@@ -87,14 +139,18 @@ function RequestHistoryCard({ request }: { request: any }) {
           {request.status}
         </span>
       </div>
-      <p className="mt-2 text-sm">
-        {request.type === 'Leave' 
-          ? `Dates: ${request.startDate} - ${request.endDate}`
-          : `Amount: ₱${typeof request.amount === 'number' 
-              ? request.amount.toLocaleString() 
-              : '0'}`
-        }
-      </p>
+      
+      {/* Display different details based on request type */}
+      {request.isLeave ? (
+        <p className="mt-2 text-sm">
+          Dates: {request.startDate} - {request.endDate}
+        </p>
+      ) : (
+        <p className="mt-2 text-sm">
+          Amount: ₱{Number(request.amount_requested || 0).toLocaleString()}
+        </p>
+      )}
+      
       <p className="text-sm text-muted-foreground mt-1">Reason: {request.reason}</p>
     </div>
   )

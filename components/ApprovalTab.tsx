@@ -65,7 +65,7 @@ interface SurplusApproval {
   /** Type of request (always "Surplus") */
   type: "Surplus"
   /** Amount requested in the surplus request */
-  amount: number
+  amount_requested: number
   /** Reason provided for the surplus request */
   reason: string
   /** Current status of the request */
@@ -171,7 +171,7 @@ export function ApprovalTab({
                         requestType="surplus"
                         currentStatus={request.status}
                         filedBy={request.requester?.full_name || "Unknown"}
-                        details={`Requested Amount: ₱${request.amount.toLocaleString()}. Reason: ${request.reason}`}
+                        details={`Requested Amount: ₱${request.amount_requested.toLocaleString()}. Reason: ${request.reason}`}
                       />
                     ))
                   ) : (
@@ -235,7 +235,7 @@ export function ApprovalTab({
                       <Card key={`approved-surplus-${request.id}`} className="mb-4 last:mb-0">
                         <CardContent className="pt-6">
                           <h4 className="font-semibold">{request.requester?.full_name || "Unknown"}</h4>
-                          <p className="text-sm text-muted-foreground">Amount: ₱{request.amount.toLocaleString()}</p>
+                          <p className="text-sm text-muted-foreground">Amount: ₱{request.amount_requested.toLocaleString()}</p>
                           <p className="text-sm mt-2">Reason: {request.reason}</p>
                           <Badge className="mt-2" variant="outline">
                             {request.status}

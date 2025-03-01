@@ -22,7 +22,13 @@ export async function RequestHistoryTabWrapper({ missionaryId }: RequestHistoryT
   ]);
 
   const leaveRequestsData = leaveRequestsResult.data || [];
-  const surplusRequestsData = surplusRequestsResult.data || [];
+  
+  // Ensure surplus requests have the correct amount format
+  const surplusRequestsData = (surplusRequestsResult.data || []).map(request => ({
+    ...request,
+    // Convert amount_requested to a number to ensure proper formatting
+    amount_requested: parseFloat(request.amount_requested) || 0
+  }));
 
   return (
     <div className="space-y-8">

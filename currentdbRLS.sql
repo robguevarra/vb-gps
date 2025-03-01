@@ -49,10 +49,34 @@
   },
   {
     "table_name": "leave_requests",
-    "policy_name": "Lead pastors can view their church requests",
+    "policy_name": "view_own_leave_requests",
     "command": "SELECT",
     "is_permissive": "PERMISSIVE",
-    "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles pastor\n     JOIN profiles missionary ON ((missionary.local_church_id = pastor.local_church_id)))\n  WHERE ((pastor.id = auth.uid()) AND (pastor.role = 'lead_pastor'::text) AND (leave_requests.requester_id = missionary.id))))",
+    "using_expression": "(requester_id = auth.uid())",
+    "check_expression": null
+  },
+  {
+    "table_name": "leave_requests",
+    "policy_name": "campus_director_view_church_leave_requests",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
+    "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles cd\n     JOIN profiles missionary ON ((missionary.local_church_id = cd.local_church_id)))\n  WHERE ((cd.id = auth.uid()) AND (cd.role = 'campus_director'::text) AND (leave_requests.requester_id = missionary.id))))",
+    "check_expression": null
+  },
+  {
+    "table_name": "leave_requests",
+    "policy_name": "campus_director_approve_leave_requests",
+    "command": "UPDATE",
+    "is_permissive": "PERMISSIVE",
+    "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles cd\n     JOIN profiles missionary ON ((missionary.local_church_id = cd.local_church_id)))\n  WHERE ((cd.id = auth.uid()) AND (cd.role = 'campus_director'::text) AND (leave_requests.requester_id = missionary.id))))",
+    "check_expression": null
+  },
+  {
+    "table_name": "leave_requests",
+    "policy_name": "superadmin_access_leave_requests",
+    "command": "ALL",
+    "is_permissive": "PERMISSIVE",
+    "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'superadmin'::text))))",
     "check_expression": null
   },
   {
@@ -137,10 +161,34 @@
   },
   {
     "table_name": "surplus_requests",
-    "policy_name": "approve_surplus_requests",
+    "policy_name": "view_own_surplus_requests",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
+    "using_expression": "(missionary_id = auth.uid())",
+    "check_expression": null
+  },
+  {
+    "table_name": "surplus_requests",
+    "policy_name": "campus_director_view_church_surplus_requests",
+    "command": "SELECT",
+    "is_permissive": "PERMISSIVE",
+    "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles cd\n     JOIN profiles missionary ON ((missionary.local_church_id = cd.local_church_id)))\n  WHERE ((cd.id = auth.uid()) AND (cd.role = 'campus_director'::text) AND (surplus_requests.missionary_id = missionary.id))))",
+    "check_expression": null
+  },
+  {
+    "table_name": "surplus_requests",
+    "policy_name": "campus_director_approve_surplus_requests",
     "command": "UPDATE",
     "is_permissive": "PERMISSIVE",
-    "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (((p.role = 'campus_director'::text) AND (EXISTS ( SELECT 1\n           FROM profiles m\n          WHERE ((m.id = surplus_requests.missionary_id) AND (m.local_church_id = p.local_church_id))))) OR ((p.role = 'lead_pastor'::text) AND (EXISTS ( SELECT 1\n           FROM profiles m\n          WHERE ((m.id = surplus_requests.missionary_id) AND (m.local_church_id = p.local_church_id))))) OR (p.role = 'superadmin'::text)))))",
+    "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles cd\n     JOIN profiles missionary ON ((missionary.local_church_id = cd.local_church_id)))\n  WHERE ((cd.id = auth.uid()) AND (cd.role = 'campus_director'::text) AND (surplus_requests.missionary_id = missionary.id))))",
+    "check_expression": null
+  },
+  {
+    "table_name": "surplus_requests",
+    "policy_name": "superadmin_access_surplus_requests",
+    "command": "ALL",
+    "is_permissive": "PERMISSIVE",
+    "using_expression": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'superadmin'::text))))",
     "check_expression": null
   },
   {
