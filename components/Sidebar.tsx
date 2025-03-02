@@ -24,7 +24,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -32,7 +32,7 @@ interface SidebarProps {
   isCampusDirector?: boolean;
 }
 
-export function Sidebar({ isCampusDirector = false }: SidebarProps) {
+function SidebarContent({ isCampusDirector = false }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams?.get("tab") || "overview";
@@ -222,5 +222,23 @@ export function Sidebar({ isCampusDirector = false }: SidebarProps) {
         </ScrollArea>
       </div>
     </>
+  );
+}
+
+// Export the Sidebar component wrapped in Suspense
+export function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={
+      <div className="hidden lg:flex lg:flex-col lg:fixed lg:top-16 lg:left-0 lg:w-64 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:bg-white lg:dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-50">
+        <div className="p-4 border-b">
+          <h3 className="text-lg font-semibold">Loading...</h3>
+        </div>
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    }>
+      <SidebarContent {...props} />
+    </Suspense>
   );
 }

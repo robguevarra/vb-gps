@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
+import { Suspense } from "react";
 
 interface SuperAdminSidebarProps {}
 
@@ -16,10 +17,10 @@ const navItems = [
   { name: "Settings", href: "?tab=settings" },
 ];
 
-export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
+function SuperAdminSidebarContent({}: SuperAdminSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const currentTab = searchParams.get("tab") || "churches";
+  const currentTab = searchParams?.get("tab") || "churches";
 
   return (
     <>
@@ -30,16 +31,16 @@ export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
             <span className="sr-only">Toggle navigation menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="flex flex-col p-4">
-          <nav className="grid gap-2 text-lg font-medium">
+        <SheetContent side="left">
+          <nav className="flex flex-col space-y-2 mt-4">
             {navItems.map((item) => (
               <Link
                 key={item.name}
                 href={`${pathname}${item.href}`}
-                className={`block px-4 py-2 rounded-lg ${
+                className={`px-3 py-2 rounded-md ${
                   currentTab === item.href.split("=")[1]
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-accent"
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted"
                 }`}
               >
                 {item.name}
@@ -49,16 +50,19 @@ export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
         </SheetContent>
       </Sheet>
 
-      <div className="hidden lg:flex lg:flex-col lg:fixed lg:top-16 lg:left-0 lg:w-64 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:bg-white lg:dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700">
-        <nav className="flex flex-col gap-1 p-4">
+      <div className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r">
+        <div className="p-4">
+          <h2 className="text-xl font-bold">Admin Portal</h2>
+        </div>
+        <nav className="flex flex-col space-y-1 p-2">
           {navItems.map((item) => (
             <Link
               key={item.name}
               href={`${pathname}${item.href}`}
-              className={`block px-4 py-2 rounded-lg ${
+              className={`px-3 py-2 rounded-md ${
                 currentTab === item.href.split("=")[1]
-                  ? "bg-muted font-semibold"
-                  : "hover:bg-accent"
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted"
               }`}
             >
               {item.name}
@@ -67,5 +71,23 @@ export default function SuperAdminSidebar({}: SuperAdminSidebarProps) {
         </nav>
       </div>
     </>
+  );
+}
+
+// Export the SuperAdminSidebar component wrapped in Suspense
+export default function SuperAdminSidebar(props: SuperAdminSidebarProps) {
+  return (
+    <Suspense fallback={
+      <div className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r">
+        <div className="p-4">
+          <h2 className="text-xl font-bold">Loading...</h2>
+        </div>
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    }>
+      <SuperAdminSidebarContent {...props} />
+    </Suspense>
   );
 }

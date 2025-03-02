@@ -8,8 +8,9 @@ import { Menu, ClipboardCheck, CheckCircle, BarChart2, ChevronRight } from "luci
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Suspense } from "react";
 
-export function LeadPastorSidebar() {
+function LeadPastorSidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams?.get("tab") || "approvals";
@@ -126,5 +127,23 @@ export function LeadPastorSidebar() {
         </ScrollArea>
       </div>
     </>
+  );
+}
+
+// Export the LeadPastorSidebar component wrapped in Suspense
+export function LeadPastorSidebar() {
+  return (
+    <Suspense fallback={
+      <div className="hidden lg:block fixed left-0 top-16 bottom-0 w-64 border-r bg-background">
+        <div className="p-4 border-b">
+          <h3 className="text-lg font-semibold">Loading...</h3>
+        </div>
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    }>
+      <LeadPastorSidebarContent />
+    </Suspense>
   );
 } 

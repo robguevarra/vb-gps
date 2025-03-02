@@ -30,12 +30,10 @@ import { ReportsTabWrapper } from "@/components/missionary-dashboard/ReportsTab"
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default async function MissionaryDashboard({
-  searchParams: promiseSearchParams,
+  searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: { [key: string]: string | string[] | undefined };
 }) {
-  // Resolve search parameters
-  const searchParams = await promiseSearchParams;
   const currentTab = typeof searchParams.tab === "string" ? searchParams.tab : "overview";
   const userIdParam = Array.isArray(searchParams.userId)
     ? searchParams.userId[0]

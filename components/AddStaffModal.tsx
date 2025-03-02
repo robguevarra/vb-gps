@@ -28,7 +28,7 @@ export default function AddStaffModal({ open, onOpenChange, churches }: AddStaff
   const [role, setRole] = useState("missionary");
   const [churchId, setChurchId] = useState("none");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | Record<string, string>>("");
   const [monthlyGoal, setMonthlyGoal] = useState(0);
 
   const roleOptions = ["missionary", "campus_director", "lead_pastor", "finance_officer"];

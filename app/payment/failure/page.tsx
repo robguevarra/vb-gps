@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function PaymentFailurePage() {
+function PaymentFailureContent() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string>("Your payment could not be processed");
   
@@ -109,5 +109,17 @@ export default function PaymentFailurePage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function PaymentFailurePage() {
+  return (
+    <Suspense fallback={
+      <div className="container max-w-3xl mx-auto py-20 px-4 text-center">
+        <p>Loading payment information...</p>
+      </div>
+    }>
+      <PaymentFailureContent />
+    </Suspense>
   );
 } 
