@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { createClient } from "@/utils/supabase/client"
-import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus, Mail, Phone, AlertCircle, Copy, Link as LinkIcon, Share2, X, CreditCard, Wallet } from "lucide-react"
+import { Plus, Trash, CheckCircle, Loader2, ArrowLeft, Search, UserPlus, Mail, Phone, AlertCircle, Copy, Link as LinkIcon, Share2, X, CreditCard, Wallet, ExternalLink } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
 import { z } from "zod"
@@ -527,6 +527,22 @@ export function BulkOnlinePaymentWizard({
     setError(null);
 
     try {
+      // Clear any existing payment status before starting a new payment
+      localStorage.removeItem(`payment_status_${missionaryId}`);
+      localStorage.removeItem(`payment_state_${missionaryId}`);
+      localStorage.removeItem(`payment_${missionaryId}`);
+      
+      // Clear any polling intervals
+      const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
+      if (pollingId) {
+        try {
+          clearInterval(parseInt(pollingId));
+        } catch (err) {
+          console.error("Error clearing interval:", err);
+        }
+        localStorage.removeItem(`payment_polling_${missionaryId}`);
+      }
+      
       // Check if we have user email
       if (!userEmail) {
         throw new Error("No email found for payment contact. Please log in again or update your profile.");
@@ -605,6 +621,7 @@ export function BulkOnlinePaymentWizard({
         // Save payment info with both key formats to ensure compatibility
         const paymentInfo = {
           invoiceId: data.invoiceId,
+          invoiceUrl: data.invoiceUrl,
           amount: totalAmount,
           timestamp: new Date().toISOString(),
           partnerCount: donorEntries.length
@@ -618,8 +635,9 @@ export function BulkOnlinePaymentWizard({
           missionaryId: missionaryId,
           step: step,
           totalAmount: totalAmount,
-          timestamp: new Date().toISOString(),
-          invoiceId: data.invoiceId
+          invoiceId: data.invoiceId,
+          invoiceUrl: data.invoiceUrl,
+          timestamp: new Date().toISOString()
         };
         localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify(paymentState));
         
@@ -680,7 +698,9 @@ export function BulkOnlinePaymentWizard({
       // Set payment status to pending
       const paymentStatus = {
         status: "pending",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        invoiceId: paymentState.invoiceId,
+        invoiceUrl: paymentLink // Store the direct URL
       };
       
       console.log(`Payment status set to pending`);
@@ -791,6 +811,17 @@ export function BulkOnlinePaymentWizard({
             clearInterval(intervalId);
             localStorage.removeItem(`payment_polling_${missionaryId}`);
             console.log("Polling stopped: payment completed");
+            
+            // Auto-clear the payment status after 5 seconds
+            setTimeout(() => {
+              console.log("Auto-clearing completed payment status");
+              // Clear ALL localStorage items related to payments
+              localStorage.removeItem(`payment_status_${missionaryId}`);
+              localStorage.removeItem(`payment_state_${missionaryId}`);
+              localStorage.removeItem(`payment_${missionaryId}`);
+              localStorage.removeItem(`payment_polling_${missionaryId}`);
+            }, 5000); // 5 seconds
+            
             return;
           } else if (transactionData.status === "expired" || transactionData.status === "failed") {
             console.log(`Payment failed or expired`);
@@ -843,6 +874,17 @@ export function BulkOnlinePaymentWizard({
                   clearInterval(intervalId);
                   localStorage.removeItem(`payment_polling_${missionaryId}`);
                   console.log("Polling stopped: payment completed (from webhook)");
+                  
+                  // Auto-clear the payment status after 5 seconds
+                  setTimeout(() => {
+                    console.log("Auto-clearing completed payment status");
+                    // Clear ALL localStorage items related to payments
+                    localStorage.removeItem(`payment_status_${missionaryId}`);
+                    localStorage.removeItem(`payment_state_${missionaryId}`);
+                    localStorage.removeItem(`payment_${missionaryId}`);
+                    localStorage.removeItem(`payment_polling_${missionaryId}`);
+                  }, 5000); // 5 seconds
+                  
                   return;
                 }
               }
@@ -885,6 +927,17 @@ export function BulkOnlinePaymentWizard({
           clearInterval(intervalId);
           localStorage.removeItem(`payment_polling_${missionaryId}`);
           console.log("Polling stopped: payment completed (from Xendit API)");
+          
+          // Auto-clear the payment status after 5 seconds
+          setTimeout(() => {
+            console.log("Auto-clearing completed payment status");
+            // Clear ALL localStorage items related to payments
+            localStorage.removeItem(`payment_status_${missionaryId}`);
+            localStorage.removeItem(`payment_state_${missionaryId}`);
+            localStorage.removeItem(`payment_${missionaryId}`);
+            localStorage.removeItem(`payment_polling_${missionaryId}`);
+          }, 5000); // 5 seconds
+          
           return true;
         } else if (data.status === "EXPIRED" || data.status === "FAILED") {
           console.log(`Payment ${data.status.toLowerCase()}`);
@@ -1446,6 +1499,19 @@ export function BulkOnlinePaymentWizard({
                 <p className="text-sm">
                   A payment page has been opened in a new tab with all available payment options from Xendit. If it didn't open automatically or you need to access it again, please click the "Pay Now" button below.
                 </p>
+                {paymentLink && (
+                  <div className="mt-2 flex items-center">
+                    <a 
+                      href={paymentLink} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-green-700 hover:text-green-900 font-medium text-sm underline underline-offset-2"
+                    >
+                      Open Payment Link
+                      <ExternalLink className="ml-1 h-3 w-3" />
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </div>

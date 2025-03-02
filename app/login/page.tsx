@@ -23,6 +23,7 @@ export default async function LoginPage() {
                 src="/victorywhite.png" 
                 alt="Victory Bulacan Logo" 
                 fill
+                sizes="(max-width: 768px) 7rem, 7rem"
                 className="object-contain"
                 priority
               />

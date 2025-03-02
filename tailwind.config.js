@@ -31,8 +31,8 @@ module.exports = {
           foreground: "hsl(var(--secondary-foreground))",
         },
         destructive: {
-          DEFAULT: '#ef4444',
-          foreground: '#f8fafc',
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -50,10 +50,6 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        success: {
-          DEFAULT: '#22c55e',
-          foreground: '#052e16',
-        }
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -69,10 +65,31 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: 0 },
         },
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideInUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        pulseGlow: {
+          '0%': { boxShadow: '0 0 0 0 rgba(0, 69, 141, 0.1)' },
+          '70%': { boxShadow: '0 0 0 10px rgba(0, 69, 141, 0)' },
+          '100%': { boxShadow: '0 0 0 0 rgba(0, 69, 141, 0)' },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fadeIn 0.5s ease-out forwards",
+        "slide-in-up": "slideInUp 0.5s ease-out forwards",
+        "scale-in": "scaleIn 0.4s ease-out forwards",
+        "pulse-glow": "pulseGlow 2s infinite",
       },
     },
   },

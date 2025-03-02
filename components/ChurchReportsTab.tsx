@@ -10,6 +10,28 @@ import { MissionaryLast6Modal, FullMissionaryReportModal } from "@/components/Mi
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Users, TrendingUp, Target, AlertTriangle } from "lucide-react";
+import { motion } from "framer-motion";
+
+// Animation variants
+const fadeIn = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.3 } }
+};
+
+const slideUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
 
 // Simple Skeleton component for loading states
 function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -132,7 +154,6 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
 
         if (error) throw error;
         
-        console.log('Fetched missionaries:', data);
         setMissionaries(data || []);
 
         // Fetch and process donations
@@ -200,142 +221,171 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
   const summaryMetrics = calculateSummaryMetrics();
 
   return (
-    <div className="space-y-6">
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xl flex items-center gap-2">
-            Staff Performance Dashboard
-          </CardTitle>
-          <CardDescription>
-            Comprehensive view of missionary performance across your churches
-          </CardDescription>
-        </CardHeader>
-        
-        {isLoading ? (
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-8 w-3/4" />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        ) : error ? (
-          <CardContent>
-            <div className="p-4 rounded-lg bg-destructive/10 text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" />
-              <p>{error}</p>
-            </div>
-          </CardContent>
-        ) : summaryMetrics ? (
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Users className="h-4 w-4" />
-                  <span className="text-sm font-medium">Total Missionaries</span>
-                </div>
-                <p className="text-2xl font-bold">{summaryMetrics.missionaryCount}</p>
-              </div>
-              
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <Target className="h-4 w-4" />
-                  <span className="text-sm font-medium">Monthly Goal</span>
-                </div>
-                <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.totalMonthlyGoal)}</p>
-              </div>
-              
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <TrendingUp className="h-4 w-4" />
-                  <span className="text-sm font-medium">Current Month</span>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.currentMonthTotal)}</p>
-                  <Badge variant={summaryMetrics.overallPercentage >= 80 ? "default" : "destructive"}>
-                    {formatNumber(summaryMetrics.overallPercentage)}%
-                  </Badge>
-                </div>
-              </div>
-              
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span className="text-sm font-medium">Below Target</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold">{summaryMetrics.belowTargetCount}</p>
-                  <Badge variant="outline" className="text-muted-foreground">
-                    {summaryMetrics.belowTargetCount > 0 
-                      ? `${Math.round((summaryMetrics.belowTargetCount / summaryMetrics.missionaryCount) * 100)}%` 
-                      : '0%'}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        ) : null}
-      </Card>
-
-      <Tabs defaultValue="missionaries" className="space-y-4">
-        <TabsList className="w-full sm:w-auto flex">
-          <TabsTrigger value="missionaries" className="flex-1 sm:flex-initial">
-            Missionary Performance
-          </TabsTrigger>
-          <TabsTrigger value="trends" className="flex-1 sm:flex-initial">
-            Trends & Analysis
-          </TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="missionaries" className="space-y-4">
+    <motion.div 
+      className="space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={fadeIn}
+    >
+      <motion.div variants={slideUp}>
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xl flex items-center gap-2">
+              Staff Performance Dashboard
+            </CardTitle>
+            <CardDescription>
+              Comprehensive view of missionary performance across your churches
+            </CardDescription>
+          </CardHeader>
+          
           {isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-8 w-64" />
-              <Skeleton className="h-[400px] w-full" />
-            </div>
-          ) : error ? (
-            <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
-              {error}
-            </div>
-          ) : missionaries.length === 0 ? (
-            <div className="p-8 text-center border rounded-lg bg-muted/30">
-              <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No missionaries found</h3>
-              <p className="text-muted-foreground">There are no missionaries assigned to your churches yet.</p>
-            </div>
-          ) : (
-            <MissionariesTable
-              missionaries={missionaries}
-              missionaryFilter={missionaryFilter}
-              setMissionaryFilter={setMissionaryFilter}
-              missionaryPage={missionaryPage}
-              setMissionaryPage={setMissionaryPage}
-              pageSize={pageSize}
-              openMissionaryModal={openMissionaryModal}
-              openFullMissionaryReport={openFullMissionaryReport}
-              getCurrentMonthRatio={getCurrentMonthRatio}
-              formatNumber={formatNumber}
-            />
-          )}
-        </TabsContent>
-        
-        <TabsContent value="trends" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Trends</CardTitle>
-              <CardDescription>
-                This section will show trends and analysis of missionary performance over time.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
-              Trends analysis coming soon
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-8 w-3/4" />
+                  </div>
+                ))}
+              </div>
             </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+          ) : error ? (
+            <CardContent>
+              <div className="p-4 rounded-lg bg-destructive/10 text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                <p>{error}</p>
+              </div>
+            </CardContent>
+          ) : summaryMetrics ? (
+            <CardContent>
+              <motion.div 
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"
+                variants={staggerContainer}
+              >
+                <motion.div variants={slideUp} className="bg-muted/50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Users className="h-4 w-4" />
+                    <span className="text-sm font-medium">Total Missionaries</span>
+                  </div>
+                  <p className="text-2xl font-bold">{summaryMetrics.missionaryCount}</p>
+                </motion.div>
+                
+                <motion.div variants={slideUp} className="bg-muted/50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <Target className="h-4 w-4" />
+                    <span className="text-sm font-medium">Monthly Goal</span>
+                  </div>
+                  <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.totalMonthlyGoal)}</p>
+                </motion.div>
+                
+                <motion.div variants={slideUp} className="bg-muted/50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <TrendingUp className="h-4 w-4" />
+                    <span className="text-sm font-medium">Current Month</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-2xl font-bold">₱{formatNumber(summaryMetrics.currentMonthTotal)}</p>
+                    <Badge variant={summaryMetrics.overallPercentage >= 80 ? "default" : "destructive"}>
+                      {formatNumber(summaryMetrics.overallPercentage)}%
+                    </Badge>
+                  </div>
+                </motion.div>
+                
+                <motion.div variants={slideUp} className="bg-muted/50 p-4 rounded-lg">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">Below Target</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold">{summaryMetrics.belowTargetCount}</p>
+                    <Badge variant="outline" className="text-muted-foreground">
+                      {summaryMetrics.belowTargetCount > 0 
+                        ? `${Math.round((summaryMetrics.belowTargetCount / summaryMetrics.missionaryCount) * 100)}%` 
+                        : '0%'}
+                    </Badge>
+                  </div>
+                </motion.div>
+              </motion.div>
+            </CardContent>
+          ) : null}
+        </Card>
+      </motion.div>
+
+      <motion.div variants={slideUp}>
+        <Tabs defaultValue="missionaries" className="space-y-4">
+          <TabsList className="w-full sm:w-auto flex">
+            <TabsTrigger value="missionaries" className="flex-1 sm:flex-initial">
+              Missionary Performance
+            </TabsTrigger>
+            <TabsTrigger value="trends" className="flex-1 sm:flex-initial">
+              Trends & Analysis
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="missionaries" className="space-y-4">
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-8 w-64" />
+                <Skeleton className="h-[400px] w-full" />
+              </div>
+            ) : error ? (
+              <div className="p-4 rounded-lg bg-destructive/10 text-destructive">
+                {error}
+              </div>
+            ) : missionaries.length === 0 ? (
+              <motion.div 
+                className="p-8 text-center border rounded-lg bg-muted/30"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">No missionaries found</h3>
+                <p className="text-muted-foreground">There are no missionaries assigned to your churches yet.</p>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
+              >
+                <MissionariesTable
+                  missionaries={missionaries}
+                  missionaryFilter={missionaryFilter}
+                  setMissionaryFilter={setMissionaryFilter}
+                  missionaryPage={missionaryPage}
+                  setMissionaryPage={setMissionaryPage}
+                  pageSize={pageSize}
+                  openMissionaryModal={openMissionaryModal}
+                  openFullMissionaryReport={openFullMissionaryReport}
+                  getCurrentMonthRatio={getCurrentMonthRatio}
+                  formatNumber={formatNumber}
+                />
+              </motion.div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="trends" className="space-y-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle>Performance Trends</CardTitle>
+                  <CardDescription>
+                    This section will show trends and analysis of missionary performance over time.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  Trends analysis coming soon
+                </CardContent>
+              </Card>
+            </motion.div>
+          </TabsContent>
+        </Tabs>
+      </motion.div>
 
       {/* Add modals */}
       <MissionaryLast6Modal
@@ -355,6 +405,6 @@ export function ChurchReportsTab({ churchIds }: ChurchReportsTabProps) {
         thirteenMonthKeys={thirteenMonthKeys}
         formatNumber={formatNumber}
       />
-    </div>
+    </motion.div>
   );
 } 

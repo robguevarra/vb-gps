@@ -46,16 +46,24 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
   useEffect(() => {
     const checkPaymentStatus = async () => {
       try {
+        console.log("Checking payment status for missionary:", missionaryId);
+        
         // Get payment state from localStorage
         const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
         if (!paymentStateStr) {
+          console.log("No payment state found in localStorage");
+          // Ensure payment status is idle if no payment state exists
+          setPaymentStatus("idle");
           return;
         }
         
         const paymentState = JSON.parse(paymentStateStr);
+        console.log("Found payment state:", paymentState);
         
         // Check if the payment state is for the current missionary
         if (paymentState.missionaryId !== missionaryId) {
+          console.log("Payment state is for a different missionary");
+          setPaymentStatus("idle");
           return;
         }
         
@@ -68,6 +76,8 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
         const timeDiff = currentTime - paymentTime;
         const thirtyMinutesInMs = 30 * 60 * 1000;
         
+        console.log("Time since last payment (minutes):", Math.round(timeDiff / 60000));
+        
         if (timeDiff < thirtyMinutesInMs) {
           // Check if there's a payment status in localStorage
           const paymentStatusStr = localStorage.getItem(`payment_status_${missionaryId}`);
@@ -75,9 +85,20 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
           
           if (paymentStatusStr) {
             status = JSON.parse(paymentStatusStr);
+            console.log("Found payment status:", status);
             setPaymentStatus(status.status);
+            
+            // If status is completed, set a timer to automatically reset to idle after 5 seconds
+            if (status.status === "completed") {
+              console.log("Setting timer to auto-clear completed status");
+              setTimeout(() => {
+                console.log("Auto-clearing completed payment status");
+                handleResetPaymentStatus();
+              }, 5000); // 5 seconds
+            }
           } else {
             // If no status is found but there's a recent payment, set status to pending
+            console.log("No payment status found, setting to pending");
             setPaymentStatus("pending");
           }
           
@@ -110,6 +131,13 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
                     status: "completed",
                     timestamp: new Date().toISOString()
                   }));
+                  
+                  // Set a timer to automatically reset to idle after 5 seconds
+                  console.log("Setting timer to auto-clear completed status");
+                  setTimeout(() => {
+                    console.log("Auto-clearing completed payment status");
+                    handleResetPaymentStatus();
+                  }, 5000); // 5 seconds
                 } else if (data.status === "expired" || data.status === "failed") {
                   setPaymentStatus("failed");
                   
@@ -125,6 +153,16 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
               }
             }
           }
+        } else {
+          // Payment is older than 30 minutes, reset to idle
+          console.log("Payment is older than 30 minutes, resetting to idle");
+          setPaymentStatus("idle");
+          
+          // Clear localStorage to prevent future checks from finding this old payment
+          localStorage.removeItem(`payment_status_${missionaryId}`);
+          localStorage.removeItem(`payment_state_${missionaryId}`);
+          localStorage.removeItem(`payment_${missionaryId}`);
+          localStorage.removeItem(`payment_polling_${missionaryId}`);
         }
       } catch (error) {
       }
@@ -150,6 +188,13 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
             status: "completed",
             timestamp: new Date().toISOString()
           }));
+          
+          // Set a timer to automatically reset to idle after 5 seconds
+          console.log("Setting timer to auto-clear completed status");
+          setTimeout(() => {
+            console.log("Auto-clearing completed payment status");
+            handleResetPaymentStatus();
+          }, 5000); // 5 seconds
         } else if (data.status === "EXPIRED" || data.status === "FAILED") {
           setPaymentStatus("failed");
           
@@ -225,10 +270,11 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
   const handleResetPaymentStatus = () => {
     setPaymentStatus("idle");
     
-    // Clear localStorage items
+    // Clear ALL localStorage items related to payments
     localStorage.removeItem(`payment_status_${missionaryId}`);
     localStorage.removeItem(`payment_state_${missionaryId}`);
     localStorage.removeItem(`payment_${missionaryId}`);
+    localStorage.removeItem(`payment_polling_${missionaryId}`);
     
     // Clear any polling intervals
     const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
@@ -236,9 +282,11 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
       try {
         clearInterval(parseInt(pollingId));
       } catch (err) {
+        console.error("Error clearing interval:", err);
       }
-      localStorage.removeItem(`payment_polling_${missionaryId}`);
     }
+    
+    console.log("Payment status reset to idle, all payment data cleared");
   };
 
   return (
@@ -251,14 +299,95 @@ export function ManualRemittanceTabWrapper({ missionaryId }: ManualRemittanceTab
           </p>
           
           {paymentStatus === "pending" && (
-            <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800">
+            <Alert className="mb-4 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
               <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-              <AlertTitle>Payment in progress</AlertTitle>
-              <AlertDescription>
-                Your payment link has been generated and opened in a new tab. Please complete the payment process.
+              <AlertTitle className="text-yellow-800 dark:text-yellow-300">Payment in progress</AlertTitle>
+              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                Your payment is being processed. Please complete the payment in the opened tab.
+                
+                {/* Retrieve payment link from localStorage */}
+                {(() => {
+                  // First try to get the payment info which contains the direct link
+                  const paymentInfoStr = localStorage.getItem(`payment_${missionaryId}`);
+                  const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
+                  const paymentStatusStr = localStorage.getItem(`payment_status_${missionaryId}`);
+                  
+                  let paymentUrl = null;
+                  
+                  // Try to get the direct payment URL from various sources
+                  if (paymentStatusStr) {
+                    try {
+                      const paymentStatusObj = JSON.parse(paymentStatusStr);
+                      if (paymentStatusObj.invoiceUrl) {
+                        paymentUrl = paymentStatusObj.invoiceUrl;
+                      } else if (paymentStatusObj.invoiceId) {
+                        paymentUrl = `https://checkout.xendit.co/web/${paymentStatusObj.invoiceId}`;
+                      }
+                    } catch (e) {
+                      console.error("Error parsing payment status:", e);
+                    }
+                  }
+                  
+                  if (!paymentUrl && paymentInfoStr) {
+                    try {
+                      const paymentInfo = JSON.parse(paymentInfoStr);
+                      // Check if we have a direct URL stored
+                      if (paymentInfo.invoiceUrl) {
+                        paymentUrl = paymentInfo.invoiceUrl;
+                      } else if (paymentInfo.invoiceId) {
+                        // Fallback to constructing URL from invoice ID
+                        paymentUrl = `https://checkout.xendit.co/web/${paymentInfo.invoiceId}`;
+                      }
+                    } catch (e) {
+                      console.error("Error parsing payment info:", e);
+                    }
+                  }
+                  
+                  // If we couldn't get the URL from payment info, try the payment state
+                  if (!paymentUrl && paymentStateStr) {
+                    try {
+                      const paymentState = JSON.parse(paymentStateStr);
+                      if (paymentState.invoiceUrl) {
+                        paymentUrl = paymentState.invoiceUrl;
+                      } else if (paymentState.invoiceId) {
+                        // Fallback to constructing URL from invoice ID
+                        paymentUrl = `https://checkout.xendit.co/web/${paymentState.invoiceId}`;
+                      }
+                    } catch (e) {
+                      console.error("Error parsing payment state:", e);
+                    }
+                  }
+                  
+                  if (paymentUrl) {
+                    return (
+                      <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-md border border-yellow-200 dark:border-yellow-800">
+                        <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center">
+                          <AlertCircle className="h-3.5 w-3.5 mr-1.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                          If the payment tab didn't open automatically:
+                        </p>
+                        <a 
+                          href={paymentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-200 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 rounded-md transition-colors duration-200 border border-yellow-300 dark:border-yellow-700"
+                        >
+                          <span className="mr-2">Open Payment Link</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                          </svg>
+                        </a>
+                      </div>
+                    );
+                  }
+                  
+                  return null;
+                })()}
+                
                 <button 
                   onClick={handleResetPaymentStatus}
-                  className="block mt-2 text-sm text-yellow-600 dark:text-yellow-400 underline"
+                  className="block mt-3 text-sm text-yellow-600 dark:text-yellow-400 underline"
                 >
                   Start a new payment
                 </button>

@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * DashboardCards Component
  * 
@@ -14,6 +16,7 @@
  * - Color-coded indicators
  * - Hover animations
  * - Shows percentages above 100% when donations exceed monthly goal
+ * - Enhanced animations with staggered card reveals
  * 
  * @component
  */
@@ -23,6 +26,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { TrendingUp, Wallet, Users, UserPlus } from "lucide-react"
+import { motion } from "framer-motion"
+import { useEffect, useState } from "react"
 
 interface DashboardCardsProps {
   /** Monthly donation goal for the missionary */
@@ -54,6 +59,14 @@ export default function DashboardCards({
   surplusBalance,
   newPartnersCount,
 }: DashboardCardsProps) {
+  // State to track if animation should start
+  const [shouldAnimate, setShouldAnimate] = useState(false);
+  
+  // Start animation after component mounts
+  useEffect(() => {
+    setShouldAnimate(true);
+  }, []);
+
   // Calculate progress percentage, ensuring we don't divide by zero
   const progressPercentage = monthlyGoal > 0 
     ? (currentDonations / monthlyGoal) * 100 
@@ -99,63 +112,164 @@ export default function DashboardCards({
     }
   ]
 
+  // Animation variants for container
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.1
+      }
+    }
+  };
+
+  // Animation variants for individual cards
+  const cardVariants = {
+    hidden: { 
+      opacity: 0, 
+      y: 20,
+    },
+    show: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20
+      }
+    }
+  };
+
+  // Animation variants for progress bar
+  const progressVariants = {
+    hidden: { width: "0%" },
+    show: (progress: number) => ({
+      width: `${Math.min(progress, 100)}%`,
+      transition: {
+        duration: 1.2,
+        ease: "easeOut",
+        delay: 0.3
+      }
+    })
+  };
+
+  // Animation variants for icon
+  const iconVariants = {
+    hidden: { scale: 0.8, opacity: 0.5 },
+    show: { 
+      scale: 1, 
+      opacity: 1,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20
+      }
+    }
+  };
+
+  // Animation variants for value
+  const valueVariants = {
+    hidden: { opacity: 0, y: 10 },
+    show: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        delay: 0.2,
+        duration: 0.4
+      }
+    }
+  };
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {cards.map((card) => (
-        <Card 
+    <motion.div 
+      className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+      variants={containerVariants}
+      initial="hidden"
+      animate={shouldAnimate ? "show" : "hidden"}
+    >
+      {cards.map((card, index) => (
+        <motion.div
           key={card.title}
-          className="group relative overflow-hidden transition-all hover:shadow-lg"
+          variants={cardVariants}
+          whileHover={{ 
+            y: -5,
+            transition: { duration: 0.2 }
+          }}
+          className="h-full"
         >
-          <div className="p-6">
-            {/* Card Header with Icon and Progress */}
-            <div className="flex items-center justify-between">
-              <card.icon className="h-8 w-8 text-muted-foreground/80" />
+          <Card className="h-full relative overflow-hidden transition-all hover:shadow-lg border-2 border-transparent hover:border-accent/50 dark:hover:border-accent/30">
+            <div className="p-6 h-full flex flex-col">
+              {/* Card Header with Icon and Progress */}
+              <div className="flex items-center justify-between">
+                <motion.div
+                  variants={iconVariants}
+                  className={cn(
+                    "p-2 rounded-full",
+                    card.variant === "blue" ? "bg-blue-100 text-blue-600" :
+                    card.variant === "emerald" ? "bg-emerald-100 text-emerald-600" :
+                    card.variant === "indigo" ? "bg-indigo-100 text-indigo-600" :
+                    "bg-teal-100 text-teal-600"
+                  )}
+                >
+                  <card.icon className="h-6 w-6" />
+                </motion.div>
+                {card.progress !== undefined && (
+                  <motion.span 
+                    variants={valueVariants}
+                    className={cn(
+                      "text-lg font-semibold",
+                      card.variant === "blue" ? "text-blue-600" :
+                      card.variant === "emerald" ? "text-emerald-600" :
+                      card.variant === "indigo" ? "text-indigo-600" :
+                      "text-teal-600"
+                    )}
+                  >
+                    {card.progress.toFixed(1)}%
+                  </motion.span>
+                )}
+              </div>
+              
+              {/* Card Content with Title and Value */}
+              <div className="mt-4 space-y-1 flex-grow">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                  {card.title}
+                </h3>
+                <motion.p 
+                  variants={valueVariants}
+                  className="text-2xl font-bold tracking-tight"
+                >
+                  {card.isCurrency 
+                    ? `₱${(card.value ?? 0).toLocaleString()}` 
+                    : (card.value ?? 0).toLocaleString()}
+                </motion.p>
+              </div>
+
+              {/* Progress Bar (only for Monthly Goal) */}
               {card.progress !== undefined && (
-                <span className={cn(
-                  "text-lg font-semibold",
-                  card.variant === "blue" ? "text-blue-600" :
-                  card.variant === "emerald" ? "text-emerald-600" :
-                  card.variant === "indigo" ? "text-indigo-600" :
-                  "text-teal-600"
-                )}>
-                  {card.progress.toFixed(1)}%
-                </span>
+                <div className="mt-4">
+                  <div className="h-2 overflow-hidden rounded-full bg-accent">
+                    <motion.div
+                      variants={progressVariants}
+                      initial="hidden"
+                      animate={shouldAnimate ? "show" : "hidden"}
+                      custom={card.progress}
+                      className={cn(
+                        "h-full",
+                        card.variant === "blue" ? "bg-blue-600" :
+                        card.variant === "emerald" ? "bg-emerald-600" :
+                        card.variant === "indigo" ? "bg-indigo-600" :
+                        "bg-teal-600"
+                      )}
+                    />
+                  </div>
+                </div>
               )}
             </div>
-            
-            {/* Card Content with Title and Value */}
-            <div className="mt-4 space-y-1">
-              <h3 className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </h3>
-              <p className="text-2xl font-bold tracking-tight">
-                {card.isCurrency 
-                  ? `₱${(card.value ?? 0).toLocaleString()}` 
-                  : (card.value ?? 0).toLocaleString()}
-              </p>
-            </div>
-
-            {/* Progress Bar (only for Monthly Goal) */}
-            {card.progress !== undefined && (
-              <div className="mt-4">
-                <div className="h-2 overflow-hidden rounded-full bg-accent">
-                  <div
-                    className={cn(
-                      "h-full transition-all duration-500",
-                      card.variant === "blue" ? "bg-blue-600" :
-                      card.variant === "emerald" ? "bg-emerald-600" :
-                      card.variant === "indigo" ? "bg-indigo-600" :
-                      "bg-teal-600"
-                    )}
-                    style={{ width: `${Math.min(card.progress, 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
+          </Card>
+        </motion.div>
       ))}
-    </div>
+    </motion.div>
   )
 }
 

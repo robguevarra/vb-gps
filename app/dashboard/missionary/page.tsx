@@ -19,7 +19,6 @@ export const revalidate = 300;
 
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/Sidebar";
 import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
 import { OverviewTab } from "@/components/missionary-dashboard/OverviewTab";
@@ -28,17 +27,22 @@ import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/Approvals
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
 import { ReportsTabWrapper } from "@/components/missionary-dashboard/ReportsTab";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { PageTransition } from "@/components/PageTransition";
+import { DashboardTabWrapper } from "@/components/DashboardTabWrapper";
+import { AnimatedHeader } from "@/components/AnimatedHeader";
 
 export default async function MissionaryDashboard({
   searchParams,
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
 }) {
-  const currentTab = typeof searchParams.tab === "string" ? searchParams.tab : "overview";
-  const userIdParam = Array.isArray(searchParams.userId)
-    ? searchParams.userId[0]
-    : typeof searchParams.userId === "string"
-    ? searchParams.userId
+  // Await searchParams before accessing its properties
+  const params = await searchParams;
+  const currentTab = typeof params.tab === "string" ? params.tab : "overview";
+  const userIdParam = Array.isArray(params.userId)
+    ? params.userId[0]
+    : typeof params.userId === "string"
+    ? params.userId
     : undefined;
 
   // Initialize Supabase client and get current user
@@ -87,70 +91,146 @@ export default async function MissionaryDashboard({
 
   const churchName = churchData?.name || (isSuperAdmin ? "All Churches" : "Unknown Church");
   const isCampusDirector = profileData.role === "campus_director";
+  
+  // Check if user should have access to campus director tabs
+  const hasAccessToCampusDirectorTabs = isCampusDirector || isSuperAdmin;
 
-  return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
-      {/* Pinned Sidebar on large screens */}
-      <Sidebar isCampusDirector={isCampusDirector} />
+  // Get tab title and subtitle for the current tab
+  const getTabInfo = () => {
+    switch(currentTab) {
+      case "overview":
+        return {
+          title: "Dashboard Overview",
+          subtitle: "View your key metrics and performance indicators"
+        };
+      case "history":
+        return {
+          title: "Request History",
+          subtitle: "Track and manage your past requests"
+        };
+      case "approvals":
+        return {
+          title: "Pending Approvals",
+          subtitle: "Review and manage approval requests"
+        };
+      case "manual-remittance":
+        return {
+          title: "Manual Remittance",
+          subtitle: "Record donations received outside the system"
+        };
+      case "reports":
+        return {
+          title: "My Reports",
+          subtitle: "View detailed reports and analytics"
+        };
+      case "staff-reports":
+        return {
+          title: "Staff Performance",
+          subtitle: "Monitor your team's performance metrics"
+        };
+      default:
+        return {
+          title: "Dashboard",
+          subtitle: "Welcome to your missionary dashboard"
+        };
+    }
+  };
 
-      {/* Main Content Offset by Sidebar Width */}
-      <div className="lg:ml-64 px-4 sm:px-6 lg:px-8 py-8">
-        <header className="mb-8">
-          <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
-            {profileData.full_name || user.email}
-          </h1>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {profileData.role.replace(/_/g, " ")}
-            </p>
-            <span className="text-sm text-gray-400">•</span>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{churchName}</p>
-          </div>
-        </header>
-
-        {/* Overview Tab */}
-        {currentTab === "overview" && (
+  // Determine which tab content to render
+  const renderTabContent = () => {
+    switch(currentTab) {
+      case "overview":
+        return (
           <OverviewTab 
             missionaryId={userIdParam || user.id}
             profileData={profileData}
             isSuperAdmin={isSuperAdmin}
           />
-        )}
-
-        {/* Request History Tab */}
-        {currentTab === "history" && (
+        );
+      case "history":
+        return (
           <RequestHistoryTabWrapper
             missionaryId={userIdParam || user.id}
           />
-        )}
-
-        {/* Approvals Tab (Campus Directors Only) */}
-        {isCampusDirector && currentTab === "approvals" && (
-          <ApprovalsTabWrapper
-            campusDirectorId={profileData.id}
+        );
+      case "approvals":
+        // Only render approvals tab for campus directors and superadmins
+        if (hasAccessToCampusDirectorTabs) {
+          return (
+            <ApprovalsTabWrapper
+              campusDirectorId={profileData.id}
+            />
+          );
+        }
+        // If not authorized, default to overview
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+            profileData={profileData}
+            isSuperAdmin={isSuperAdmin}
           />
-        )}
-
-        {/* Manual Remittance Tab */}
-        {currentTab === "manual-remittance" && (
+        );
+      case "manual-remittance":
+        return (
           <ManualRemittanceTabWrapper
             missionaryId={userIdParam || user.id}
           />
-        )}
-
-        {/* Reports Tab */}
-        {currentTab === "reports" && (
+        );
+      case "reports":
+        return (
           <ReportsTabWrapper
             missionaryId={userIdParam || user.id}
           />
-        )}
+        );
+      case "staff-reports":
+        // Only render staff reports tab for campus directors and superadmins
+        if (hasAccessToCampusDirectorTabs) {
+          return (
+            <TooltipProvider>
+              <ChurchReportsTab churchIds={[profileData.local_church_id]} />
+            </TooltipProvider>
+          );
+        }
+        // If not authorized, default to overview
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+            profileData={profileData}
+            isSuperAdmin={isSuperAdmin}
+          />
+        );
+      default:
+        // Default to overview if tab is not recognized
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+            profileData={profileData}
+            isSuperAdmin={isSuperAdmin}
+          />
+        );
+    }
+  };
 
-        {/* Staff Reports Tab (Campus Directors Only) */}
-        {currentTab === "staff-reports" && profileData.role === 'campus_director' && (
-          <TooltipProvider>
-            <ChurchReportsTab churchIds={[profileData.local_church_id]} />
-          </TooltipProvider>
-        )}
+  const { title, subtitle } = getTabInfo();
+
+  return (
+    <div className="relative min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
+      {/* Main Content - No need for sidebar offset on mobile */}
+      <div className="lg:ml-64 px-4 sm:px-6 lg:px-8 py-8">
+        <AnimatedHeader 
+          fullName={profileData.full_name || user.email}
+          role={profileData.role.replace(/_/g, " ")}
+          churchName={churchName}
+          title={title}
+          subtitle={subtitle}
+        />
+
+        {/* Tab content with page transitions */}
+        <PageTransition mode="elastic">
+          <DashboardTabWrapper>
+            {renderTabContent()}
+          </DashboardTabWrapper>
+        </PageTransition>
       </div>
     </div>
   );
