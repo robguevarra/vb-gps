@@ -508,36 +508,443 @@ export function ApprovalTable({
   onPageSizeChange: (size: number) => void
 }) {
   return (
-    <div className="border rounded-lg shadow-sm">
-      <Table>
-        <TableHeader className="bg-gray-50">
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="px-3 py-3 text-sm">Missionary</TableHead>
-            <TableHead className="px-3 py-3 text-sm">Campus Director</TableHead>
-            <TableHead className="px-3 py-3 text-sm">Details</TableHead>
-            <TableHead className="px-3 py-3 text-sm">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {requests.map((request) => (
-            <ApprovalTableRow
-              key={request.id}
-              request={request}
-              requestType={requestType}
-              approvalStatus={approvalStatus}
-            />
-          ))}
-        </TableBody>
-      </Table>
+    <div className="w-full">
+      {/* Desktop view - Table */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader className="bg-gray-50 dark:bg-gray-800/50">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="px-4 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300">Missionary</TableHead>
+              <TableHead className="px-4 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300">Campus Director</TableHead>
+              <TableHead className="px-4 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300">Details</TableHead>
+              <TableHead className="px-4 py-3.5 text-sm font-medium text-gray-700 dark:text-gray-300">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {requests.map((request) => (
+              <ApprovalTableRow
+                key={request.id}
+                request={request}
+                requestType={requestType}
+                approvalStatus={approvalStatus}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      
+      {/* Mobile view - Cards */}
+      <div className="md:hidden">
+        {requests.map((request) => (
+          <MobileApprovalCard
+            key={request.id}
+            request={request}
+            requestType={requestType}
+            approvalStatus={approvalStatus}
+          />
+        ))}
+      </div>
       
       <PaginationControls
-        className="px-2 py-1 border-t"
+        className="px-4 py-3 border-t bg-gray-50 dark:bg-gray-800/50"
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={onPageChange}
         pageSize={pageSize}
         onPageSizeChange={onPageSizeChange}
       />
+    </div>
+  )
+}
+
+// Mobile-optimized card component for approvals
+function MobileApprovalCard({ 
+  request, 
+  requestType, 
+  approvalStatus 
+}: { 
+  request: ApprovalRequest, 
+  requestType: 'leave' | 'surplus', 
+  approvalStatus: 'pending' | 'approved' 
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [localNotes, setLocalNotes] = useState(request.leadPastorNotes || '')
+  const router = useRouter()
+  const supabase = createClient()
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [pendingAction, setPendingAction] = useState<"approve" | "reject" | "override">()
+  const [overrideType, setOverrideType] = useState<"approve" | "reject">("approve")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [modalNotes, setModalNotes] = useState("")
+
+  // Reuse the same functions from ApprovalTableRow
+  const handleStatusUpdate = async (newStatus: string, action: "approve" | "reject" | "override" = "approve") => {
+    setIsSubmitting(true)
+    try {
+      const tableName = requestType === 'leave' ? 'leave_requests' : 'surplus_requests'
+      
+      // Always update the lead_pastor_approval field and status
+      const updateData = {
+        lead_pastor_approval: newStatus,
+        // For both missionaries and campus directors, Lead Pastor has final say
+        // so we can update the status directly
+        status: newStatus === 'approved' ? 'approved' : 'rejected',
+        // Include the notes from the modal
+        lead_pastor_notes: modalNotes
+      };
+      
+      const { error } = await supabase
+        .from(tableName)
+        .update(updateData)
+        .eq('id', request.id)
+
+      if (error) throw error
+
+      // Customize toast message based on the action
+      let toastMessage = "";
+      if (action === "override") {
+        const cdDecision = request.campusDirectorApproval === 'approved' ? 'approval' : 
+                          request.campusDirectorApproval === 'rejected' ? 'rejection' : 'decision';
+        const lpAction = newStatus === 'approved' ? 'approved' : 'rejected';
+        
+        toastMessage = `Request ${lpAction} (Campus Director ${cdDecision} overridden)`;
+      } else {
+        toastMessage = `Request ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully`;
+      }
+
+      toast({
+        title: "Success!",
+        description: toastMessage,
+        variant: "success"
+      })
+      
+      // Update local notes state to match what was saved
+      setLocalNotes(modalNotes)
+      
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update request status",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSubmitting(false)
+      setIsConfirming(false)
+    }
+  }
+
+  const saveNotes = useMemo(() => {
+    return debounce(async (notes: string) => {
+      const { error } = await supabase
+        .from(requestType === 'leave' ? 'leave_requests' : 'surplus_requests')
+        .update({ lead_pastor_notes: notes })
+        .eq('id', request.id)
+
+      if (!error) {
+        router.refresh()
+      }
+    }, 500)
+  }, [request.id, requestType])
+
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newNotes = e.target.value
+    setLocalNotes(newNotes)
+    saveNotes(newNotes)
+  }
+
+  useEffect(() => {
+    return () => saveNotes.cancel()
+  }, [saveNotes])
+
+  return (
+    <div className="border-b last:border-b-0">
+      <div 
+        className="p-4 cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-9 w-9">
+              <AvatarFallback className="bg-blue-100 text-blue-800">
+                {request.requester?.full_name?.[0] || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium text-sm">{request.requester?.full_name || "Unknown"}</p>
+              <p className="text-xs text-muted-foreground">
+                {format(new Date(request.date), 'MMM dd, yyyy')}
+              </p>
+            </div>
+          </div>
+          <ChevronRight className={cn(
+            "w-5 h-5 text-muted-foreground transform transition-transform",
+            isExpanded ? "rotate-90" : "rotate-0"
+          )} />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Campus Director</p>
+            <Badge 
+              variant={
+                request.campusDirectorApproval === 'approved' 
+                  ? 'default' 
+                  : request.campusDirectorApproval === 'rejected'
+                  ? 'destructive'
+                  : 'outline'
+              }
+              className="capitalize text-xs"
+            >
+              {request.campusDirectorApproval || 'pending'}
+            </Badge>
+          </div>
+          
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Request Details</p>
+            <div className="flex items-center gap-1">
+              {requestType === 'leave' ? (
+                <>
+                  <CalendarDays className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-xs truncate">
+                    {format(new Date(request.startDate || new Date()), 'MMM dd')} - 
+                    {format(new Date(request.endDate || new Date()), 'MMM dd')}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Wallet className="w-3.5 h-3.5 text-green-600" />
+                  <span className="text-xs">₱{request.amount?.toLocaleString()}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {!isExpanded && (
+          <div className="flex gap-2 mt-3">
+            {approvalStatus === 'pending' && (
+              <>
+                <Button 
+                  variant="default" 
+                  className={`${request.campusDirectorApproval === 'rejected' ? 'opacity-50 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white h-8 text-xs flex-1`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPendingAction('approve')
+                    setIsConfirming(true)
+                  }}
+                  disabled={request.campusDirectorApproval === 'rejected'}
+                  title={request.campusDirectorApproval === 'rejected' ? "Cannot approve - Campus Director rejected this request" : ""}
+                >
+                  <Check className="w-3.5 h-3.5 mr-1" />
+                  Approve
+                </Button>
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPendingAction('reject')
+                    setIsConfirming(true)
+                  }}
+                  className="h-8 text-xs flex-1"
+                  title={request.campusDirectorApproval === 'rejected' ? "Confirm Campus Director's rejection" : "Reject this request"}
+                >
+                  <X className="w-3.5 h-3.5 mr-1" />
+                  Reject
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="px-4 pb-4 bg-blue-50/50 dark:bg-gray-800/20">
+          <div className="space-y-3">
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Reason</h4>
+              <p className="text-sm">{request.reason}</p>
+            </div>
+            
+            {request.campusDirectorNotes && (
+              <div>
+                <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Campus Director Notes</h4>
+                <div className="bg-white dark:bg-gray-800 p-2 rounded-md border text-sm">
+                  <p className="text-sm">{request.campusDirectorNotes}</p>
+                </div>
+              </div>
+            )}
+            
+            <div>
+              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Your Notes</h4>
+              <textarea
+                className="w-full p-2 border rounded-md text-sm min-h-[80px] bg-white dark:bg-gray-800"
+                placeholder="Add your notes about this decision..."
+                value={localNotes}
+                onChange={handleNotesChange}
+              />
+            </div>
+            
+            {approvalStatus === 'pending' && (
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="default" 
+                  className={`${request.campusDirectorApproval === 'rejected' ? 'opacity-50 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white h-9 text-xs flex-1`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPendingAction('approve')
+                    setIsConfirming(true)
+                  }}
+                  disabled={request.campusDirectorApproval === 'rejected'}
+                >
+                  <Check className="w-3.5 h-3.5 mr-1" />
+                  Approve
+                </Button>
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setPendingAction('reject')
+                    setIsConfirming(true)
+                  }}
+                  className="h-9 text-xs flex-1"
+                >
+                  <X className="w-3.5 h-3.5 mr-1" />
+                  Reject
+                </Button>
+                
+                {/* Override button if CD rejected */}
+                {request.campusDirectorApproval === 'rejected' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPendingAction('override')
+                      setIsConfirming(true)
+                    }}
+                    className="h-9 text-xs flex-1"
+                  >
+                    <ArrowRightLeft className="w-3.5 h-3.5 mr-1" />
+                    Override
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Confirmation Dialog - Reuse the same dialog from ApprovalTableRow */}
+      <Dialog open={isConfirming} onOpenChange={setIsConfirming}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingAction === 'approve' 
+                ? 'Approve Request' 
+                : pendingAction === 'reject'
+                ? 'Reject Request'
+                : 'Override Campus Director Decision'}
+            </DialogTitle>
+            <DialogDescription>
+              {pendingAction === 'approve' 
+                ? 'Are you sure you want to approve this request?' 
+                : pendingAction === 'reject'
+                ? 'Are you sure you want to reject this request?'
+                : 'Are you sure you want to override the Campus Director\'s decision?'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Request Details</h4>
+              <div className="rounded-md bg-muted p-3">
+                <p className="text-sm">{request.reason}</p>
+                {requestType === 'leave' && (
+                  <p className="text-sm mt-2">
+                    <strong>Period:</strong> {format(new Date(request.startDate || new Date()), 'MMM dd, yyyy')} - {format(new Date(request.endDate || new Date()), 'MMM dd, yyyy')}
+                  </p>
+                )}
+                {requestType === 'surplus' && (
+                  <p className="text-sm mt-2">
+                    <strong>Amount:</strong> ₱{request.amount?.toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {pendingAction === 'override' && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Override Action</h4>
+                <Select
+                  value={overrideType}
+                  onValueChange={(v) => setOverrideType(v as "approve" | "reject")}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="approve">Approve (Override Rejection)</SelectItem>
+                    <SelectItem value="reject">Reject (Override Approval)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            
+            {request.campusDirectorNotes && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Campus Director Notes</h4>
+                <div className="rounded-md bg-muted p-3">
+                  <p className="text-sm text-muted-foreground">{request.campusDirectorNotes}</p>
+                </div>
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Your Notes</h4>
+              <textarea
+                className="w-full p-3 border rounded-md text-sm min-h-[100px]"
+                placeholder="Add your notes about this decision..."
+                value={modalNotes}
+                onChange={(e) => setModalNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsConfirming(false)}>Cancel</Button>
+            <Button 
+              variant={pendingAction === 'reject' ? 'destructive' : 'default'}
+              onClick={() => {
+                if (pendingAction === 'override') {
+                  handleStatusUpdate(overrideType, 'override')
+                } else {
+                  handleStatusUpdate(pendingAction === 'approve' ? 'approved' : 'rejected', pendingAction)
+                }
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                pendingAction === 'approve' 
+                  ? 'Approve' 
+                  : pendingAction === 'reject'
+                  ? 'Reject'
+                  : `Override with ${overrideType === 'approve' ? 'Approval' : 'Rejection'}`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
