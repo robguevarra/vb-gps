@@ -6,7 +6,7 @@ import LeadPastorSelector from "@/components/LeadPastorSelector";
 import LeadPastorDashboardClient from "./LeadPastorDashboardClient";
 import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
-import { LeadPastorSidebar } from "@/components/LeadPastorSidebar";
+import LeadPastorNavbar from "@/components/LeadPastorNavbar";
 
 // Define the ApprovalStatus type to match the one in LeadPastorApprovalTab
 type ApprovalStatus = 'approved' | 'pending' | 'rejected'
@@ -201,7 +201,7 @@ export default async function LeadPastorDashboard({
 
   return (
     <div className="min-h-screen bg-background">
-      <LeadPastorSidebar />
+      <LeadPastorNavbar />
       
       <main className="lg:ml-64 pt-20 px-4 sm:px-6 pb-6 space-y-4 sm:space-y-6">
         <header className="space-y-2 bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm border">
