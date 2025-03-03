@@ -205,7 +205,7 @@ export async function handleInvoicePaid(payload: any, supabase: any, systemUserI
           payment_method: payload.payment_method,
           payment_channel: payload.payment_channel,
           paid_at: new Date().toISOString(),
-          payment_id: payload.id
+          updated_at: new Date().toISOString()
         })
         .eq('id', transaction.id);
       
@@ -257,7 +257,17 @@ export async function handleInvoicePaid(payload: any, supabase: any, systemUserI
             
             try {
               // Use direct SQL query to bypass materialized view refresh
-              const { error: donationError } = await supabase.rpc(
+              console.log(`📌 Calling insert_single_donation with params:`, {
+                donor_id: parseInt(donor.donorId, 10),
+                amount: donor.amount,
+                missionary_id: paymentDetails.recipientId,
+                donation_date: new Date().toISOString(),
+                source: 'online',
+                status: 'completed',
+                notes: `Bulk payment via ${payload.payment_method || "unknown"} (${payload.payment_channel || "unknown"})`
+              });
+              
+              const { data: donationResult, error: donationError } = await supabase.rpc(
                 'insert_single_donation',
                 {
                   donor_id: parseInt(donor.donorId, 10), // Convert string to number
@@ -273,7 +283,7 @@ export async function handleInvoicePaid(payload: any, supabase: any, systemUserI
               if (donationError) {
                 console.error(`❌ Error creating donation record for donor ${donor.donorId}:`, donationError);
               } else {
-                console.log(`✅ Successfully created donation record for donor ${donor.donorId}`);
+                console.log(`✅ Successfully created donation record for donor ${donor.donorId}`, donationResult);
               }
             } catch (err) {
               console.error(`❌ Exception creating donation record for donor ${donor.donorId}:`, err);
@@ -284,7 +294,17 @@ export async function handleInvoicePaid(payload: any, supabase: any, systemUserI
           
           try {
             // Use direct SQL query to bypass materialized view refresh
-            const { error: donationError } = await supabase.rpc(
+            console.log(`📌 Calling insert_single_donation with params:`, {
+              donor_id: parseInt(paymentDetails.donorId, 10),
+              amount: transaction.amount,
+              missionary_id: paymentDetails.recipientId,
+              donation_date: new Date().toISOString(),
+              source: 'online',
+              status: 'completed',
+              notes: `Payment via ${payload.payment_method || "unknown"} (${payload.payment_channel || "unknown"})`
+            });
+            
+            const { data: donationResult, error: donationError } = await supabase.rpc(
               'insert_single_donation',
               {
                 donor_id: parseInt(paymentDetails.donorId, 10), // Convert string to number
@@ -293,14 +313,14 @@ export async function handleInvoicePaid(payload: any, supabase: any, systemUserI
                 donation_date: new Date().toISOString(),
                 source: 'online',
                 status: 'completed',
-                notes: "Created from payment_details as fallback"
+                notes: `Payment via ${payload.payment_method || "unknown"} (${payload.payment_channel || "unknown"})`
               }
             );
             
             if (donationError) {
               console.error(`❌ Error creating donation record:`, donationError);
             } else {
-              console.log(`✅ Successfully created donation record for donor ${paymentDetails.donorId}`);
+              console.log(`✅ Successfully created donation record for donor ${paymentDetails.donorId}`, donationResult);
             }
           } catch (err) {
             console.error(`❌ Exception creating donation record:`, err);
@@ -429,28 +449,23 @@ export async function handleInvoiceExpired(payload: any, supabase: any) {
       return { success: false, error: 'Transaction not found' };
     }
     
-    console.log(`📌 Found transaction record for reference ${externalId || 'unknown'} with ID ${transaction.id}`);
+    console.log(`📌 Found transaction record for reference ${externalId} with ID ${transaction.id}`);
     
-    // Only update if not already expired to prevent duplicate processing
-    if (transaction.status !== "expired") {
-      // Update transaction status
-      const { error: updateError } = await supabase
-        .from('payment_transactions')
-        .update({
-          status: 'expired',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', transaction.id);
-      
-      if (updateError) {
-        console.error('❌ Error updating transaction status:', updateError);
-        return { success: false, error: 'Failed to update transaction' };
-      }
-      
-      console.log(`📌 Updated transaction status to expired for ID ${transaction.id}`);
-    } else {
-      console.log(`📌 Transaction already expired, skipping update`);
+    // Update transaction status
+    const { error: updateError } = await supabase
+      .from('payment_transactions')
+      .update({
+        status: 'expired',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', transaction.id);
+    
+    if (updateError) {
+      console.error('❌ Error updating transaction status:', updateError);
+      return { success: false, error: 'Failed to update transaction' };
     }
+    
+    console.log(`📌 Updated transaction status to expired for ID ${transaction.id}`);
     
     return { success: true };
   } catch (error) {
