@@ -174,20 +174,36 @@ async function resolveRecipientId(supabase: any, donationType: string, recipient
   }
 }
 
+// CORS headers configuration
+function getCorsHeaders(request: NextRequest) {
+  // Get the origin from the request
+  const origin = request.headers.get('origin') || '';
+  
+  // List of allowed origins
+  const allowedOrigins = [
+    'https://victorybulacan.org',
+    'https://www.victorybulacan.org',
+    'http://localhost:3000',
+    'https://v0-gps.vercel.app'
+  ];
+  
+  // Check if the request origin is allowed
+  const isAllowedOrigin = allowedOrigins.includes(origin);
+  
+  return {
+    'Access-Control-Allow-Origin': isAllowedOrigin ? origin : '',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Vary': 'Origin' // Important when using dynamic origin
+  };
+}
+
 // Handle OPTIONS requests for CORS preflight
 export async function OPTIONS(req: NextRequest) {
-  // Get the origin from the request headers
-  const origin = req.headers.get('origin') || '*';
-  
-  // Return a response with CORS headers
   return new NextResponse(null, {
-    status: 204, // No content
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400', // 24 hours
-    },
+    status: 204,
+    headers: getCorsHeaders(req)
   });
 }
 
@@ -195,8 +211,8 @@ export async function POST(req: NextRequest) {
   try {
     console.log("create-invoicev2: Received request");
     
-    // Get the origin from the request headers for CORS
-    const origin = req.headers.get('origin') || '*';
+    // Get CORS headers for this request
+    const corsHeaders = getCorsHeaders(req);
     
     // 1. Parse and validate request body
     const rawBody = await req.text();
@@ -211,11 +227,7 @@ export async function POST(req: NextRequest) {
         { error: "Invalid JSON", details: "The request body is not valid JSON" },
         { 
           status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          },
+          headers: corsHeaders
         }
       );
     }
@@ -230,11 +242,7 @@ export async function POST(req: NextRequest) {
         { error: "Invalid request data", details: validationResult.error.format() },
         { 
           status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          },
+          headers: corsHeaders
         }
       );
     }
@@ -301,22 +309,14 @@ export async function POST(req: NextRequest) {
             { error: "Invalid response from create-invoice", details: responseText },
             { 
               status: 500,
-              headers: {
-                'Access-Control-Allow-Origin': origin,
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-              },
+              headers: corsHeaders
             }
           );
         }
         
         return NextResponse.json(responseData, { 
           status: response.status,
-          headers: {
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          },
+          headers: corsHeaders
         });
       } catch (fetchError) {
         console.error("Fetch error:", fetchError);
@@ -327,11 +327,7 @@ export async function POST(req: NextRequest) {
           },
           { 
             status: 500,
-            headers: {
-              'Access-Control-Allow-Origin': origin,
-              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            },
+            headers: corsHeaders
           }
         );
       }
@@ -344,28 +340,18 @@ export async function POST(req: NextRequest) {
         },
         { 
           status: 404,
-          headers: {
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          },
+          headers: corsHeaders
         }
       );
     }
   } catch (error) {
     console.error("Unexpected error:", error);
-    // Get the origin from the request headers for CORS
-    const origin = req.headers.get('origin') || '*';
     
     return NextResponse.json(
       { error: "Server error", details: error instanceof Error ? error.message : "Unknown error" },
       { 
         status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': origin,
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
+        headers: getCorsHeaders(req)
       }
     );
   }
