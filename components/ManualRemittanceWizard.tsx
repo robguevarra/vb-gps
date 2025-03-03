@@ -127,6 +127,7 @@ export function ManualRemittanceWizard({
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<Donor[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const [searchMode, setSearchMode] = useState<"previous" | "all">("previous")
   const [newDonorForm, setNewDonorForm] = useState<NewDonorForm>({
     name: "",
     email: "",
@@ -138,11 +139,52 @@ export function ManualRemittanceWizard({
   /**
    * Debounced search function to prevent excessive API calls
    * Searches for donors based on the input term
+   * First searches for donors who have previously given to this missionary,
+   * then allows searching from all donors
    */
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
       setSearchLoading(true)
       try {
+        if (searchMode === "previous") {
+          // First search for donors who have previously given to this missionary
+          const { data: previousDonors, error: previousError } = await supabase
+            .from("donor_donations")
+            .select(`
+              donor_id,
+              donors:donor_id(id, name, email, phone)
+            `)
+            .eq("missionary_id", userId)
+            .order("date", { ascending: false })
+            
+          if (previousError) {
+            console.error("Error fetching previous donors:", previousError)
+          } else if (previousDonors && previousDonors.length > 0) {
+            // Extract unique donors from the results
+            const uniqueDonors: Donor[] = []
+            const donorIds = new Set()
+            
+            previousDonors.forEach(item => {
+              if (item.donors && typeof item.donors === 'object' && 'id' in item.donors) {
+                const donor = item.donors as unknown as Donor
+                if (!donorIds.has(donor.id)) {
+                  donorIds.add(donor.id)
+                  
+                  // Only include donors that match the search term if one is provided
+                  if (!term.trim() || donor.name.toLowerCase().includes(term.toLowerCase())) {
+                    uniqueDonors.push(donor)
+                  }
+                }
+              }
+            })
+            
+            setSearchResults(uniqueDonors)
+            setSearchLoading(false)
+            return
+          }
+        }
+        
+        // If no previous donors found or searchMode is "all", search all donors
         let query = supabase.from("donors").select("id, name, email, phone")
 
         if (term.trim()) {
@@ -155,6 +197,8 @@ export function ManualRemittanceWizard({
         const { data, error } = await query
         if (!error) {
           setSearchResults(data || [])
+        } else {
+          console.error("Error searching donors:", error)
         }
       } catch (error) {
         toast({ title: "Search Error", description: "Failed to fetch partners" })
@@ -162,7 +206,7 @@ export function ManualRemittanceWizard({
         setSearchLoading(false)
       }
     }, 300),
-    [],
+    [userId, searchMode],
   )
 
   // Trigger donor search when search term changes
@@ -202,6 +246,18 @@ export function ManualRemittanceWizard({
   const handleCreateDonor = async (name: string, email?: string, phone?: string) => {
     setLoading(true)
     try {
+      // First check if donor with this name already exists in the database
+      const { data: existingDonors, error: searchError } = await supabase
+        .from("donors")
+        .select("id, name, email, phone")
+        .ilike("name", name.trim())
+        .limit(1)
+        
+      if (!searchError && existingDonors && existingDonors.length > 0) {
+        // Donor already exists, return it
+        return existingDonors[0]
+      }
+      
       // Use the server action instead of client-side Supabase
       const result = await createDonor(name, email, phone)
 
@@ -217,10 +273,16 @@ export function ManualRemittanceWizard({
           // Check if donor already exists in results to avoid duplicates
           const exists = prevResults.some(d => d.id === newDonor.id);
           if (!exists) {
-            return [...prevResults, newDonor];
+            return [newDonor, ...prevResults];
           }
           return prevResults;
         });
+        
+        // Force a refresh of the search results
+        setTimeout(() => {
+          debouncedSearch(name.trim())
+        }, 500)
+        
         return newDonor
       }
       return null
@@ -318,6 +380,8 @@ export function ManualRemittanceWizard({
       showForm: false,
       emailError: undefined
     })
+    // Reset search mode to previous for next search
+    setSearchMode("previous")
   }
 
   /**
@@ -394,6 +458,7 @@ export function ManualRemittanceWizard({
           date: new Date().toISOString(),
           source: "offline" as const,
           status: "completed" as const,
+          recorded_by: userId // Add the recorded_by field to fix the type error
         };
       });
 
@@ -566,6 +631,37 @@ export function ManualRemittanceWizard({
                           {!searchLoading && searchResults.length === 0 && (
                             <div className="p-2 text-muted-foreground">No partners found.</div>
                           )}
+                          
+                          {/* Add toggle button to switch between search modes */}
+                          <div className="mt-2 pt-2 border-t flex justify-between items-center">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSearchMode(searchMode === "previous" ? "all" : "previous")}
+                              className="text-xs"
+                            >
+                              {searchMode === "previous" ? "Search all partners" : "Search previous partners"}
+                            </Button>
+                            
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (!searchTerm.trim() || loading) return;
+                                setNewDonorForm(prev => ({
+                                  ...prev,
+                                  name: searchTerm,
+                                  showForm: true
+                                }));
+                              }}
+                              disabled={!searchTerm.trim()}
+                              className="text-xs"
+                            >
+                              <UserPlus className="mr-1 h-3 w-3" /> Create New
+                            </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     )}

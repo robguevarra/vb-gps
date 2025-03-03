@@ -8,10 +8,12 @@ export async function POST(req: NextRequest) {
     // Get the request body
     const body = await req.json();
     
+    // Keep this log as it's useful for debugging donor creation issues
     console.log('Creating new donor request received');
     
     // Validate required fields
     if (!body.name || !body.name.trim()) {
+      // Keep this log as it's useful for debugging validation issues
       console.log('Donor creation failed: Name is required');
       return NextResponse.json(
         { error: 'Donor name is required' },
@@ -20,6 +22,7 @@ export async function POST(req: NextRequest) {
     }
     
     if (!body.email || !body.email.includes('@')) {
+      // Keep this log as it's useful for debugging validation issues
       console.log('Donor creation failed: Valid email is required');
       return NextResponse.json(
         { error: 'Valid email is required' },
@@ -34,6 +37,7 @@ export async function POST(req: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
+      // Keep this log as it's useful for debugging authentication issues
       console.log('Donor creation failed: Authentication required');
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -59,10 +63,12 @@ export async function POST(req: NextRequest) {
       .single();
     
     if (error) {
+      // Keep error logs for debugging
       console.error('Error creating donor:', error);
       
       // Check for duplicate email
       if (error.code === '23505' && error.message.includes('email')) {
+        // Keep this log as it's useful for debugging duplicate email issues
         console.log('Donor creation failed: Email already exists');
         return NextResponse.json(
           { error: 'A donor with this email already exists' },
@@ -76,10 +82,12 @@ export async function POST(req: NextRequest) {
       );
     }
     
+    // Keep this log as it's useful for tracking successful donor creation
     console.log('Donor created successfully with ID:', donor.id);
     
     return NextResponse.json(donor, { status: 201 });
   } catch (error) {
+    // Keep error logs for debugging
     console.error('Exception in donor creation:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -92,8 +100,15 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get('search') || '';
+  // Get the limit parameter from the URL, default to 1000
+  const limit = parseInt(searchParams.get('limit') || '1000', 10);
+  // Get the offset parameter for pagination
+  const offset = parseInt(searchParams.get('offset') || '0', 10);
+  // Get sort parameter, default to created_at desc
+  const sortBy = searchParams.get('sort') || 'created_at';
+  const sortOrder = searchParams.get('order') || 'desc';
   
-  console.log(`Searching donors with term: "${search}"`);
+  // Remove excessive log
   
   try {
     const supabase = await createClient();
@@ -102,6 +117,7 @@ export async function GET(req: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
+      // Keep this log as it's useful for debugging authentication issues
       console.log('Authentication error in donor search');
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -109,23 +125,48 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    // Search donors
-    const { data, error } = await supabase
-      .from('donors')
-      .select('id, name, email, phone')
-      .ilike('name', `%${search}%`)
-      .limit(10);
+    // Create a service client to bypass RLS
+    const serviceClient = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
     
-    if (error) {
-      console.error('Error searching donors:', error);
-      return NextResponse.json({ donors: [] }, { status: 200 });
+    // Build the query with pagination and sorting
+    let query = serviceClient
+      .from('donors')
+      .select('id, name, email, phone', { count: 'exact' });
+    
+    // Add search filter if provided
+    if (search) {
+      query = query.ilike('name', `%${search}%`);
     }
     
-    console.log(`Found ${data?.length || 0} donors matching "${search}"`);
+    // Add pagination
+    query = query
+      .order(sortBy, { ascending: sortOrder === 'asc' })
+      .range(offset, offset + limit - 1);
     
-    return NextResponse.json({ donors: data }, { status: 200 });
+    // Execute the query
+    const { data, error, count } = await query;
+    
+    if (error) {
+      // Keep error logs for debugging
+      console.error('Error searching donors:', error);
+      return NextResponse.json({ donors: [], total: 0 }, { status: 200 });
+    }
+    
+    // Return the results with pagination metadata
+    return NextResponse.json({ 
+      donors: data || [], 
+      total: count || 0,
+      hasMore: data && data.length === limit,
+      page: Math.floor(offset / limit) + 1,
+      pageSize: limit,
+      offset
+    });
   } catch (error) {
+    // Keep error logs for debugging
     console.error('Exception in donor search:', error);
-    return NextResponse.json({ donors: [] }, { status: 200 });
+    return NextResponse.json({ donors: [], total: 0 }, { status: 200 });
   }
 } 

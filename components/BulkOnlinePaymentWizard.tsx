@@ -109,9 +109,26 @@ export function BulkOnlinePaymentWizard({
   const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
   // Add state to track which partner box initiated the form
   const [formOriginIndex, setFormOriginIndex] = useState<number | null>(null);
+  // Add state for search mode
+  const [searchMode, setSearchMode] = useState<"previous" | "all">("previous");
+  // Add state for local donor cache
+  const [localDonorCache, setLocalDonorCache] = useState<Donor[]>([]);
+  // Add state to track if all donors have been loaded
+  const [allDonorsLoaded, setAllDonorsLoaded] = useState(false);
+  // Add state for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
+  const PAGE_SIZE = 50; // Number of results per page
 
   // Use an array of refs for dropdowns
   const dropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Add a ref to store all donors without causing re-renders
+  const allDonorsRef = useRef<Donor[]>([]);
+  // Add a ref to store donor lookup map for faster searching
+  const donorLookupRef = useRef<Map<string, Donor>>(new Map());
+  // Add a ref to store donor index for faster text search
+  const donorIndexRef = useRef<Map<string, Set<string>>>(new Map());
 
   // Update refs array when donor entries change
   useEffect(() => {
@@ -191,7 +208,184 @@ export function BulkOnlinePaymentWizard({
     getUserProfile();
   }, []);
 
-  // Direct search function (not debounced) for immediate results
+  // Add a function to index donors for faster searching
+  const indexDonors = (donors: Donor[]) => {
+    // Create a map of donor IDs to donor objects for O(1) lookups
+    const lookupMap = new Map<string, Donor>();
+    
+    // Create an index for text search
+    // Map of lowercase name fragments to sets of donor IDs
+    const textIndex = new Map<string, Set<string>>();
+    
+    donors.forEach(donor => {
+      // Add to lookup map
+      lookupMap.set(donor.id, donor);
+      
+      // Index the donor name for text search
+      if (donor.name) {
+        // Split name into words and index each word
+        const words = donor.name.toLowerCase().split(/\s+/);
+        words.forEach(word => {
+          // For each 2+ character substring, add this donor to the index
+          for (let i = 0; i < word.length - 1; i++) {
+            for (let j = i + 2; j <= word.length; j++) {
+              const fragment = word.substring(i, j);
+              if (!textIndex.has(fragment)) {
+                textIndex.set(fragment, new Set());
+              }
+              textIndex.get(fragment)?.add(donor.id);
+            }
+          }
+        });
+      }
+    });
+    
+    // Store in refs
+    donorLookupRef.current = lookupMap;
+    donorIndexRef.current = textIndex;
+  };
+
+  // Add a function to search the donor index
+  const searchDonorIndex = (term: string): Donor[] => {
+    if (!term || !term.trim()) return [];
+    
+    const normalizedTerm = term.toLowerCase().trim();
+    const words = normalizedTerm.split(/\s+/);
+    
+    // For each word, find matching donor IDs
+    const matchingSets: Set<string>[] = [];
+    
+    words.forEach(word => {
+      // Find all fragments that match this word
+      const matchingFragments = Array.from(donorIndexRef.current.keys())
+        .filter(fragment => fragment.includes(word));
+      
+      // Union all donor IDs that match any fragment
+      const matchingDonorIds = new Set<string>();
+      matchingFragments.forEach(fragment => {
+        const donorIds = donorIndexRef.current.get(fragment);
+        if (donorIds) {
+          donorIds.forEach(id => matchingDonorIds.add(id));
+        }
+      });
+      
+      if (matchingDonorIds.size > 0) {
+        matchingSets.push(matchingDonorIds);
+      }
+    });
+    
+    // If no matches found, return empty array
+    if (matchingSets.length === 0) return [];
+    
+    // Find intersection of all matching sets (donors that match all words)
+    let resultIds: Set<string>;
+    if (matchingSets.length === 1) {
+      resultIds = matchingSets[0];
+    } else {
+      // Start with the first set
+      resultIds = matchingSets[0];
+      // Intersect with each subsequent set
+      for (let i = 1; i < matchingSets.length; i++) {
+        resultIds = new Set(
+          Array.from(resultIds).filter(id => matchingSets[i].has(id))
+        );
+      }
+    }
+    
+    // Convert IDs back to donor objects
+    return Array.from(resultIds)
+      .map(id => donorLookupRef.current.get(id))
+      .filter((donor): donor is Donor => donor !== undefined)
+      .slice(0, 100); // Limit to 100 results for performance
+  };
+
+  // Modify the loadAllDonors function to use pagination and indexing
+  const loadAllDonors = async (page = 1, pageSize = 1000) => {
+    // Don't reload if already loaded
+    if (allDonorsLoaded && page === 1) {
+      return;
+    }
+    
+    // Keep this log as it's useful for debugging loading issues
+    if (page === 1) {
+      console.log("Loading donors...");
+    }
+    
+    setSearchLoading(true);
+    
+    try {
+      // Add cache-busting parameters
+      const timestamp = new Date().getTime();
+      const random = Math.random().toString(36).substring(2, 15);
+      
+      // Use the API endpoint with pagination
+      const response = await fetch(
+        `/api/donors?search=&limit=${pageSize}&offset=${(page - 1) * pageSize}&_t=${timestamp}&_r=${random}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to load donors');
+      }
+      
+      const result = await response.json();
+      const pageDonors = result.donors || [];
+      
+      // Keep this log as it's useful for debugging data loading issues
+      console.log(`Loaded ${pageDonors.length} donors (page ${page})`);
+      
+      // If this is the first page, reset the donors array
+      if (page === 1) {
+        allDonorsRef.current = pageDonors;
+      } else {
+        // Otherwise append to the existing array
+        allDonorsRef.current = [...allDonorsRef.current, ...pageDonors];
+      }
+      
+      // Check if there are more results to load
+      const hasMore = pageDonors.length === pageSize;
+      setHasMoreResults(hasMore);
+      
+      // If there are more results and we're loading all, load the next page
+      if (hasMore) {
+        // Load the next page after a short delay
+        setTimeout(() => {
+          loadAllDonors(page + 1, pageSize);
+        }, 100);
+      } else {
+        // No more results, we've loaded all donors
+        setAllDonorsLoaded(true);
+        
+        // Index the donors for faster searching
+        indexDonors(allDonorsRef.current);
+        
+        // If we have search results, filter them based on the current search term
+        if (activeSearchIndex !== null && searchTerms[activeSearchIndex]) {
+          const term = searchTerms[activeSearchIndex];
+          const filteredDonors = searchDonorIndex(term);
+          setSearchResults(filteredDonors);
+        }
+      }
+    } catch (error) {
+      // Keep error logs for debugging
+      console.error("Error loading donors:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load donors",
+        variant: "destructive"
+      });
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Update the search functions to use the optimized index
   const searchPartners = async (term: string) => {
     if (!term || !term.trim()) {
       setSearchResults([]);
@@ -200,40 +394,184 @@ export function BulkOnlinePaymentWizard({
 
     setSearchLoading(true);
     try {
-      // Add a stronger cache-busting mechanism with a random value
+      // First check local donor cache for exact matches
+      const localMatches = localDonorCache.filter(donor => 
+        donor.name.toLowerCase().includes(term.toLowerCase())
+      );
+      
+      // If we're in "all" mode and all donors are loaded, use the indexed search
+      if (searchMode === "all" && allDonorsLoaded) {
+        // Use the indexed search for better performance
+        const filteredResults = searchDonorIndex(term);
+        
+        // Add any local matches that aren't already in the results
+        const resultIds = new Set(filteredResults.map(d => d.id));
+        const uniqueLocalMatches = localMatches.filter(d => !resultIds.has(d.id));
+        const combinedResults = [...filteredResults, ...uniqueLocalMatches];
+        
+        // Limit results to prevent performance issues
+        const limitedResults = combinedResults.slice(0, 100);
+        setSearchResults(limitedResults);
+        setSearchLoading(false);
+        return;
+      }
+      
+      // First search for donors who have previously given to this missionary if in "previous" mode
+      if (searchMode === "previous") {
+        const { data: previousDonors, error: previousError } = await supabase
+          .from("donor_donations")
+          .select(`
+            donor_id,
+            donors:donor_id(id, name, email, phone)
+          `)
+          .eq("missionary_id", missionaryId)
+          .order("date", { ascending: false });
+          
+        if (!previousError && previousDonors && previousDonors.length > 0) {
+          // Extract unique donors from the results
+          const uniqueDonors: Donor[] = [];
+          const donorIds = new Set();
+          
+          previousDonors.forEach(item => {
+            if (item.donors && typeof item.donors === 'object' && 'id' in item.donors) {
+              const donor = item.donors as unknown as Donor;
+              if (!donorIds.has(donor.id)) {
+                donorIds.add(donor.id);
+                
+                // Only include donors that match the search term if one is provided
+                if (!term.trim() || donor.name.toLowerCase().includes(term.toLowerCase())) {
+                  uniqueDonors.push(donor);
+                }
+              }
+            }
+          });
+          
+          if (uniqueDonors.length > 0 || localMatches.length > 0) {
+            // Combine unique donors from database with local cache, avoiding duplicates
+            const combinedResults = [...uniqueDonors];
+            
+            // Add local matches that aren't already in the results
+            localMatches.forEach(localDonor => {
+              if (!donorIds.has(localDonor.id)) {
+                combinedResults.push(localDonor);
+              }
+            });
+            
+            setSearchResults(combinedResults);
+            setSearchLoading(false);
+            return;
+          }
+        }
+      }
+      
+      // If no previous donors found or searchMode is "all", search all donors via API
+      // Use pagination for better performance with large datasets
       const timestamp = new Date().getTime();
       const random = Math.random().toString(36).substring(2, 15);
       
-      // Use the API endpoint with cache-busting parameters
-      const response = await fetch(`/api/donors?search=${encodeURIComponent(term.trim())}&_t=${timestamp}&_r=${random}`, {
-        // Add cache control headers
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+      // Use the API endpoint with pagination
+      const response = await fetch(
+        `/api/donors?search=${encodeURIComponent(term.trim())}&limit=${PAGE_SIZE}&offset=0&_t=${timestamp}&_r=${random}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
         }
-      });
+      );
       
       if (!response.ok) {
         throw new Error('Failed to search partners');
       }
       
       const result = await response.json();
-      console.log("Search results count:", result.donors?.length || 0);
-      setSearchResults(result.donors || []);
+      const apiDonors = result.donors || [];
+      
+      // Check if there are more results
+      setHasMoreResults(apiDonors.length === PAGE_SIZE);
+      setCurrentPage(1);
+      
+      // Combine API results with local cache, avoiding duplicates
+      const apiDonorIds = new Set(apiDonors.map((d: Donor) => d.id));
+      const uniqueLocalMatches = localMatches.filter(d => !apiDonorIds.has(d.id));
+      const combinedResults = [...apiDonors, ...uniqueLocalMatches];
+      
+      setSearchResults(combinedResults);
     } catch (error) {
+      // Keep error logs for debugging
       console.error("Partner search error:", error);
+      
+      // If API search fails, at least show local cache matches
+      const localMatches = localDonorCache.filter(donor => 
+        donor.name.toLowerCase().includes(term.toLowerCase())
+      );
+      
+      if (localMatches.length > 0) {
+        setSearchResults(localMatches);
+      } else {
+        toast({
+          title: "Search Error",
+          description: "Failed to search for partners",
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+  
+  // Add a function to load more search results
+  const loadMoreSearchResults = async () => {
+    if (!hasMoreResults || searchLoading || activeSearchIndex === null) return;
+    
+    const nextPage = currentPage + 1;
+    const term = searchTerms[activeSearchIndex];
+    
+    setSearchLoading(true);
+    
+    try {
+      const timestamp = new Date().getTime();
+      const random = Math.random().toString(36).substring(2, 15);
+      
+      // Use the API endpoint with pagination
+      const response = await fetch(
+        `/api/donors?search=${encodeURIComponent(term.trim())}&limit=${PAGE_SIZE}&offset=${(nextPage - 1) * PAGE_SIZE}&_t=${timestamp}&_r=${random}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to load more results');
+      }
+      
+      const result = await response.json();
+      const nextPageDonors = result.donors || [];
+      
+      // Check if there are more results
+      setHasMoreResults(nextPageDonors.length === PAGE_SIZE);
+      setCurrentPage(nextPage);
+      
+      // Append to existing results
+      setSearchResults(prevResults => [...prevResults, ...nextPageDonors]);
+    } catch (error) {
+      console.error("Error loading more results:", error);
       toast({
-        title: "Search Error",
-        description: "Failed to search for partners",
+        title: "Error",
+        description: "Failed to load more results",
         variant: "destructive"
       });
     } finally {
       setSearchLoading(false);
     }
   };
-  
-  // Debounced search function
+
+  // Update the debounced search function similarly
   const debouncedSearch = useCallback(
     debounce(async (term: string) => {
       if (!term || !term.trim()) {
@@ -243,39 +581,133 @@ export function BulkOnlinePaymentWizard({
 
       setSearchLoading(true);
       try {
-        // Add a stronger cache-busting mechanism with a random value
+        // First check local donor cache for exact matches
+        const localMatches = localDonorCache.filter(donor => 
+          donor.name.toLowerCase().includes(term.toLowerCase())
+        );
+        
+        // If we're in "all" mode and all donors are loaded, use the indexed search
+        if (searchMode === "all" && allDonorsLoaded) {
+          // Use the indexed search for better performance
+          const filteredResults = searchDonorIndex(term);
+          
+          // Add any local matches that aren't already in the results
+          const resultIds = new Set(filteredResults.map(d => d.id));
+          const uniqueLocalMatches = localMatches.filter(d => !resultIds.has(d.id));
+          const combinedResults = [...filteredResults, ...uniqueLocalMatches];
+          
+          // Limit results to prevent performance issues
+          const limitedResults = combinedResults.slice(0, 100);
+          setSearchResults(limitedResults);
+          setSearchLoading(false);
+          return;
+        }
+        
+        // First search for donors who have previously given to this missionary if in "previous" mode
+        if (searchMode === "previous") {
+          const { data: previousDonors, error: previousError } = await supabase
+            .from("donor_donations")
+            .select(`
+              donor_id,
+              donors:donor_id(id, name, email, phone)
+            `)
+            .eq("missionary_id", missionaryId)
+            .order("date", { ascending: false });
+            
+          if (!previousError && previousDonors && previousDonors.length > 0) {
+            // Extract unique donors from the results
+            const uniqueDonors: Donor[] = [];
+            const donorIds = new Set();
+            
+            previousDonors.forEach(item => {
+              if (item.donors && typeof item.donors === 'object' && 'id' in item.donors) {
+                const donor = item.donors as unknown as Donor;
+                if (!donorIds.has(donor.id)) {
+                  donorIds.add(donor.id);
+                  
+                  // Only include donors that match the search term if one is provided
+                  if (!term.trim() || donor.name.toLowerCase().includes(term.toLowerCase())) {
+                    uniqueDonors.push(donor);
+                  }
+                }
+              }
+            });
+            
+            if (uniqueDonors.length > 0 || localMatches.length > 0) {
+              // Combine unique donors from database with local cache, avoiding duplicates
+              const combinedResults = [...uniqueDonors];
+              
+              // Add local matches that aren't already in the results
+              localMatches.forEach(localDonor => {
+                if (!donorIds.has(localDonor.id)) {
+                  combinedResults.push(localDonor);
+                }
+              });
+              
+              setSearchResults(combinedResults);
+              setSearchLoading(false);
+              return;
+            }
+          }
+        }
+        
+        // If no previous donors found or searchMode is "all", search all donors via API
+        // Use pagination for better performance with large datasets
         const timestamp = new Date().getTime();
         const random = Math.random().toString(36).substring(2, 15);
         
-        // Use the API endpoint with cache-busting parameters
-        const response = await fetch(`/api/donors?search=${encodeURIComponent(term.trim())}&_t=${timestamp}&_r=${random}`, {
-          // Add cache control headers
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+        // Use the API endpoint with pagination
+        const response = await fetch(
+          `/api/donors?search=${encodeURIComponent(term.trim())}&limit=${PAGE_SIZE}&offset=0&_t=${timestamp}&_r=${random}`,
+          {
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
           }
-        });
+        );
         
         if (!response.ok) {
           throw new Error('Failed to search partners');
         }
         
         const result = await response.json();
-        console.log("Debounced search results count:", result.donors?.length || 0);
-        setSearchResults(result.donors || []);
+        const apiDonors = result.donors || [];
+        
+        // Check if there are more results
+        setHasMoreResults(apiDonors.length === PAGE_SIZE);
+        setCurrentPage(1);
+        
+        // Combine API results with local cache, avoiding duplicates
+        const apiDonorIds = new Set(apiDonors.map((d: Donor) => d.id));
+        const uniqueLocalMatches = localMatches.filter(d => !apiDonorIds.has(d.id));
+        const combinedResults = [...apiDonors, ...uniqueLocalMatches];
+        
+        setSearchResults(combinedResults);
       } catch (error) {
+        // Keep error logs for debugging
         console.error("Partner search error:", error);
-        toast({
-          title: "Search Error",
-          description: "Failed to search for partners",
-          variant: "destructive"
-        });
+        
+        // If API search fails, at least show local cache matches
+        const localMatches = localDonorCache.filter(donor => 
+          donor.name.toLowerCase().includes(term.toLowerCase())
+        );
+        
+        if (localMatches.length > 0) {
+          setSearchResults(localMatches);
+        } else {
+          toast({
+            title: "Search Error",
+            description: "Failed to search for partners",
+            variant: "destructive"
+          });
+        }
       } finally {
         setSearchLoading(false);
       }
     }, 300),
-    []
+    [missionaryId, searchMode, localDonorCache, allDonorsLoaded]
   );
 
   // Add handleSearchPartners function
@@ -360,6 +792,9 @@ export function BulkOnlinePaymentWizard({
     
     // Clear search results
     setSearchResults([]);
+    
+    // Reset search mode to previous for next search
+    setSearchMode("previous");
   };
 
   const handleAddDonorEntry = () => {
@@ -458,6 +893,16 @@ export function BulkOnlinePaymentWizard({
       
       console.log("New partner created successfully");
       
+      // Add the new donor to the local cache
+      setLocalDonorCache(prevCache => {
+        // Check if donor already exists in cache
+        const exists = prevCache.some(d => d.id === newDonor.id);
+        if (!exists) {
+          return [newDonor, ...prevCache];
+        }
+        return prevCache;
+      });
+      
       // Get the index where we want to add the new donor
       const targetIndex = formOriginIndex !== null ? formOriginIndex : 0;
       
@@ -493,22 +938,23 @@ export function BulkOnlinePaymentWizard({
       // Reset form origin index
       setFormOriginIndex(null);
       
+      // Force a refresh of the search results to include the new donor
+      setTimeout(() => {
+        if (activeSearchIndex !== null) {
+          // Use the new donor's name as the search term to ensure it's found
+          const searchTerm = newDonor.name;
+          const newSearchTermsArray = [...searchTerms];
+          newSearchTermsArray[activeSearchIndex] = searchTerm;
+          setSearchTerms(newSearchTermsArray);
+          searchPartners(searchTerm);
+        }
+      }, 500);
+      
       // Show success toast
       toast({
         title: "Success",
         description: "Partner created successfully",
       });
-      
-      // IMPORTANT: Instead of trying to refresh the search results,
-      // we'll directly select the newly created partner
-      // This bypasses any issues with search result caching
-      handleSelectDonor(targetIndex, newDonor);
-      
-      // Also perform a search to update the search results for future searches
-      // This ensures the new partner will appear in future searches
-      setTimeout(() => {
-        searchPartners(newDonor.name);
-      }, 500);
     } catch (error) {
       console.error("Error creating partner:", error);
       
@@ -1039,6 +1485,20 @@ export function BulkOnlinePaymentWizard({
     setLoading(false);
   };
 
+  // Preload donors when component mounts
+  useEffect(() => {
+    // Only preload donors once and only if they haven't been loaded yet
+    if (!allDonorsLoaded) {
+      // Preload donors in the background after a short delay
+      const timer = setTimeout(() => {
+        loadAllDonors(1, 1000);
+      }, 2000); // 2 second delay to not interfere with initial rendering
+      
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allDonorsLoaded]); // Only depend on allDonorsLoaded to prevent continuous refreshing
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1186,6 +1646,48 @@ export function BulkOnlinePaymentWizard({
                                           No partners found
                                         </div>
                                       ) : null}
+                                      
+                                      {/* Add search mode toggle button */}
+                                      <div className="p-2 border-t flex justify-between items-center">
+                                        <button
+                                          type="button"
+                                          className="text-xs text-primary hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newMode = searchMode === "previous" ? "all" : "previous";
+                                            setSearchMode(newMode);
+                                            
+                                            // If switching to "all" mode and all donors haven't been loaded yet, load them
+                                            if (newMode === "all") {
+                                              if (!allDonorsLoaded) {
+                                                loadAllDonors(1, 1000);
+                                              } else if (searchTerms[index]) {
+                                                // If donors are already loaded, use the indexed search
+                                                const term = searchTerms[index];
+                                                const filteredResults = searchDonorIndex(term);
+                                                
+                                                // Add any local matches that aren't already in the results
+                                                const localMatches = localDonorCache.filter(donor => 
+                                                  donor.name.toLowerCase().includes(term.toLowerCase())
+                                                );
+                                                const resultIds = new Set(filteredResults.map(d => d.id));
+                                                const uniqueLocalMatches = localMatches.filter(d => !resultIds.has(d.id));
+                                                const combinedResults = [...filteredResults, ...uniqueLocalMatches];
+                                                
+                                                // Limit results to prevent performance issues
+                                                const limitedResults = combinedResults.slice(0, 100);
+                                                setSearchResults(limitedResults);
+                                              }
+                                            } else if (searchTerms[index]) {
+                                              // If switching to "previous" mode, search for previous donors
+                                              searchPartners(searchTerms[index]);
+                                            }
+                                          }}
+                                        >
+                                          {searchMode === "previous" ? "Search all partners" : "Search previous partners"}
+                                        </button>
+                                      </div>
+                                      
                                       <div
                                         className="p-2 hover:bg-gray-100 cursor-pointer border-t"
                                         onClick={() => {
