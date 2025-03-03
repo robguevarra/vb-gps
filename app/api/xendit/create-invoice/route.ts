@@ -16,7 +16,7 @@ const createInvoiceSchema = z.object({
   donor: z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    phone: z.string().optional(),
+    phone: z.string().min(0).optional().default(''),
   }),
   isAnonymous: z.boolean().optional().default(false),
   // Add optional payment_details field for bulk donations
@@ -25,10 +25,10 @@ const createInvoiceSchema = z.object({
     donors: z.array(
       z.object({
         donorId: z.string(),
-        donorName: z.string().optional(),
+        donorName: z.string().optional().default('Anonymous Donor'),
         amount: z.number().positive(),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
+        email: z.string().email().optional().default('donor@example.com'),
+        phone: z.string().min(0).optional().default(''),
       })
     ).optional(),
     recipientId: z.string().uuid().optional(),

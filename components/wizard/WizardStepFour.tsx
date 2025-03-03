@@ -46,6 +46,15 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
     notes
   } = usePaymentWizardStore();
 
+  // Clean up polling interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+
   // Don't render if not visible
   if (!visible) return null;
 
@@ -59,12 +68,16 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
       // Prepare the donation data
       const donationData = donorEntries.map(entry => {
         const donor = selectedDonors[entry.donorId];
+        const donorName = donor?.name || entry.donorName || 'Anonymous Donor';
+        // Create a default email based on donor name if not available
+        const defaultEmail = `${donorName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
+        
         return {
           donorId: String(entry.donorId),
-          donorName: donor?.name || entry.donorName,
+          donorName: donorName,
           amount: parseFloat(entry.amount),
-          email: donor?.email || entry.email,
-          phone: donor?.phone || entry.phone
+          email: donor?.email || entry.email || defaultEmail,
+          phone: donor?.phone || entry.phone || ''
         };
       });
       
@@ -79,15 +92,18 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
         throw new Error('No donors selected');
       }
 
+      const primaryDonorName = primaryDonor.name || 'Anonymous Donor';
+      const defaultPrimaryEmail = `${primaryDonorName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
+
       // Log the request payload for debugging
       const requestPayload = {
         donationType: "missionary",
         recipientId: missionaryId,
         amount: totalAmount,
         donor: {
-          name: primaryDonor.name,
-          email: primaryDonor.email || 'donor@example.com',
-          phone: primaryDonor.phone
+          name: primaryDonorName,
+          email: primaryDonor.email || defaultPrimaryEmail,
+          phone: primaryDonor.phone || ''
         },
         isAnonymous: false,
         payment_details: {
@@ -255,15 +271,6 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
     
     // No need to return cleanup function here as we're managing the interval in state
   };
-  
-  // Clean up polling interval on component unmount
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [pollingInterval]);
 
   return (
     <motion.div
