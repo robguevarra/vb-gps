@@ -20,10 +20,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { memo, useMemo, useCallback, useState } from "react";
 import PartnerHistoryModal from "./DonorHistoryModal";
 import { Inbox } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 /**
  * Interface representing a single donation transaction
@@ -47,171 +46,132 @@ interface RecentDonationsProps {
   donations: Donation[];
   /** ID of the missionary to filter donations for in the modal */
   missionaryId: string;
+  /** Loading state for the component */
+  isLoading?: boolean;
 }
 
-export default function RecentDonations({ donations, missionaryId }: RecentDonationsProps) {
-  // State for managing the donor history modal
+/**
+ * Skeleton component for loading state
+ */
+function RecentDonationsSkeleton() {
+  return (
+    <Card className="overflow-hidden shadow-sm animate-pulse">
+      <CardHeader className="bg-muted/10 px-6 py-4">
+        <div className="h-6 w-48 bg-gray-200 rounded" />
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y divide-border">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center justify-between p-4">
+              <div className="grid gap-1">
+                <div className="h-5 w-32 bg-gray-200 rounded" />
+                <div className="h-4 w-24 bg-gray-200 rounded" />
+              </div>
+              <div className="h-6 w-24 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Empty state component
+ */
+const EmptyState = memo(function EmptyState() {
+  return (
+    <div className="p-6 text-center text-muted-foreground">
+      <Inbox className="mx-auto h-8 w-8 mb-2" />
+      <p>No recent transactions</p>
+    </div>
+  );
+});
+
+/**
+ * Individual donation item component with memoization
+ */
+const DonationItem = memo(function DonationItem({ 
+  donation,
+  onOpenModal 
+}: { 
+  donation: Donation;
+  onOpenModal: (donorName: string) => void;
+}) {
+  const formattedAmount = useMemo(() => 
+    formatCurrency(donation.amount),
+    [donation.amount]
+  );
+
+  const formattedDate = useMemo(() => 
+    formatDate(donation.date),
+    [donation.date]
+  );
+
+  return (
+    <div className="flex items-center justify-between p-4 transition-colors hover:bg-muted/50">
+      <div className="grid gap-1">
+        <button
+          onClick={() => onOpenModal(donation.donor_name)}
+          className="font-medium text-left hover:text-primary transition-colors"
+        >
+          {donation.donor_name}
+        </button>
+        <div className="text-sm text-muted-foreground">
+          {formattedDate}
+        </div>
+      </div>
+      <div className="font-semibold text-emerald-600">
+        {formattedAmount}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Main RecentDonations component with optimized rendering
+ */
+export default function RecentDonations({ 
+  donations, 
+  missionaryId,
+  isLoading = false 
+}: RecentDonationsProps) {
   const [partnerModalOpen, setPartnerModalOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<string>("");
-  const [shouldAnimate, setShouldAnimate] = useState(false);
-  
-  // Start animation after component mounts
-  useEffect(() => {
-    setShouldAnimate(true);
-  }, []);
 
-  /**
-   * Opens the partner history modal for a specific partner
-   * @param donorName - Name of the partner to show history for
-   */
-  const openModal = (donorName: string) => {
+  const openModal = useCallback((donorName: string) => {
     setSelectedPartner(donorName);
     setPartnerModalOpen(true);
-  };
+  }, []);
 
-  // Animation variants for container
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-        delayChildren: 0.2
-      }
-    }
-  };
-
-  // Animation variants for individual items
-  const itemVariants = {
-    hidden: { 
-      opacity: 0, 
-      y: 10,
-    },
-    show: { 
-      opacity: 1, 
-      y: 0,
-      transition: {
-        type: "spring",
-        stiffness: 500,
-        damping: 30
-      }
-    }
-  };
-
-  // Animation variants for card
-  const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { 
-      opacity: 1, 
-      y: 0,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 25,
-        delay: 0.1
-      }
-    }
-  };
-
-  // Animation variants for empty state
-  const emptyStateVariants = {
-    hidden: { opacity: 0, scale: 0.9 },
-    show: { 
-      opacity: 1, 
-      scale: 1,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 25,
-        delay: 0.2
-      }
-    }
-  };
+  if (isLoading) {
+    return <RecentDonationsSkeleton />;
+  }
 
   return (
     <>
-      <motion.div
-        variants={cardVariants}
-        initial="hidden"
-        animate={shouldAnimate ? "show" : "hidden"}
-      >
-        <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
-          <CardHeader className="bg-muted/10 px-6 py-4">
-            <CardTitle className="text-lg font-semibold">Recent Transactions</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {donations.length > 0 ? (
-                <motion.div
-                  variants={containerVariants}
-                  initial="hidden"
-                  animate={shouldAnimate ? "show" : "hidden"}
-                  className="max-h-[400px] overflow-auto"
-                >
-                  {donations.map((donation) => (
-                    <motion.div
-                      key={donation.id}
-                      variants={itemVariants}
-                      whileHover={{ 
-                        backgroundColor: "rgba(0,0,0,0.03)",
-                        transition: { duration: 0.2 }
-                      }}
-                      className="flex items-center justify-between p-4 transition-colors"
-                    >
-                      <div className="grid gap-1">
-                        {/* Partner name with click handler for history modal */}
-                        <motion.div 
-                          className="font-medium cursor-pointer hover:text-primary"
-                          onClick={() => openModal(donation.donor_name)}
-                          whileHover={{ 
-                            scale: 1.02,
-                            color: "var(--primary)",
-                            transition: { duration: 0.2 }
-                          }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          {donation.donor_name}
-                        </motion.div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatDate(donation.date)}
-                        </div>
-                      </div>
-                      {/* Amount display with currency formatting */}
-                      <motion.div 
-                        className="font-semibold text-emerald-600"
-                        whileHover={{ scale: 1.05 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                      >
-                        ₱{donation.amount.toLocaleString()}
-                      </motion.div>
-                    </motion.div>
-                  ))}
-                </motion.div>
-              ) : (
-                // Empty state display
-                <motion.div 
-                  className="p-6 text-center text-muted-foreground"
-                  variants={emptyStateVariants}
-                  initial="hidden"
-                  animate={shouldAnimate ? "show" : "hidden"}
-                >
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0,
-                      transition: { delay: 0.3, duration: 0.5 }
-                    }}
-                  >
-                    <Inbox className="mx-auto h-8 w-8 mb-2" />
-                    <p>No recent transactions</p>
-                  </motion.div>
-                </motion.div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      <Card className="overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+        <CardHeader className="bg-muted/10 px-6 py-4">
+          <CardTitle className="text-lg font-semibold">Recent Transactions</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y divide-border">
+            {donations.length > 0 ? (
+              <div className="max-h-[400px] overflow-auto">
+                {donations.map((donation) => (
+                  <DonationItem
+                    key={donation.id}
+                    donation={donation}
+                    onOpenModal={openModal}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState />
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Partner History Modal */}
       <PartnerHistoryModal
