@@ -200,18 +200,36 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Use custom success redirect URL if provided, otherwise use the default one
-    const successRedirectUrl = success_redirect_url || 
-      `${process.env.NEXT_PUBLIC_APP_URL}/donation/success?ref=${referenceId}`;
+    // Determine the appropriate success redirect URL based on the source
+    let successRedirectUrl: string;
+    
+    if (success_redirect_url) {
+      // If a custom success redirect URL is provided, use it
+      successRedirectUrl = success_redirect_url;
+    } else {
+      // Determine the source of the request based on the referrer or other indicators
+      const isFromWordPress = req.headers.get('referer')?.includes('victorybulacan.org') || false;
+      
+      if (isFromWordPress) {
+        // For WordPress site (external donations)
+        successRedirectUrl = "https://victorybulacan.org/thankyou/";
+      } else {
+        // For staff portal (internal donations)
+        successRedirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/giving/thank-you?ref=${referenceId}`;
+      }
+    }
     
     console.log(`Using success redirect URL: ${successRedirectUrl}`);
+    
+    // Determine the appropriate failure redirect URL
+    const failureRedirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/failure?ref=${referenceId}`;
     
     const xenditService = new XenditService(
       process.env.XENDIT_SECRET_KEY!,
       process.env.XENDIT_WEBHOOK_SECRET!,
       `${process.env.NEXT_PUBLIC_APP_URL}/api/xendit-webhook`,
       successRedirectUrl,
-      `${process.env.NEXT_PUBLIC_APP_URL}/donation/failed?ref=${referenceId}`
+      failureRedirectUrl
     );
     
     try {
