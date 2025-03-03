@@ -3,35 +3,53 @@
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { PaymentWizardSkeleton } from "./PaymentWizardSkeleton";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { BulkOnlinePaymentWizard } from "@/components/wizard/BulkOnlinePaymentWizard";
+import { ErrorBoundary } from "react-error-boundary";
+import { BulkOnlinePaymentWizardProps } from "../wizard/BulkOnlinePaymentWizard";
 
-interface BulkOnlinePaymentWizardWrapperProps {
+// Dynamically import the BulkOnlinePaymentWizard component
+const BulkOnlinePaymentWizard = dynamic(
+  () => import("../wizard/BulkOnlinePaymentWizard").then(mod => mod.BulkOnlinePaymentWizard),
+  {
+    loading: () => <div className="p-4 text-center">Loading payment wizard...</div>,
+    ssr: false,
+  }
+);
+
+/**
+ * Props for the BulkOnlinePaymentWizardWrapper component
+ */
+export interface BulkOnlinePaymentWizardWrapperProps {
   missionaryId: string;
   missionaryName: string;
+  onSuccess?: () => void;
+  onError?: (error: string) => void;
 }
 
 /**
  * BulkOnlinePaymentWizardWrapper Component
  * 
- * Client component wrapper for the BulkOnlinePaymentWizard.
- * Handles lazy loading of the wizard component and provides a skeleton loading state.
+ * A wrapper component that lazy loads the BulkOnlinePaymentWizard component
+ * and provides error boundary protection.
  * 
- * @param missionaryId - The ID of the missionary
+ * @param missionaryId - The ID of the missionary receiving the payment
  * @param missionaryName - The name of the missionary
+ * @param onSuccess - Optional callback for successful payment completion
+ * @param onError - Optional callback for payment errors
  */
-export function BulkOnlinePaymentWizardWrapper({ 
+export function BulkOnlinePaymentWizardWrapper({
   missionaryId,
-  missionaryName
+  missionaryName,
+  onSuccess,
+  onError
 }: BulkOnlinePaymentWizardWrapperProps) {
   return (
-    <ErrorBoundary>
-      <Suspense fallback={<PaymentWizardSkeleton />}>
-        <BulkOnlinePaymentWizard 
-          missionaryId={missionaryId} 
-          missionaryName={missionaryName} 
-        />
-      </Suspense>
+    <ErrorBoundary fallback={<div className="p-4 text-red-500">Error loading payment wizard</div>}>
+      <BulkOnlinePaymentWizard 
+        missionaryId={missionaryId} 
+        missionaryName={missionaryName}
+        onSuccess={onSuccess}
+        onError={onError}
+      />
     </ErrorBoundary>
   );
 } 

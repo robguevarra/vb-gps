@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { usePaymentWizardStore } from "@/stores/paymentWizardStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, Loader2, User, Mail, Phone, Save } from "lucide-react";
 import { motion } from "framer-motion";
-import { createClient } from "@/utils/supabase/client";
 import { z } from "zod";
 
 // Validation schema for new donor
@@ -32,8 +30,6 @@ interface DonorCreationFormProps {
  * This component handles validation, submission, and error handling.
  */
 export function DonorCreationForm({ onSuccess, onCancel }: DonorCreationFormProps) {
-  const { setIsNewDonorFormOpen } = usePaymentWizardStore();
-  
   const [formData, setFormData] = useState<DonorFormData>({
     name: "",
     email: "",
@@ -85,30 +81,30 @@ export function DonorCreationForm({ onSuccess, onCancel }: DonorCreationFormProp
     setIsSubmitting(true);
     
     try {
-      const supabase = createClient();
-      
-      // Create new donor in the database
-      const { data, error } = await supabase
-        .from("donors")
-        .insert({
+      // Use the server API endpoint instead of direct Supabase client
+      const response = await fetch('/api/donors/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           name: formData.name,
           email: formData.email || null,
           phone: formData.phone || null
-        })
-        .select("id, name, email, phone")
-        .single();
+        }),
+      });
       
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create donor');
       }
+      
+      const data = await response.json();
       
       // Call success callback with the new donor
       if (onSuccess && data) {
         onSuccess(data);
       }
-      
-      // Close the form
-      setIsNewDonorFormOpen(false);
       
     } catch (err) {
       console.error("Error creating donor:", err);
@@ -122,7 +118,6 @@ export function DonorCreationForm({ onSuccess, onCancel }: DonorCreationFormProp
     if (onCancel) {
       onCancel();
     }
-    setIsNewDonorFormOpen(false);
   };
   
   return (

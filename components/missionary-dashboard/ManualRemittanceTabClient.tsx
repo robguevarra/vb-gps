@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, Suspense, lazy } from "react";
+import { useState, useEffect, Suspense, lazy, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 import { AlertCircle, CheckCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BulkOnlinePaymentWizardWrapper } from "@/components/missionary-dashboard/BulkOnlinePaymentWizardWrapper";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "react-error-boundary";
 
 interface ManualRemittanceTabClientProps {
   missionaryId: string;
@@ -35,8 +35,8 @@ export function ManualRemittanceTabClient({
   const [error, setError] = useState<string | null>(initialError || null);
   const shouldReduceMotion = useReducedMotion();
   
-  // Function to reset payment status
-  const handleResetPaymentStatus = () => {
+  // Function to reset payment status - memoized with useCallback
+  const handleResetPaymentStatus = useCallback(() => {
     setPaymentStatus("idle");
     setError(null);
     
@@ -55,7 +55,7 @@ export function ManualRemittanceTabClient({
         console.error("Error clearing interval:", err);
       }
     }
-  };
+  }, [missionaryId]);
 
   // Check for payment status on component mount and window focus
   useEffect(() => {
@@ -236,9 +236,10 @@ export function ManualRemittanceTabClient({
         localStorage.removeItem(`payment_polling_${missionaryId}`);
       }
     };
-  }, [missionaryId]);
+  }, [missionaryId, handleResetPaymentStatus]);
 
-  const handleBulkOnlineSuccess = () => {
+  // Memoized success handler
+  const handleBulkOnlineSuccess = useCallback(() => {
     // Set payment status to pending
     setPaymentStatus("pending");
     
@@ -252,9 +253,10 @@ export function ManualRemittanceTabClient({
       title: "Success",
       description: "Payment process initiated successfully",
     });
-  };
+  }, [missionaryId, toast]);
   
-  const handleBulkOnlineError = (error: string) => {
+  // Memoized error handler
+  const handleBulkOnlineError = useCallback((error: string) => {
     // Set payment status to failed
     setPaymentStatus("failed");
     setError(error);
@@ -270,10 +272,10 @@ export function ManualRemittanceTabClient({
       description: `Payment process failed: ${error}`,
       variant: "destructive"
     });
-  };
+  }, [missionaryId, toast]);
 
   // Function to get payment URL from localStorage
-  const getPaymentUrl = () => {
+  const getPaymentUrl = useCallback(() => {
     // First try to get the payment info which contains the direct link
     const paymentInfoStr = localStorage.getItem(`payment_${missionaryId}`);
     const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
@@ -326,9 +328,9 @@ export function ManualRemittanceTabClient({
     }
     
     return paymentUrl;
-  };
+  }, [missionaryId]);
 
-  // Animation variants
+  // Animation variants with reduced motion support
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { 
@@ -365,20 +367,20 @@ export function ManualRemittanceTabClient({
   };
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary fallback={<div className="p-4 text-red-500">An error occurred while loading the payment interface</div>}>
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col gap-6"
+        className="flex flex-col gap-4 sm:gap-6"
       >
-        <div className="flex flex-col gap-6 md:flex-row">
+        <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row">
           <motion.div 
             variants={itemVariants}
-            className="flex-1 space-y-4"
+            className="flex-1 space-y-3 sm:space-y-4"
           >
-            <h2 className="text-2xl font-semibold">Manual Remittance</h2>
-            <p className="text-muted-foreground text-sm">
+            <h2 className="text-xl sm:text-2xl font-semibold">Manual Remittance</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Generate a payment link to collect donations from multiple donors in a single transaction.
             </p>
             
@@ -392,10 +394,10 @@ export function ManualRemittanceTabClient({
                   exit="exit"
                   layout
                 >
-                  <Alert className="mb-4 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
+                  <Alert className="mb-3 sm:mb-4 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
                     <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                    <AlertTitle className="text-yellow-800 dark:text-yellow-300">Payment in progress</AlertTitle>
-                    <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+                    <AlertTitle className="text-sm sm:text-base text-yellow-800 dark:text-yellow-300">Payment in progress</AlertTitle>
+                    <AlertDescription className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400">
                       Your payment is being processed. Please complete the payment in the opened tab.
                       
                       {/* Payment link section */}
@@ -408,20 +410,20 @@ export function ManualRemittanceTabClient({
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               transition={{ delay: shouldReduceMotion ? 0 : 0.2 }}
-                              className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-md border border-yellow-200 dark:border-yellow-800"
+                              className="mt-2 sm:mt-3 p-2 sm:p-3 bg-white dark:bg-gray-800 rounded-md border border-yellow-200 dark:border-yellow-800"
                             >
-                              <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center">
-                                <AlertCircle className="h-3.5 w-3.5 mr-1.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 flex items-center">
+                                <AlertCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
                                 If the payment tab didn&apos;t open automatically:
                               </p>
                               <a 
                                 href={paymentUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="mt-2 flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-200 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 rounded-md transition-colors duration-200 border border-yellow-300 dark:border-yellow-700"
+                                className="mt-2 flex items-center justify-center w-full px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-200 dark:bg-yellow-900/40 dark:hover:bg-yellow-900/60 rounded-md transition-colors duration-200 border border-yellow-300 dark:border-yellow-700"
                               >
-                                <span className="mr-2">Open Payment Link</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link">
+                                <span className="mr-1 sm:mr-2">Open Payment Link</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link">
                                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                                   <polyline points="15 3 21 3 21 9"></polyline>
                                   <line x1="10" y1="14" x2="21" y2="3"></line>
@@ -438,7 +440,7 @@ export function ManualRemittanceTabClient({
                         whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
                         whileTap={shouldReduceMotion ? {} : { scale: 0.98 }}
                         onClick={handleResetPaymentStatus}
-                        className="block mt-3 text-sm text-yellow-600 dark:text-yellow-400 underline"
+                        className="block mt-2 sm:mt-3 text-xs sm:text-sm text-yellow-600 dark:text-yellow-400 underline"
                       >
                         Start a new payment
                       </motion.button>
@@ -504,11 +506,11 @@ export function ManualRemittanceTabClient({
             
             <motion.div 
               variants={itemVariants}
-              className="bg-white p-4 rounded-md shadow dark:bg-gray-800"
+              className="bg-white p-3 sm:p-4 rounded-md shadow dark:bg-gray-800"
             >
-              <h3 className="text-lg font-medium">Online Payment Instructions</h3>
-              <p className="text-sm mt-2 text-muted-foreground">
-                1. Enter the total amount to be collected.<br />
+              <h3 className="text-base sm:text-lg font-medium">Online Payment Instructions</h3>
+              <p className="text-xs sm:text-sm mt-2 text-muted-foreground">
+                1. Enter the total amount to be collected in Philippine Peso (₱).<br />
                 2. Add multiple donors with their contribution amounts.<br />
                 3. Click &quot;Pay Now&quot; to process the payment directly.<br />
                 4. Choose from multiple payment methods including credit/debit cards, e-wallets, bank transfers, and more.
@@ -518,9 +520,9 @@ export function ManualRemittanceTabClient({
           
           <motion.aside 
             variants={itemVariants}
-            className="w-full md:w-96 lg:w-[30rem]"
+            className="w-full lg:w-96 xl:w-[30rem] max-w-full"
           >
-            <div className="bg-white dark:bg-gray-800 rounded-md shadow p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-md shadow p-2 sm:p-4 overflow-hidden">
               {paymentStatus === "idle" ? (
                 <BulkOnlinePaymentWizardWrapper
                   missionaryId={missionaryId}
@@ -533,14 +535,14 @@ export function ManualRemittanceTabClient({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: shouldReduceMotion ? 0 : 0.3 }}
-                  className="p-4 text-center"
+                  className="p-3 sm:p-4 text-center"
                 >
-                  <h3 className="text-lg font-medium mb-4">
+                  <h3 className="text-base sm:text-lg font-medium mb-3 sm:mb-4">
                     {paymentStatus === "pending" ? "Payment in Progress" : 
                      paymentStatus === "completed" ? "Payment Completed" : 
                      "Payment Failed"}
                   </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
                     {paymentStatus === "pending" ? 
                       "Please complete your payment in the opened tab." : 
                      paymentStatus === "completed" ? 
@@ -551,7 +553,7 @@ export function ManualRemittanceTabClient({
                     whileHover={shouldReduceMotion ? {} : { scale: 1.02 }}
                     whileTap={shouldReduceMotion ? {} : { scale: 0.98 }}
                     onClick={handleResetPaymentStatus}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors duration-200"
                   >
                     Start New Payment
                   </motion.button>

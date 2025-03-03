@@ -86,11 +86,11 @@ export function WizardStepTwo({ onNext, onPrev, visible }: WizardStepTwoProps) {
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.3 }}
     >
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold">Step 2: Enter Donation Amounts</CardTitle>
+      <Card className="overflow-hidden">
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-lg sm:text-xl font-semibold">Step 2: Enter Donation Amounts</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
           {donorEntries.length > 0 ? (
             <>
               {donorEntries.map((entry, index) => {
@@ -98,28 +98,28 @@ export function WizardStepTwo({ onNext, onPrev, visible }: WizardStepTwoProps) {
                 if (!donor) return null;
                 
                 return (
-                  <div key={`${donor.id}-${index}`} className="p-4 border rounded-md">
+                  <div key={`${donor.id}-${index}`} className="p-3 border rounded-md">
                     <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-medium">{donor.name}</h3>
+                      <div className="flex-1 mr-2">
+                        <h3 className="font-medium text-sm sm:text-base truncate">{donor.name}</h3>
                         {donor.email && (
-                          <p className="text-sm text-gray-500">{donor.email}</p>
+                          <p className="text-xs sm:text-sm text-gray-500 truncate">{donor.email}</p>
                         )}
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => removeDonorEntry(index)}
-                        className="h-8 w-8 p-0 text-red-500"
+                        className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-red-500 flex-shrink-0"
                       >
-                        <Trash className="h-4 w-4" />
+                        <Trash className="h-3 w-3 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
                     
                     <div className="mt-2">
-                      <Label htmlFor={`amount-${index}`}>Donation Amount</Label>
+                      <Label htmlFor={`amount-${index}`} className="text-xs sm:text-sm">Donation Amount</Label>
                       <div className="relative mt-1">
-                        <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                        <span className="absolute left-2 top-2.5 h-4 w-4 text-gray-400">₱</span>
                         <Input
                           id={`amount-${index}`}
                           placeholder="0.00"
@@ -129,7 +129,7 @@ export function WizardStepTwo({ onNext, onPrev, visible }: WizardStepTwoProps) {
                         />
                       </div>
                       {errors[index] && (
-                        <p className="text-sm text-red-500 mt-1">{errors[index]}</p>
+                        <p className="text-xs sm:text-sm text-red-500 mt-1">{errors[index]}</p>
                       )}
                     </div>
                   </div>
@@ -137,31 +137,32 @@ export function WizardStepTwo({ onNext, onPrev, visible }: WizardStepTwoProps) {
               })}
 
               {/* Total amount */}
-              <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
                 <div className="flex justify-between items-center">
-                  <span className="font-medium">Total Amount:</span>
-                  <span className="text-lg font-bold">${totalAmount.toFixed(2)}</span>
+                  <span className="font-medium text-sm sm:text-base">Total Amount:</span>
+                  <span className="text-base sm:text-lg font-bold">₱{totalAmount.toFixed(2)}</span>
                 </div>
               </div>
             </>
           ) : (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
+              <AlertDescription className="text-xs sm:text-sm">
                 Please add at least one donor with a valid amount.
               </AlertDescription>
             </Alert>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between">
-          <Button variant="outline" onClick={onPrev}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
+        <CardFooter className="flex justify-between px-4 py-3 sm:px-6 sm:py-4">
+          <Button variant="outline" onClick={onPrev} className="text-xs sm:text-sm">
+            <ArrowLeft className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" /> Back
           </Button>
           <Button 
             onClick={handleNextStep} 
             disabled={donorEntries.length === 0 || totalAmount <= 0}
+            className="text-xs sm:text-sm"
           >
-            Next <ArrowRight className="ml-2 h-4 w-4" />
+            Next <ArrowRight className="ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </CardFooter>
       </Card>

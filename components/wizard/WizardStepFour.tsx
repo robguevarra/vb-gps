@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 interface WizardStepFourProps {
   onPrev: () => void;
   visible: boolean;
+  onSuccess?: () => void;
+  onError?: (error: string) => void;
 }
 
 /**
@@ -20,8 +22,13 @@ interface WizardStepFourProps {
  * 
  * Final step of the payment wizard where users process the payment.
  * This component handles payment link generation and displays the payment status.
+ * 
+ * @param onPrev - Function to navigate to the previous step
+ * @param visible - Whether this step is currently visible
+ * @param onSuccess - Optional callback for successful payment
+ * @param onError - Optional callback for payment errors
  */
-export function WizardStepFour({ onPrev, visible }: WizardStepFourProps) {
+export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardStepFourProps) {
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'completed' | 'failed'>('idle');
@@ -179,8 +186,14 @@ export function WizardStepFour({ onPrev, visible }: WizardStepFourProps) {
       
     } catch (err) {
       console.error('Error generating payment link:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate payment link');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate payment link';
+      setError(errorMessage);
       setPaymentStatus('failed');
+      
+      // Call the onError callback if provided
+      if (onError) {
+        onError(errorMessage);
+      }
     } finally {
       setIsGeneratingLink(false);
     }
@@ -188,7 +201,7 @@ export function WizardStepFour({ onPrev, visible }: WizardStepFourProps) {
   
   const startPaymentStatusPolling = (invoiceId: string) => {
     // Set up polling interval to check payment status
-    const pollingInterval = setInterval(async () => {
+    const interval = setInterval(async () => {
       try {
         const response = await fetch(`/api/xendit/check-invoice?invoiceId=${invoiceId}`);
         
@@ -200,31 +213,57 @@ export function WizardStepFour({ onPrev, visible }: WizardStepFourProps) {
         
         if (data.status === 'PAID' || data.status === 'SETTLED') {
           setPaymentStatus('completed');
-          clearInterval(pollingInterval);
+          clearInterval(interval);
           
           // Update localStorage
           localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
             status: 'completed',
             timestamp: new Date().toISOString()
           }));
+          
+          // Call the onSuccess callback if provided
+          if (onSuccess) {
+            onSuccess();
+          }
         } else if (data.status === 'EXPIRED' || data.status === 'FAILED') {
           setPaymentStatus('failed');
-          clearInterval(pollingInterval);
+          clearInterval(interval);
           
           // Update localStorage
           localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
             status: 'failed',
             timestamp: new Date().toISOString()
           }));
+          
+          // Call the onError callback if provided
+          if (onError) {
+            onError('Payment expired or failed');
+          }
         }
       } catch (err) {
         console.error('Error checking payment status:', err);
+        
+        // Don't call onError here as this is just a polling error, not a payment failure
       }
     }, 5000); // Check every 5 seconds
     
-    // Clean up interval on component unmount
-    return () => clearInterval(pollingInterval);
+    // Store the interval ID in state for cleanup
+    setPollingInterval(interval);
+    
+    // Also store it in localStorage for recovery after page refresh
+    localStorage.setItem(`payment_polling_${missionaryId}`, interval.toString());
+    
+    // No need to return cleanup function here as we're managing the interval in state
   };
+  
+  // Clean up polling interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   return (
     <motion.div
