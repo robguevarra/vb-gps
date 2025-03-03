@@ -174,9 +174,29 @@ async function resolveRecipientId(supabase: any, donationType: string, recipient
   }
 }
 
+// Handle OPTIONS requests for CORS preflight
+export async function OPTIONS(req: NextRequest) {
+  // Get the origin from the request headers
+  const origin = req.headers.get('origin') || '*';
+  
+  // Return a response with CORS headers
+  return new NextResponse(null, {
+    status: 204, // No content
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400', // 24 hours
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     console.log("create-invoicev2: Received request");
+    
+    // Get the origin from the request headers for CORS
+    const origin = req.headers.get('origin') || '*';
     
     // 1. Parse and validate request body
     const rawBody = await req.text();
@@ -189,7 +209,14 @@ export async function POST(req: NextRequest) {
       console.error("Failed to parse JSON:", e);
       return NextResponse.json(
         { error: "Invalid JSON", details: "The request body is not valid JSON" },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        }
       );
     }
     
@@ -201,7 +228,14 @@ export async function POST(req: NextRequest) {
       console.error("Validation error:", validationResult.error.format());
       return NextResponse.json(
         { error: "Invalid request data", details: validationResult.error.format() },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        }
       );
     }
     
@@ -265,11 +299,25 @@ export async function POST(req: NextRequest) {
           console.error("Failed to parse response JSON:", e);
           return NextResponse.json(
             { error: "Invalid response from create-invoice", details: responseText },
-            { status: 500 }
+            { 
+              status: 500,
+              headers: {
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+              },
+            }
           );
         }
         
-        return NextResponse.json(responseData, { status: response.status });
+        return NextResponse.json(responseData, { 
+          status: response.status,
+          headers: {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        });
       } catch (fetchError) {
         console.error("Fetch error:", fetchError);
         return NextResponse.json(
@@ -277,7 +325,14 @@ export async function POST(req: NextRequest) {
             error: "Failed to forward request", 
             details: fetchError instanceof Error ? fetchError.message : "Unknown fetch error" 
           },
-          { status: 500 }
+          { 
+            status: 500,
+            headers: {
+              'Access-Control-Allow-Origin': origin,
+              'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            },
+          }
         );
       }
     } catch (error) {
@@ -287,14 +342,31 @@ export async function POST(req: NextRequest) {
           error: "Failed to resolve recipient", 
           details: error instanceof Error ? error.message : "Unknown error" 
         },
-        { status: 404 }
+        { 
+          status: 404,
+          headers: {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          },
+        }
       );
     }
   } catch (error) {
     console.error("Unexpected error:", error);
+    // Get the origin from the request headers for CORS
+    const origin = req.headers.get('origin') || '*';
+    
     return NextResponse.json(
       { error: "Server error", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': origin,
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+      }
     );
   }
 }
