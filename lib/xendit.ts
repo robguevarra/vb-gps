@@ -219,17 +219,43 @@ export class XenditService {
         body: JSON.stringify(payload),
       });
       
-      // Parse the response
-      const data = await response.json();
+      console.log(`Xendit API response status: ${response.status} ${response.statusText}`);
       
-      console.log("Xendit API response received");
+      // Check if the response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.error("Xendit API returned non-JSON response:", textResponse);
+        throw new XenditError(
+          `Non-JSON response from Xendit API: ${response.status} ${response.statusText}`,
+          response.status,
+          'NON_JSON_RESPONSE'
+        );
+      }
+      
+      // Parse the response
+      let data;
+      try {
+        data = await response.json();
+        console.log("Xendit API response data:", JSON.stringify(data).substring(0, 500) + "...");
+      } catch (error) {
+        console.error("Error parsing Xendit API response:", error);
+        throw new XenditError(
+          'Failed to parse Xendit API response',
+          response.status,
+          'PARSE_ERROR'
+        );
+      }
+      
+      console.log("Xendit API response processed");
       
       // Handle error responses
       if (!response.ok) {
         console.error("Xendit API Error:", {
           status: response.status,
           statusText: response.statusText,
-          error_code: data.error_code || 'unknown'
+          error_code: data.error_code || 'unknown',
+          error_message: data.message || 'No error message provided'
         });
         
         // Enhanced error handling for payment method errors
@@ -242,6 +268,28 @@ export class XenditService {
             errorMsg,
             response.status,
             data.error_code,
+            data
+          );
+        }
+        
+        // Handle API key errors
+        if (data.error_code === 'API_VALIDATION_ERROR' || data.error_code === 'AUTHENTICATION_ERROR') {
+          console.error("API validation or authentication error");
+          throw new XenditError(
+            data.message || 'API key validation failed',
+            response.status,
+            data.error_code,
+            data
+          );
+        }
+        
+        // Handle rate limiting
+        if (response.status === 429) {
+          console.error("Rate limit exceeded");
+          throw new XenditError(
+            'Too many requests to payment gateway. Please try again later.',
+            response.status,
+            'RATE_LIMIT_EXCEEDED',
             data
           );
         }

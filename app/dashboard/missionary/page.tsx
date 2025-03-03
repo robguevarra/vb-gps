@@ -21,7 +21,7 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
-import { OverviewTab } from "@/components/missionary-dashboard/OverviewTab";
+import OverviewTab from "@/components/missionary-dashboard/OverviewTab";
 import { RequestHistoryTabWrapper } from "@/components/missionary-dashboard/RequestHistoryTab";
 import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/ApprovalsTab";
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
@@ -30,78 +30,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PageTransition } from "@/components/PageTransition";
 import { DashboardTabWrapper } from "@/components/DashboardTabWrapper";
 import { AnimatedHeader } from "@/components/AnimatedHeader";
-import { Suspense } from "react";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LoadingSpinner } from "@/components/LoadingSpinner";
-
-// Separate data fetching function for better organization and reusability
-async function fetchDashboardData(userId: string, userIdParam?: string) {
-  const supabase = await createClient();
-  
-  // Get user role and check superadmin status
-  const userRole = await getUserRole(userId);
-  const isSuperAdmin = userRole === "superadmin";
-
-  // Fetch profile and church data in parallel with proper error handling
-  const [profileResult, churchResult] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userIdParam || userId)
-      .single(),
-    supabase
-      .from("local_churches")
-      .select("name")
-  ]);
-
-  // Handle potential errors in data fetching
-  if (profileResult.error) {
-    throw new Error(`Failed to fetch profile data: ${profileResult.error.message}`);
-  }
-
-  if (churchResult.error) {
-    throw new Error(`Failed to fetch church data: ${churchResult.error.message}`);
-  }
-
-  // Extract data and handle errors
-  const fetchedProfileData = profileResult.data;
-  const churchData = churchResult.data?.[0];
-
-  // Create default profile for superadmin if needed
-  const profileData = fetchedProfileData || (isSuperAdmin
-    ? {
-        id: userId,
-        full_name: userId,
-        role: "superadmin",
-        local_church_id: null,
-        monthly_goal: 0,
-        surplus_balance: 0,
-      }
-    : null);
-
-  if (!profileData) {
-    throw new Error("Profile data not found");
-  }
-
-  const churchName = churchData?.name || (isSuperAdmin ? "All Churches" : "Unknown Church");
-  const isCampusDirector = profileData.role === "campus_director";
-  
-  return {
-    profileData,
-    churchName,
-    isCampusDirector,
-    isSuperAdmin
-  };
-}
-
-// Loading component for tab content
-function TabContentSkeleton() {
-  return (
-    <div className="w-full h-[400px] flex items-center justify-center">
-      <LoadingSpinner size="lg" />
-    </div>
-  );
-}
 
 export default async function MissionaryDashboard({
   searchParams,
@@ -125,17 +53,44 @@ export default async function MissionaryDashboard({
     redirect("/login");
   }
 
-  // Fetch dashboard data with error handling
-  let dashboardData;
-  try {
-    dashboardData = await fetchDashboardData(user.id, userIdParam);
-  } catch (error) {
-    console.error("Error fetching dashboard data:", error);
-    // You might want to redirect to an error page or show an error message
-    throw error;
+  // Get user role and check superadmin status
+  const userRole = await getUserRole(user.id);
+  const isSuperAdmin = userRole === "superadmin";
+
+  // Only fetch essential profile and church data
+  const [profileResult, churchResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userIdParam || user.id)
+      .single(),
+    supabase
+      .from("local_churches")
+      .select("name")
+  ]);
+
+  // Extract data and handle errors
+  const fetchedProfileData = profileResult.data;
+  const churchData = churchResult.data?.[0];
+
+  // Create default profile for superadmin if needed
+  const profileData = fetchedProfileData || (isSuperAdmin
+    ? {
+        id: user.id,
+        full_name: user.email,
+        role: "superadmin",
+        local_church_id: null,
+        monthly_goal: 0,
+        surplus_balance: 0,
+      }
+    : null);
+
+  if (!profileData) {
+    redirect("/login");
   }
 
-  const { profileData, churchName, isCampusDirector, isSuperAdmin } = dashboardData;
+  const churchName = churchData?.name || (isSuperAdmin ? "All Churches" : "Unknown Church");
+  const isCampusDirector = profileData.role === "campus_director";
   
   // Check if user should have access to campus director tabs
   const hasAccessToCampusDirectorTabs = isCampusDirector || isSuperAdmin;
@@ -181,84 +136,71 @@ export default async function MissionaryDashboard({
     }
   };
 
-  // Determine which tab content to render with proper error boundaries and loading states
+  // Determine which tab content to render
   const renderTabContent = () => {
-    const tabContent = (() => {
-      switch(currentTab) {
-        case "overview":
+    switch(currentTab) {
+      case "overview":
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+          />
+        );
+      case "history":
+        return (
+          <RequestHistoryTabWrapper
+            missionaryId={userIdParam || user.id}
+          />
+        );
+      case "approvals":
+        // Only render approvals tab for campus directors and superadmins
+        if (hasAccessToCampusDirectorTabs) {
           return (
-            <OverviewTab 
-              missionaryId={userIdParam || user.id}
-              profileData={profileData}
-              isSuperAdmin={isSuperAdmin}
+            <ApprovalsTabWrapper
+              campusDirectorId={profileData.id}
             />
           );
-        case "history":
+        }
+        // If not authorized, default to overview
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+          />
+        );
+      case "manual-remittance":
+        return (
+          <ManualRemittanceTabWrapper
+            missionaryId={userIdParam || user.id}
+          />
+        );
+      case "reports":
+        return (
+          <ReportsTabWrapper
+            missionaryId={userIdParam || user.id}
+          />
+        );
+      case "staff-reports":
+        // Only render staff reports tab for campus directors and superadmins
+        if (hasAccessToCampusDirectorTabs) {
           return (
-            <RequestHistoryTabWrapper
-              missionaryId={userIdParam || user.id}
-            />
+            <TooltipProvider>
+              <ChurchReportsTab churchIds={[profileData.local_church_id]} />
+            </TooltipProvider>
           );
-        case "approvals":
-          if (hasAccessToCampusDirectorTabs) {
-            return (
-              <ApprovalsTabWrapper
-                campusDirectorId={profileData.id}
-              />
-            );
-          }
-          return (
-            <OverviewTab 
-              missionaryId={userIdParam || user.id}
-              profileData={profileData}
-              isSuperAdmin={isSuperAdmin}
-            />
-          );
-        case "manual-remittance":
-          return (
-            <ManualRemittanceTabWrapper
-              missionaryId={userIdParam || user.id}
-            />
-          );
-        case "reports":
-          return (
-            <ReportsTabWrapper
-              missionaryId={userIdParam || user.id}
-            />
-          );
-        case "staff-reports":
-          if (hasAccessToCampusDirectorTabs) {
-            return (
-              <TooltipProvider>
-                <ChurchReportsTab churchIds={[profileData.local_church_id]} />
-              </TooltipProvider>
-            );
-          }
-          return (
-            <OverviewTab 
-              missionaryId={userIdParam || user.id}
-              profileData={profileData}
-              isSuperAdmin={isSuperAdmin}
-            />
-          );
-        default:
-          return (
-            <OverviewTab 
-              missionaryId={userIdParam || user.id}
-              profileData={profileData}
-              isSuperAdmin={isSuperAdmin}
-            />
-          );
-      }
-    })();
-
-    return (
-      <ErrorBoundary fallback={<div>Something went wrong. Please try again.</div>}>
-        <Suspense fallback={<TabContentSkeleton />}>
-          {tabContent}
-        </Suspense>
-      </ErrorBoundary>
-    );
+        }
+        // If not authorized, default to overview
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+          />
+        );
+      default:
+        // Default to overview if tab is not recognized
+        return (
+          <OverviewTab 
+            missionaryId={userIdParam || user.id}
+          />
+        );
+    }
   };
 
   const { title, subtitle } = getTabInfo();

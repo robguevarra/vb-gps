@@ -20,6 +20,7 @@ import Navbar from "@/components/navbar";
 import { Sidebar as MissionarySidebar } from "@/components/Sidebar";
 import SuperAdminSidebar from "@/components/SuperAdminSidebar";
 import { createClient } from "@/utils/supabase/client";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -77,7 +78,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Main content area - grows to fill available space */}
         <main className="flex-1 p-4 pt-16">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

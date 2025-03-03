@@ -40,12 +40,30 @@ const createInvoiceSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  console.log("📌 API: /api/xendit/create-invoice - Request received");
+  
   try {
     // 1. Parse and validate request body
-    const body = await req.json();
+    const rawBody = await req.text();
+    console.log("📌 Request body:", rawBody);
+    
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error("📌 JSON parse error:", parseError);
+      return NextResponse.json(
+        { error: "Invalid JSON in request body", details: parseError instanceof Error ? parseError.message : "Unknown parsing error" },
+        { status: 400 }
+      );
+    }
+    
+    console.log("📌 Parsed body:", body);
+    
     const validationResult = createInvoiceSchema.safeParse(body);
     
     if (!validationResult.success) {
+      console.error("📌 Validation error:", validationResult.error.format());
       return NextResponse.json(
         { error: "Invalid request data", details: validationResult.error.format() },
         { status: 400 }
@@ -53,8 +71,17 @@ export async function POST(req: NextRequest) {
     }
     
     const { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes, success_redirect_url } = validationResult.data;
+    console.log("📌 Validated data:", { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes, success_redirect_url });
     
     // 2. Create a Supabase client with service role to bypass RLS and permission issues
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("📌 Missing Supabase environment variables");
+      return NextResponse.json(
+        { error: "Server configuration error", details: "Missing Supabase credentials" },
+        { status: 500 }
+      );
+    }
+    
     const supabase = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -64,37 +91,64 @@ export async function POST(req: NextRequest) {
     let recipientName = "";
     
     if (donationType === "missionary") {
-      const { data: missionary } = await supabase
+      const { data: missionary, error: missionaryError } = await supabase
         .from("profiles")
         .select("full_name")
         .eq("id", recipientId)
         .single();
+      
+      if (missionaryError) {
+        console.error("📌 Error fetching missionary:", missionaryError);
+        return NextResponse.json(
+          { error: "Failed to fetch missionary details", details: missionaryError.message },
+          { status: 500 }
+        );
+      }
         
       recipientName = missionary?.full_name || "Missionary";
     } else {
-      const { data: church } = await supabase
+      const { data: church, error: churchError } = await supabase
         .from("local_churches")
         .select("name")
         .eq("id", recipientId)
         .single();
+      
+      if (churchError) {
+        console.error("📌 Error fetching church:", churchError);
+        return NextResponse.json(
+          { error: "Failed to fetch church details", details: churchError.message },
+          { status: 500 }
+        );
+      }
         
       recipientName = church?.name || "Church";
     }
     
+    console.log("📌 Recipient name:", recipientName);
+    
     // 4. Create or get donor record
     let donorId: number; // Change type to number for PostgreSQL BIGINT compatibility
     
-    const { data: existingDonor } = await supabase
+    const { data: existingDonor, error: donorQueryError } = await supabase
       .from("donors")
       .select("id")
       .eq("email", donor.email)
       .maybeSingle();
+    
+    if (donorQueryError) {
+      console.error("📌 Error querying donor:", donorQueryError);
+      return NextResponse.json(
+        { error: "Failed to query donor record", details: donorQueryError.message },
+        { status: 500 }
+      );
+    }
       
     if (existingDonor) {
       donorId = parseInt(existingDonor.id); // Convert to number
+      console.log("📌 Using existing donor:", donorId);
       
       // Update donor info if needed
-      await supabase
+      const { error: updateError } = await supabase
         .from("donors")
         .update({
           name: donor.name,
@@ -102,7 +156,13 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", donorId);
+      
+      if (updateError) {
+        console.error("📌 Error updating donor:", updateError);
+        // Non-critical error, continue with existing donor data
+      }
     } else {
+      console.log("📌 Creating new donor");
       // Create new donor
       const { data: newDonor, error: donorError } = await supabase
         .from("donors")
@@ -115,16 +175,21 @@ export async function POST(req: NextRequest) {
         .single();
         
       if (donorError || !newDonor) {
+        console.error("📌 Error creating donor:", donorError);
         return NextResponse.json(
-          { error: "Failed to create donor record", details: donorError },
+          { error: "Failed to create donor record", details: donorError?.message || "Unknown error" },
           { status: 500 }
         );
       }
       
       donorId = parseInt(newDonor.id); // Convert to number
+      console.log("📌 Created new donor:", donorId);
     }
+    
     // Generate a unique reference ID for tracking this transaction
     const referenceId = `${donorId}_${Date.now()}`;
+    console.log("📌 Generated reference ID:", referenceId);
+    
     // 5. Create payment transaction record
     const { data: transaction, error: transactionError } = await supabase
       .from("payment_transactions")
@@ -151,11 +216,14 @@ export async function POST(req: NextRequest) {
       .single();
       
     if (transactionError || !transaction) {
+      console.error("📌 Error creating transaction:", transactionError);
       return NextResponse.json(
-        { error: "Failed to create transaction record", details: transactionError },
+        { error: "Failed to create transaction record", details: transactionError?.message || "Unknown error" },
         { status: 500 }
       );
     }
+    
+    console.log("📌 Created transaction record:", transaction.id);
     
     // IMPORTANT: We don't create the donor_donations record at this point.
     // It will be created by the webhook handler when payment is confirmed.
@@ -163,6 +231,7 @@ export async function POST(req: NextRequest) {
     // 6. Create invoice item record without donor_donation reference
     // For bulk donations, we don't create invoice items since we'll use payment_details
     const isBulkDonation = payment_details?.isBulkDonation === true;
+    console.log("📌 Is bulk donation:", isBulkDonation);
     
     // Declare invoiceItem variable outside the conditional block
     let invoiceItem: { id: string } | null = null;
@@ -178,14 +247,17 @@ export async function POST(req: NextRequest) {
       }).select("id").single();
       
       if (invoiceItemError) {
+        console.error("📌 Error creating invoice item:", invoiceItemError);
         return NextResponse.json(
-          { error: "Failed to create invoice item", details: invoiceItemError },
+          { error: "Failed to create invoice item", details: invoiceItemError.message },
           { status: 500 }
         );
       }
       
       invoiceItem = data;
+      console.log("📌 Created invoice item:", invoiceItem?.id);
     } else {
+      console.log("📌 Skipping invoice item creation for bulk donation");
     }
     
     // 7. Call Xendit API to create invoice
@@ -194,6 +266,7 @@ export async function POST(req: NextRequest) {
         !process.env.XENDIT_CALLBACK_URL || 
         !process.env.XENDIT_SUCCESS_REDIRECT_URL || 
         !process.env.XENDIT_FAILURE_REDIRECT_URL) {
+      console.error("📌 Missing Xendit environment variables");
       return NextResponse.json(
         { error: "Xendit configuration error", details: "Missing required environment variables" },
         { status: 500 }
@@ -219,10 +292,18 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    console.log(`Using success redirect URL: ${successRedirectUrl}`);
+    console.log(`📌 Using success redirect URL: ${successRedirectUrl}`);
     
     // Determine the appropriate failure redirect URL
     const failureRedirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/failure?ref=${referenceId}`;
+    
+    if (!process.env.XENDIT_SECRET_KEY || !process.env.XENDIT_WEBHOOK_SECRET) {
+      console.error("📌 Missing Xendit API keys");
+      return NextResponse.json(
+        { error: "Xendit API configuration error", details: "Missing API keys" },
+        { status: 500 }
+      );
+    }
     
     const xenditService = new XenditService(
       process.env.XENDIT_SECRET_KEY!,
@@ -233,6 +314,14 @@ export async function POST(req: NextRequest) {
     );
     
     try {
+      console.log("📌 Creating Xendit invoice with params:", {
+        externalId: referenceId,
+        amount,
+        payerEmail: donor.email,
+        payerName: donor.name,
+        description: `Donation to ${recipientName}${isAnonymous ? ' (Anonymous)' : ''}`,
+      });
+      
       // Create invoice with Xendit
       const invoice = await xenditService.createInvoice({
         externalId: referenceId,
@@ -256,10 +345,10 @@ export async function POST(req: NextRequest) {
         ]
       });
       
-      console.log(`Xendit invoice created successfully`);
+      console.log(`📌 Xendit invoice created successfully:`, invoice.id);
       
       // 8. Update payment_transactions with invoice details
-      await supabase
+      const { error: updateTransactionError } = await supabase
         .from("payment_transactions")
         .update({
           invoice_id: invoice.id,
@@ -267,6 +356,11 @@ export async function POST(req: NextRequest) {
           expires_at: new Date(invoice.expiry_date).toISOString(),
         })
         .eq("id", transaction.id);
+      
+      if (updateTransactionError) {
+        console.error("📌 Error updating transaction with invoice details:", updateTransactionError);
+        // Non-critical error, continue with response
+      }
         
       // 9. Update invoice_items with Xendit invoice ID
       if (invoiceItem?.id) {
@@ -278,9 +372,9 @@ export async function POST(req: NextRequest) {
           .eq("id", invoiceItem.id);
           
         if (updateItemError) {
-          console.error(`Failed to update invoice item:`, updateItemError.code);
+          console.error(`📌 Failed to update invoice item:`, updateItemError.code);
         } else {
-          console.log(`Updated invoice item successfully`);
+          console.log(`📌 Updated invoice item successfully`);
         }
         
         // Double-check that the invoice item was updated correctly
@@ -290,32 +384,38 @@ export async function POST(req: NextRequest) {
           .eq("id", invoiceItem.id)
           .single();
           
-        console.log(`Verified invoice item update`);
+        console.log(`📌 Verified invoice item update`);
       } else {
-        console.log(`No invoice item to update - bulk donation mode`);
+        console.log(`📌 No invoice item to update - bulk donation mode`);
       }
       
       // 10. Return success with invoice URL
-      return NextResponse.json({
+      const response = {
         success: true,
         invoiceUrl: invoice.invoice_url,
         invoiceId: invoice.id,
         expiryDate: invoice.expiry_date,
-      });
+      };
+      
+      console.log("📌 Returning success response:", response);
+      
+      return NextResponse.json(response);
     } catch (xenditError) {
-      console.error("Xendit API error occurred");
+      console.error("📌 Xendit API error occurred:", xenditError);
       // Try to extract more detailed error message from Xendit
       let errorDetails = "Unknown error";
       let statusCode = 500;
+      let errorCode = "UNKNOWN_ERROR";
       
       if (xenditError instanceof Error) {
         errorDetails = xenditError.message;
         // Log the full error stack for debugging
-        console.error("Error details:", xenditError.name);
+        console.error("📌 Error details:", xenditError.name, xenditError.stack);
         
         // Check for specific Xendit error types
         if (xenditError.name === 'XenditError' && 'xenditErrorCode' in xenditError) {
           const xenditSpecificError = xenditError as any;
+          errorCode = xenditSpecificError.xenditErrorCode || "XENDIT_ERROR";
           
           // Handle payment method errors specifically
           if (xenditSpecificError.xenditErrorCode === 'UNAVAILABLE_PAYMENT_METHOD_ERROR') {
@@ -325,16 +425,27 @@ export async function POST(req: NextRequest) {
         }
       }
       
+      // Ensure we always return a structured error response
       return NextResponse.json(
-        { error: "Failed to create invoice", details: errorDetails },
+        { 
+          success: false,
+          error: "Failed to create invoice", 
+          details: errorDetails,
+          errorCode: errorCode
+        },
         { status: statusCode }
       );
     }
     
   } catch (error) {
-    console.error("Error creating invoice:", error);
+    console.error("📌 Unhandled error creating invoice:", error);
     return NextResponse.json(
-      { error: "Failed to create invoice", details: error instanceof Error ? error.message : "Unknown error" },
+      { 
+        success: false,
+        error: "Failed to create invoice", 
+        details: error instanceof Error ? error.message : "Unknown error",
+        errorCode: "SERVER_ERROR"
+      },
       { status: 500 }
     );
   }

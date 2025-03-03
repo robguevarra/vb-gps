@@ -4,6 +4,8 @@ import { Inter } from 'next/font/google'
 import '../styles/globals.css'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ReactQueryProvider } from '@/components/providers/ReactQueryProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -29,7 +31,11 @@ export default function RootLayout({
         )}
       >
         {/* No sidebar spacing here. Only global UI (like a global <Navbar> if you want it on non-dashboard pages too). */}
-        {children}
+        <ReactQueryProvider>
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
+        </ReactQueryProvider>
         <Toaster />
       </body>
     </html>

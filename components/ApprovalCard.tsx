@@ -12,12 +12,15 @@
  * - Real-time status updates via Supabase
  * - Color-coded status indicators for quick recognition
  * - Loading states and error handling
+ * - Enhanced animations and micro-interactions
+ * - Accessibility improvements
  * 
  * Performance Considerations:
  * - Optimistic updates for better UX
  * - Proper cleanup of database listeners
  * - Efficient modal state management
  * - Debounced database operations
+ * - Respects user motion preferences
  * 
  * Error Handling:
  * - Graceful error states with user feedback
@@ -43,9 +46,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import { motion, useReducedMotion } from 'framer-motion';
 
 /**
  * Props interface for the ApprovalCard component
@@ -80,6 +84,7 @@ export function ApprovalCard({
   // Initialize Supabase client for real-time database operations
   const supabase = createClient();
   const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
 
   // State management for modal and form
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -87,6 +92,7 @@ export function ApprovalCard({
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isHovered, setIsHovered] = useState(false);
 
   /**
    * Opens the confirmation modal for the specified action
@@ -185,19 +191,60 @@ export function ApprovalCard({
     }
   };
 
+  // Get status color based on current status
+  const getStatusColor = () => {
+    switch (currentStatus) {
+      case 'approved':
+        return 'text-green-600 dark:text-green-400';
+      case 'rejected':
+        return 'text-red-600 dark:text-red-400';
+      default:
+        return 'text-yellow-600 dark:text-yellow-400';
+    }
+  };
+
+  // Card hover animation variants
+  const cardVariants = {
+    initial: { 
+      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+      backgroundColor: 'var(--background)'
+    },
+    hover: shouldReduceMotion ? {} : { 
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+      backgroundColor: 'var(--accent)',
+      scale: 1.01,
+      transition: { duration: 0.2 }
+    }
+  };
+
+  // Button hover animation variants
+  const buttonVariants = {
+    initial: {},
+    hover: shouldReduceMotion ? {} : { 
+      scale: 1.05,
+      transition: { duration: 0.2 }
+    },
+    tap: shouldReduceMotion ? {} : { 
+      scale: 0.95,
+      transition: { duration: 0.1 }
+    }
+  };
+
   return (
-    <div className="p-4 bg-background rounded-lg border flex justify-between items-center mb-4">
+    <motion.div 
+      className="p-4 bg-background rounded-lg border flex justify-between items-center mb-4"
+      initial="initial"
+      whileHover="hover"
+      variants={cardVariants}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
+      transition={{ duration: 0.2 }}
+    >
       {/* Request Information */}
-      <div>
+      <div className="flex-1">
         <p className="font-medium">
           {requestType === 'leave' ? 'Leave Request' : 'Surplus Request'} by {filedBy}
-          <span className={`ml-2 text-sm ${
-            currentStatus === 'approved'
-              ? 'text-green-600'
-              : currentStatus === 'rejected'
-              ? 'text-red-600'
-              : 'text-yellow-600'
-          }`}>
+          <span className={`ml-2 text-sm ${getStatusColor()}`}>
             ({currentStatus})
           </span>
         </p>
@@ -205,49 +252,114 @@ export function ApprovalCard({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => handleOpenModal('approve')}>
-          Approve
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => handleOpenModal('reject')}>
-          Reject
-        </Button>
+      <div className="flex gap-2 ml-4">
+        <motion.div
+          variants={buttonVariants}
+          whileHover="hover"
+          whileTap="tap"
+        >
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleOpenModal('approve')}
+            className="flex items-center gap-1 transition-colors duration-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200 dark:hover:bg-green-900/20 dark:hover:text-green-400 dark:hover:border-green-800"
+            aria-label="Approve request"
+          >
+            <CheckCircle className={`h-4 w-4 ${isHovered ? 'text-green-500' : ''}`} />
+            <span>Approve</span>
+          </Button>
+        </motion.div>
+        <motion.div
+          variants={buttonVariants}
+          whileHover="hover"
+          whileTap="tap"
+        >
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleOpenModal('reject')}
+            className="flex items-center gap-1 transition-colors duration-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:hover:border-red-800"
+            aria-label="Reject request"
+          >
+            <XCircle className={`h-4 w-4 ${isHovered ? 'text-red-500' : ''}`} />
+            <span>Reject</span>
+          </Button>
+        </motion.div>
       </div>
 
       {/* Confirmation Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              Confirm {actionType === "approve" ? "Approval" : "Rejection"}
+            <DialogTitle className="flex items-center gap-2">
+              {actionType === "approve" ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-500" />
+              )}
+              <span>
+                Confirm {actionType === "approve" ? "Approval" : "Rejection"}
+              </span>
             </DialogTitle>
             <DialogDescription>
               Are you sure you want to {actionType} this {requestType} request from {filedBy}?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <p><strong>Filed by:</strong> {filedBy}</p>
-            <p><strong>Details:</strong> {formattedDetails()}</p>
+            <div className="bg-muted p-3 rounded-md">
+              <p><strong>Filed by:</strong> {filedBy}</p>
+              <p className="mt-1"><strong>Details:</strong> {formattedDetails()}</p>
+            </div>
             <div className="space-y-2">
-              <Label>Optional Notes</Label>
+              <Label htmlFor="approval-notes">Optional Notes</Label>
               <Textarea
+                id="approval-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes (optional)"
+                className="min-h-[100px]"
               />
             </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && (
+              <motion.p 
+                className="text-red-500 text-sm p-2 border border-red-200 rounded bg-red-50 dark:bg-red-900/20 dark:border-red-800"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {error}
+              </motion.p>
+            )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsModalOpen(false)}
+                className="transition-all duration-200 hover:bg-muted"
+              >
                 Cancel
               </Button>
-              <Button onClick={handleAction} disabled={loading}>
-                {loading ? <Loader2 className="animate-spin" /> : 'Confirm'}
+              <Button 
+                onClick={handleAction} 
+                disabled={loading}
+                className={`transition-all duration-200 ${
+                  actionType === "approve" 
+                    ? "bg-green-600 hover:bg-green-700 text-white" 
+                    : "bg-red-600 hover:bg-red-700 text-white"
+                }`}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : actionType === "approve" ? (
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                ) : (
+                  <XCircle className="h-4 w-4 mr-2" />
+                )}
+                {loading ? 'Processing...' : 'Confirm'}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }

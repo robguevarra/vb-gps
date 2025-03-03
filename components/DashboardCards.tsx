@@ -9,12 +9,14 @@
  * - Active Partners count
  * - New Partners count
  * 
- * Performance Optimizations:
- * 1. Memoized card configurations and calculations
- * 2. CSS-based animations for better performance
- * 3. Proper loading states with skeletons
- * 4. Optimized re-renders with useMemo and useCallback
- * 5. Type-safe data handling
+ * Features:
+ * - Responsive grid layout (1 column on mobile, 4 on large screens)
+ * - Progress bar for monthly goal tracking
+ * - Currency formatting for monetary values
+ * - Color-coded indicators
+ * - Hover animations
+ * - Shows percentages above 100% when donations exceed monthly goal
+ * - Enhanced animations with staggered card reveals
  * 
  * @component
  */
@@ -24,7 +26,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { TrendingUp, Wallet, Users, UserPlus } from "lucide-react"
-import { memo, useMemo, useCallback } from "react"
+import { motion } from "framer-motion"
+import { useEffect, useState } from "react"
 
 interface DashboardCardsProps {
   /** Monthly donation goal for the missionary */
@@ -37,8 +40,6 @@ interface DashboardCardsProps {
   surplusBalance: number;
   /** Number of new partners this month */
   newPartnersCount: number;
-  /** Loading state for the component */
-  isLoading?: boolean;
 }
 
 // Define the card type to ensure type safety
@@ -51,137 +52,32 @@ interface DashboardCard {
   icon: React.ElementType;
 }
 
-/**
- * Skeleton component for loading state
- */
-function DashboardCardSkeleton() {
-  return (
-    <Card className="h-full animate-pulse">
-      <div className="p-6 h-full flex flex-col">
-        <div className="flex items-center justify-between">
-          <div className="h-10 w-10 rounded-full bg-gray-200" />
-          <div className="h-6 w-16 bg-gray-200 rounded" />
-        </div>
-        <div className="mt-4 space-y-2">
-          <div className="h-4 w-24 bg-gray-200 rounded" />
-          <div className="h-8 w-32 bg-gray-200 rounded" />
-        </div>
-        <div className="mt-4">
-          <div className="h-2 w-full bg-gray-200 rounded" />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-/**
- * Individual dashboard card component with memoization
- */
-const DashboardCard = memo(function DashboardCard({ 
-  card 
-}: { 
-  card: DashboardCard 
-}) {
-  const formattedValue = useMemo(() => {
-    return card.isCurrency 
-      ? `₱${(card.value ?? 0).toLocaleString()}` 
-      : (card.value ?? 0).toLocaleString();
-  }, [card.value, card.isCurrency]);
-
-  const progressBarStyle = useMemo(() => {
-    if (card.progress === undefined) return {};
-    return {
-      width: `${Math.min(card.progress, 100)}%`,
-      transition: 'width 1.2s ease-out'
-    };
-  }, [card.progress]);
-
-  return (
-    <Card className="h-full relative overflow-hidden transition-all hover:shadow-lg border-2 border-transparent hover:border-accent/50 dark:hover:border-accent/30">
-      <div className="p-6 h-full flex flex-col">
-        {/* Card Header with Icon and Progress */}
-        <div className="flex items-center justify-between">
-          <div
-            className={cn(
-              "p-2 rounded-full transition-transform hover:scale-110",
-              card.variant === "blue" ? "bg-blue-100 text-blue-600" :
-              card.variant === "emerald" ? "bg-emerald-100 text-emerald-600" :
-              card.variant === "indigo" ? "bg-indigo-100 text-indigo-600" :
-              "bg-teal-100 text-teal-600"
-            )}
-          >
-            <card.icon className="h-6 w-6" />
-          </div>
-          {card.progress !== undefined && (
-            <span 
-              className={cn(
-                "text-lg font-semibold",
-                card.variant === "blue" ? "text-blue-600" :
-                card.variant === "emerald" ? "text-emerald-600" :
-                card.variant === "indigo" ? "text-indigo-600" :
-                "text-teal-600"
-              )}
-            >
-              {card.progress.toFixed(1)}%
-            </span>
-          )}
-        </div>
-        
-        {/* Card Content with Title and Value */}
-        <div className="mt-4 space-y-1 flex-grow">
-          <h3 className="text-sm font-medium text-muted-foreground">
-            {card.title}
-          </h3>
-          <p className="text-2xl font-bold tracking-tight">
-            {formattedValue}
-          </p>
-        </div>
-
-        {/* Progress Bar (only for Monthly Goal) */}
-        {card.progress !== undefined && (
-          <div className="mt-4">
-            <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-1000",
-                  card.variant === "blue" ? "bg-blue-500" :
-                  card.variant === "emerald" ? "bg-emerald-500" :
-                  card.variant === "indigo" ? "bg-indigo-500" :
-                  "bg-teal-500"
-                )}
-                style={progressBarStyle}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-});
-
-/**
- * Main DashboardCards component with optimized rendering
- */
 export default function DashboardCards({
   monthlyGoal,
   currentDonations,
   currentPartnersCount,
   surplusBalance,
   newPartnersCount,
-  isLoading = false,
 }: DashboardCardsProps) {
+  // State to track if animation should start
+  const [shouldAnimate, setShouldAnimate] = useState(false);
+  
+  // Start animation after component mounts
+  useEffect(() => {
+    setShouldAnimate(true);
+  }, []);
+
   // Calculate progress percentage, ensuring we don't divide by zero
-  const progressPercentage = useMemo(() => 
-    monthlyGoal > 0 ? (currentDonations / monthlyGoal) * 100 : 0,
-    [monthlyGoal, currentDonations]
-  );
+  const progressPercentage = monthlyGoal > 0 
+    ? (currentDonations / monthlyGoal) * 100 
+    : 0;
 
   // Define card configurations with their respective properties
-  const cards = useMemo<DashboardCard[]>(() => [
+  const cards: DashboardCard[] = [
     {
       title: "Monthly Goal",
       value: monthlyGoal ?? 0,
-      progress: progressPercentage,
+      progress: progressPercentage, // Use the safely calculated percentage
       variant: "blue",
       isCurrency: true,
       icon: TrendingUp
@@ -214,24 +110,166 @@ export default function DashboardCards({
       isCurrency: true,
       icon: Wallet
     }
-  ], [monthlyGoal, currentDonations, currentPartnersCount, newPartnersCount, surplusBalance, progressPercentage]);
+  ]
 
-  if (isLoading) {
-    return (
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[...Array(5)].map((_, i) => (
-          <DashboardCardSkeleton key={i} />
-        ))}
-      </div>
-    );
-  }
+  // Animation variants for container
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.1
+      }
+    }
+  };
+
+  // Animation variants for individual cards
+  const cardVariants = {
+    hidden: { 
+      opacity: 0, 
+      y: 20,
+    },
+    show: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20
+      }
+    }
+  };
+
+  // Animation variants for progress bar
+  const progressVariants = {
+    hidden: { width: "0%" },
+    show: (progress: number) => ({
+      width: `${Math.min(progress, 100)}%`,
+      transition: {
+        duration: 1.2,
+        ease: "easeOut",
+        delay: 0.3
+      }
+    })
+  };
+
+  // Animation variants for icon
+  const iconVariants = {
+    hidden: { scale: 0.8, opacity: 0.5 },
+    show: { 
+      scale: 1, 
+      opacity: 1,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20
+      }
+    }
+  };
+
+  // Animation variants for value
+  const valueVariants = {
+    hidden: { opacity: 0, y: 10 },
+    show: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        delay: 0.2,
+        duration: 0.4
+      }
+    }
+  };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {cards.map((card) => (
-        <DashboardCard key={card.title} card={card} />
+    <motion.div 
+      className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+      variants={containerVariants}
+      initial="hidden"
+      animate={shouldAnimate ? "show" : "hidden"}
+    >
+      {cards.map((card, index) => (
+        <motion.div
+          key={card.title}
+          variants={cardVariants}
+          whileHover={{ 
+            y: -5,
+            transition: { duration: 0.2 }
+          }}
+          className="h-full"
+        >
+          <Card className="h-full relative overflow-hidden transition-all hover:shadow-lg border-2 border-transparent hover:border-accent/50 dark:hover:border-accent/30">
+            <div className="p-6 h-full flex flex-col">
+              {/* Card Header with Icon and Progress */}
+              <div className="flex items-center justify-between">
+                <motion.div
+                  variants={iconVariants}
+                  className={cn(
+                    "p-2 rounded-full",
+                    card.variant === "blue" ? "bg-blue-100 text-blue-600" :
+                    card.variant === "emerald" ? "bg-emerald-100 text-emerald-600" :
+                    card.variant === "indigo" ? "bg-indigo-100 text-indigo-600" :
+                    "bg-teal-100 text-teal-600"
+                  )}
+                >
+                  <card.icon className="h-6 w-6" />
+                </motion.div>
+                {card.progress !== undefined && (
+                  <motion.span 
+                    variants={valueVariants}
+                    className={cn(
+                      "text-lg font-semibold",
+                      card.variant === "blue" ? "text-blue-600" :
+                      card.variant === "emerald" ? "text-emerald-600" :
+                      card.variant === "indigo" ? "text-indigo-600" :
+                      "text-teal-600"
+                    )}
+                  >
+                    {card.progress.toFixed(1)}%
+                  </motion.span>
+                )}
+              </div>
+              
+              {/* Card Content with Title and Value */}
+              <div className="mt-4 space-y-1 flex-grow">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                  {card.title}
+                </h3>
+                <motion.p 
+                  variants={valueVariants}
+                  className="text-2xl font-bold tracking-tight"
+                >
+                  {card.isCurrency 
+                    ? `₱${(card.value ?? 0).toLocaleString()}` 
+                    : (card.value ?? 0).toLocaleString()}
+                </motion.p>
+              </div>
+
+              {/* Progress Bar (only for Monthly Goal) */}
+              {card.progress !== undefined && (
+                <div className="mt-4">
+                  <div className="h-2 overflow-hidden rounded-full bg-accent">
+                    <motion.div
+                      variants={progressVariants}
+                      initial="hidden"
+                      animate={shouldAnimate ? "show" : "hidden"}
+                      custom={card.progress}
+                      className={cn(
+                        "h-full",
+                        card.variant === "blue" ? "bg-blue-600" :
+                        card.variant === "emerald" ? "bg-emerald-600" :
+                        card.variant === "indigo" ? "bg-indigo-600" :
+                        "bg-teal-600"
+                      )}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        </motion.div>
       ))}
-    </div>
-  );
+    </motion.div>
+  )
 }
 
