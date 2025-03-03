@@ -182,7 +182,6 @@ export async function POST(req: NextRequest) {
     
     // 1. Parse and validate request body
     const rawBody = await req.text();
-    console.log("Raw request body:", rawBody);
     
     let body;
     try {
@@ -195,7 +194,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    console.log("Parsed body:", body);
+    console.log("Request parsed successfully");
     
     const validationResult = createInvoiceSchema.safeParse(body);
     
@@ -207,15 +206,11 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    console.log("Validation successful");
-    
     // 2. Create a Supabase client with service role
     const supabase = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
-    
-    console.log("Supabase client created");
     
     // 3. Extract data from request
     const { 
@@ -233,7 +228,6 @@ export async function POST(req: NextRequest) {
       // 4. Resolve the recipient ID to a UUID
       console.log(`Resolving recipientId: ${originalRecipientId}`);
       const resolvedRecipientId = await resolveRecipientId(supabase, donationType, originalRecipientId);
-      console.log(`Resolved recipientId: ${resolvedRecipientId}`);
       
       // 5. Create a new request body with the resolved UUID
       const modifiedBody = {
@@ -246,15 +240,14 @@ export async function POST(req: NextRequest) {
         modifiedBody.payment_details.recipientId = resolvedRecipientId;
       }
       
-      // Set the success redirect URL to victorybulacan.org/thankyou/ if not provided
-      const customSuccessRedirectUrl = success_redirect_url || "https://victorybulacan.org/thankyou/";
-      console.log(`Using success redirect URL: ${customSuccessRedirectUrl}`);
+      // Always set the success redirect URL to victorybulacan.org/thankyou/ for the website
+      // This endpoint is specifically for the website donations
+      const customSuccessRedirectUrl = "https://victorybulacan.org/thankyou/";
       
       // Add the success_redirect_url to the modified body
       modifiedBody.success_redirect_url = customSuccessRedirectUrl;
       
       console.log(`Forwarding request with resolved recipientId: ${resolvedRecipientId}`);
-      console.log("Modified body:", JSON.stringify(modifiedBody));
       
       // 6. Forward to the original create-invoice endpoint using a relative URL
       // This ensures it works in any environment (development, production, etc.)
@@ -274,11 +267,8 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify(modifiedBody),
         });
         
-        console.log(`Response status: ${response.status}`);
-        
         // 7. Return the response from the original endpoint
         const responseText = await response.text();
-        console.log(`Response body: ${responseText}`);
         
         let responseData;
         try {

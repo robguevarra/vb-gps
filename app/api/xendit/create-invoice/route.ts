@@ -45,7 +45,6 @@ export async function POST(req: NextRequest) {
   try {
     // 1. Parse and validate request body
     const rawBody = await req.text();
-    console.log("📌 Request body:", rawBody);
     
     let body;
     try {
@@ -58,7 +57,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    console.log("📌 Parsed body:", body);
+    console.log("📌 Request parsed successfully");
     
     const validationResult = createInvoiceSchema.safeParse(body);
     
@@ -71,7 +70,6 @@ export async function POST(req: NextRequest) {
     }
     
     const { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes, success_redirect_url } = validationResult.data;
-    console.log("📌 Validated data:", { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes, success_redirect_url });
     
     // 2. Create a Supabase client with service role to bypass RLS and permission issues
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -279,19 +277,30 @@ export async function POST(req: NextRequest) {
     if (success_redirect_url) {
       // If a custom success redirect URL is provided, use it
       successRedirectUrl = success_redirect_url;
-    } else {
-      // Determine the source of the request based on the referrer or other indicators
-      const isFromWordPress = req.headers.get('referer')?.includes('victorybulacan.org') || false;
       
-      if (isFromWordPress) {
+      // If it's the staff portal URL but doesn't have the reference ID, add it
+      if (successRedirectUrl.includes('staff.victorybulacan.org/giving/thank-you') && 
+          !successRedirectUrl.includes('?ref=')) {
+        successRedirectUrl = `${successRedirectUrl}${successRedirectUrl.includes('?') ? '&' : '?'}ref=${referenceId}`;
+      }
+    } else {
+      // Check if this request is coming from create-invoicev2 (website)
+      // If it has a success_redirect_url that includes victorybulacan.org, it's from the website
+      const isFromWebsite = req.headers.get('referer')?.includes('victorybulacan.org') || 
+                           (success_redirect_url && success_redirect_url.includes('victorybulacan.org'));
+      
+      if (isFromWebsite) {
         // For WordPress site (external donations)
         successRedirectUrl = "https://victorybulacan.org/thankyou/";
       } else {
         // For staff portal (internal donations)
-        successRedirectUrl = `${process.env.NEXT_PUBLIC_APP_URL}/giving/thank-you?ref=${referenceId}`;
+        // Make sure we use the full URL including the domain for staff portal
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://staff.victorybulacan.org";
+        successRedirectUrl = `${baseUrl}/giving/thank-you?ref=${referenceId}`;
       }
     }
     
+    // Log the final redirect URL for debugging purposes
     console.log(`📌 Using success redirect URL: ${successRedirectUrl}`);
     
     // Determine the appropriate failure redirect URL
@@ -314,13 +323,7 @@ export async function POST(req: NextRequest) {
     );
     
     try {
-      console.log("📌 Creating Xendit invoice with params:", {
-        externalId: referenceId,
-        amount,
-        payerEmail: donor.email,
-        payerName: donor.name,
-        description: `Donation to ${recipientName}${isAnonymous ? ' (Anonymous)' : ''}`,
-      });
+      console.log("📌 Creating Xendit invoice for reference:", referenceId);
       
       // Create invoice with Xendit
       const invoice = await xenditService.createInvoice({
@@ -345,7 +348,7 @@ export async function POST(req: NextRequest) {
         ]
       });
       
-      console.log(`📌 Xendit invoice created successfully:`, invoice.id);
+      console.log(`📌 Xendit invoice created successfully: ${invoice.id}`);
       
       // 8. Update payment_transactions with invoice details
       const { error: updateTransactionError } = await supabase
@@ -373,8 +376,6 @@ export async function POST(req: NextRequest) {
           
         if (updateItemError) {
           console.error(`📌 Failed to update invoice item:`, updateItemError.code);
-        } else {
-          console.log(`📌 Updated invoice item successfully`);
         }
         
         // Double-check that the invoice item was updated correctly
@@ -383,8 +384,6 @@ export async function POST(req: NextRequest) {
           .select("id, invoice_id")
           .eq("id", invoiceItem.id)
           .single();
-          
-        console.log(`📌 Verified invoice item update`);
       } else {
         console.log(`📌 No invoice item to update - bulk donation mode`);
       }
@@ -397,7 +396,7 @@ export async function POST(req: NextRequest) {
         expiryDate: invoice.expiry_date,
       };
       
-      console.log("📌 Returning success response:", response);
+      console.log("📌 Payment invoice created successfully");
       
       return NextResponse.json(response);
     } catch (xenditError) {

@@ -168,10 +168,8 @@ export class XenditService {
         currency: params.currency || 'PHP',
       };
       
-      // Log the redirect URLs for debugging
-      console.log(`Success redirect URL: ${payload.success_redirect_url}`);
-      console.log(`Failure redirect URL: ${payload.failure_redirect_url}`);
-      console.log(`Callback URL: ${payload.callback_url}`);
+      // Log only the success redirect URL for traceability
+      console.log(`XenditService: Using success redirect URL: ${payload.success_redirect_url}`);
       
       if (params.payerName) {
         payload.payer_name = params.payerName;
