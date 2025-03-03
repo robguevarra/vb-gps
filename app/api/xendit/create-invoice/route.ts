@@ -35,6 +35,8 @@ const createInvoiceSchema = z.object({
     recipientName: z.string().optional(),
   }).optional(),
   notes: z.string().optional(),
+  // Add optional success_redirect_url field
+  success_redirect_url: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes } = validationResult.data;
+    const { donationType, recipientId, amount, donor, isAnonymous, payment_details, notes, success_redirect_url } = validationResult.data;
     
     // 2. Create a Supabase client with service role to bypass RLS and permission issues
     const supabase = createServiceClient(
@@ -198,11 +200,17 @@ export async function POST(req: NextRequest) {
       );
     }
     
+    // Use custom success redirect URL if provided, otherwise use the default one
+    const successRedirectUrl = success_redirect_url || 
+      `${process.env.NEXT_PUBLIC_APP_URL}/donation/success?ref=${referenceId}`;
+    
+    console.log(`Using success redirect URL: ${successRedirectUrl}`);
+    
     const xenditService = new XenditService(
       process.env.XENDIT_SECRET_KEY!,
       process.env.XENDIT_WEBHOOK_SECRET!,
       `${process.env.NEXT_PUBLIC_APP_URL}/api/xendit-webhook`,
-      `${process.env.NEXT_PUBLIC_APP_URL}/donation/success?ref=${referenceId}`,
+      successRedirectUrl,
       `${process.env.NEXT_PUBLIC_APP_URL}/donation/failed?ref=${referenceId}`
     );
     
@@ -218,6 +226,8 @@ export async function POST(req: NextRequest) {
         // Remove payment methods configuration to use defaults from Xendit Dashboard
         currency: "PHP", // Always set currency to PHP
         shouldSendEmail: true,
+        // Add success redirect URL explicitly
+        successRedirectUrl: successRedirectUrl,
         items: payment_details?.isBulkDonation ? undefined : [
           {
             name: `Donation to ${recipientName}`,

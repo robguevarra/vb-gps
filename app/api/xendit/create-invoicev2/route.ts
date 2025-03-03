@@ -30,6 +30,8 @@ const createInvoiceSchema = z.object({
     recipientName: z.string().optional(),
   }).optional(),
   notes: z.string().optional(),
+  // Add optional success_redirect_url field
+  success_redirect_url: z.string().optional(),
 });
 
 /**
@@ -216,7 +218,16 @@ export async function POST(req: NextRequest) {
     console.log("Supabase client created");
     
     // 3. Extract data from request
-    const { donationType, recipientId: originalRecipientId, amount, donor, isAnonymous, payment_details, notes } = validationResult.data;
+    const { 
+      donationType, 
+      recipientId: originalRecipientId, 
+      amount, 
+      donor, 
+      isAnonymous, 
+      payment_details, 
+      notes,
+      success_redirect_url 
+    } = validationResult.data;
     
     try {
       // 4. Resolve the recipient ID to a UUID
@@ -234,6 +245,13 @@ export async function POST(req: NextRequest) {
       if (modifiedBody.payment_details?.recipientId) {
         modifiedBody.payment_details.recipientId = resolvedRecipientId;
       }
+      
+      // Set the success redirect URL to victorybulacan.org/thankyou/ if not provided
+      const customSuccessRedirectUrl = success_redirect_url || "https://victorybulacan.org/thankyou/";
+      console.log(`Using success redirect URL: ${customSuccessRedirectUrl}`);
+      
+      // Add the success_redirect_url to the modified body
+      modifiedBody.success_redirect_url = customSuccessRedirectUrl;
       
       console.log(`Forwarding request with resolved recipientId: ${resolvedRecipientId}`);
       console.log("Modified body:", JSON.stringify(modifiedBody));
