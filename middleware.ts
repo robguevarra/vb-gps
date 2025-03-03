@@ -5,6 +5,29 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  // If this is an OPTIONS request for an API route, handle it immediately
+  if (request.method === 'OPTIONS' && request.nextUrl.pathname.startsWith('/api/')) {
+    const origin = request.headers.get("origin") || "";
+    const allowedOrigins = [
+      "https://victorybulacan.org",
+      "https://www.victorybulacan.org",
+      "http://localhost:3000",
+      "https://v0-gps.vercel.app"
+    ];
+    const isAllowed = allowedOrigins.includes(origin);
+
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": isAllowed ? origin : "",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization",
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin"
+      }
+    });
+  }
+
   // Start with a default response.
   let response = NextResponse.next({
     request: {

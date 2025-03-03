@@ -58,8 +58,6 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     
-    
-    
     // 3. Look up recipient details
     let recipientName = "";
     

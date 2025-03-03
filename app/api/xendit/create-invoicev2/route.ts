@@ -174,45 +174,9 @@ async function resolveRecipientId(supabase: any, donationType: string, recipient
   }
 }
 
-// CORS headers configuration
-function getCorsHeaders(request: NextRequest) {
-  // Get the origin from the request
-  const origin = request.headers.get('origin') || '';
-  
-  // List of allowed origins
-  const allowedOrigins = [
-    'https://victorybulacan.org',
-    'https://www.victorybulacan.org',
-    'http://localhost:3000',
-    'https://v0-gps.vercel.app'
-  ];
-  
-  // Check if the request origin is allowed
-  const isAllowedOrigin = allowedOrigins.includes(origin);
-  
-  return {
-    'Access-Control-Allow-Origin': isAllowedOrigin ? origin : '',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization',
-    'Access-Control-Allow-Credentials': 'true',
-    'Vary': 'Origin' // Important when using dynamic origin
-  };
-}
-
-// Handle OPTIONS requests for CORS preflight
-export async function OPTIONS(req: NextRequest) {
-  return new NextResponse(null, {
-    status: 204,
-    headers: getCorsHeaders(req)
-  });
-}
-
 export async function POST(req: NextRequest) {
   try {
     console.log("create-invoicev2: Received request");
-    
-    // Get CORS headers for this request
-    const corsHeaders = getCorsHeaders(req);
     
     // 1. Parse and validate request body
     const rawBody = await req.text();
@@ -225,10 +189,7 @@ export async function POST(req: NextRequest) {
       console.error("Failed to parse JSON:", e);
       return NextResponse.json(
         { error: "Invalid JSON", details: "The request body is not valid JSON" },
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
+        { status: 400 }
       );
     }
     
@@ -240,10 +201,7 @@ export async function POST(req: NextRequest) {
       console.error("Validation error:", validationResult.error.format());
       return NextResponse.json(
         { error: "Invalid request data", details: validationResult.error.format() },
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
+        { status: 400 }
       );
     }
     
@@ -307,17 +265,11 @@ export async function POST(req: NextRequest) {
           console.error("Failed to parse response JSON:", e);
           return NextResponse.json(
             { error: "Invalid response from create-invoice", details: responseText },
-            { 
-              status: 500,
-              headers: corsHeaders
-            }
+            { status: 500 }
           );
         }
         
-        return NextResponse.json(responseData, { 
-          status: response.status,
-          headers: corsHeaders
-        });
+        return NextResponse.json(responseData, { status: response.status });
       } catch (fetchError) {
         console.error("Fetch error:", fetchError);
         return NextResponse.json(
@@ -325,10 +277,7 @@ export async function POST(req: NextRequest) {
             error: "Failed to forward request", 
             details: fetchError instanceof Error ? fetchError.message : "Unknown fetch error" 
           },
-          { 
-            status: 500,
-            headers: corsHeaders
-          }
+          { status: 500 }
         );
       }
     } catch (error) {
@@ -338,21 +287,14 @@ export async function POST(req: NextRequest) {
           error: "Failed to resolve recipient", 
           details: error instanceof Error ? error.message : "Unknown error" 
         },
-        { 
-          status: 404,
-          headers: corsHeaders
-        }
+        { status: 404 }
       );
     }
   } catch (error) {
     console.error("Unexpected error:", error);
-    
     return NextResponse.json(
       { error: "Server error", details: error instanceof Error ? error.message : "Unknown error" },
-      { 
-        status: 500,
-        headers: getCorsHeaders(req)
-      }
+      { status: 500 }
     );
   }
 }
