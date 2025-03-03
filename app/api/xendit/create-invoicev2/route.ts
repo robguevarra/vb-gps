@@ -238,13 +238,17 @@ export async function POST(req: NextRequest) {
       console.log(`Forwarding request with resolved recipientId: ${resolvedRecipientId}`);
       console.log("Modified body:", JSON.stringify(modifiedBody));
       
-      // 6. Forward to the original create-invoice endpoint
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const targetUrl = `${appUrl}/api/xendit/create-invoice`;
+      // 6. Forward to the original create-invoice endpoint using a relative URL
+      // This ensures it works in any environment (development, production, etc.)
+      const targetUrl = `/api/xendit/create-invoice`;
       console.log(`Forwarding to: ${targetUrl}`);
       
       try {
-        const response = await fetch(targetUrl, {
+        // Use the Request/Response API to make an internal API call
+        const url = new URL(targetUrl, req.url);
+        console.log(`Full URL: ${url.toString()}`);
+        
+        const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
