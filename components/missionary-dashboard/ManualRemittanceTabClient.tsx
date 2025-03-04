@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense, lazy, useCallback } from "react";
+import { useState, useEffect, Suspense, lazy, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 import { AlertCircle, CheckCircle } from "lucide-react";
@@ -8,6 +8,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BulkOnlinePaymentWizardWrapper } from "@/components/missionary-dashboard/BulkOnlinePaymentWizardWrapper";
 import { ErrorBoundary } from "react-error-boundary";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertCircle as AlertCircleIcon, CheckCircle as CheckCircleIcon, RefreshCcw } from 'lucide-react';
+import { safelyGetData, safelyStoreData, safelyRemoveData, clearByPrefix } from '@/utils/storage';
+import { trackPerformance } from '@/utils/performance';
 
 interface ManualRemittanceTabClientProps {
   missionaryId: string;
@@ -35,19 +41,22 @@ export function ManualRemittanceTabClient({
   const [error, setError] = useState<string | null>(initialError || null);
   const shouldReduceMotion = useReducedMotion();
   
+  // Track component performance
+  useEffect(() => {
+    const endTracking = trackPerformance('ManualRemittanceTabClient');
+    return endTracking;
+  }, []);
+
   // Function to reset payment status - memoized with useCallback
   const handleResetPaymentStatus = useCallback(() => {
     setPaymentStatus("idle");
     setError(null);
     
     // Clear ALL localStorage items related to payments
-    localStorage.removeItem(`payment_status_${missionaryId}`);
-    localStorage.removeItem(`payment_state_${missionaryId}`);
-    localStorage.removeItem(`payment_${missionaryId}`);
-    localStorage.removeItem(`payment_polling_${missionaryId}`);
+    clearByPrefix(`payment_`);
     
     // Clear any polling intervals
-    const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
+    const pollingId = safelyGetData<string>(`payment_polling_${missionaryId}`, "");
     if (pollingId) {
       try {
         clearInterval(parseInt(pollingId));
@@ -62,14 +71,18 @@ export function ManualRemittanceTabClient({
     const checkPaymentStatus = async () => {
       try {
         // Get payment state from localStorage
-        const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
-        if (!paymentStateStr) {
+        const paymentState = safelyGetData<{
+          missionaryId: string;
+          invoiceId: string;
+          invoiceUrl: string;
+          timestamp: string;
+        } | null>(`payment_state_${missionaryId}`, null);
+        
+        if (!paymentState) {
           // Ensure payment status is idle if no payment state exists
           setPaymentStatus("idle");
           return;
         }
-        
-        const paymentState = JSON.parse(paymentStateStr);
         
         // Check if the payment state is for the current missionary
         if (paymentState.missionaryId !== missionaryId) {
@@ -85,15 +98,17 @@ export function ManualRemittanceTabClient({
         
         if (timeDiff < thirtyMinutesInMs) {
           // Check if there's a payment status in localStorage
-          const paymentStatusStr = localStorage.getItem(`payment_status_${missionaryId}`);
-          let status = null;
+          const paymentStatusData = safelyGetData<{
+            status: "idle" | "pending" | "completed" | "failed";
+            invoiceUrl?: string;
+            invoiceId?: string;
+          } | null>(`payment_status_${missionaryId}`, null);
           
-          if (paymentStatusStr) {
-            status = JSON.parse(paymentStatusStr);
-            setPaymentStatus(status.status);
+          if (paymentStatusData) {
+            setPaymentStatus(paymentStatusData.status);
             
             // If status is completed, set a timer to automatically reset to idle after 5 seconds
-            if (status.status === "completed") {
+            if (paymentStatusData.status === "completed") {
               setTimeout(() => {
                 handleResetPaymentStatus();
               }, 5000); // 5 seconds
@@ -104,7 +119,7 @@ export function ManualRemittanceTabClient({
           }
           
           // If status is still pending, check the database directly
-          if (!status || status.status === "pending") {
+          if (!paymentStatusData || paymentStatusData.status === "pending") {
             // Get the invoice ID from payment state
             const invoiceId = paymentState.invoiceId;
             if (invoiceId) {
@@ -129,10 +144,7 @@ export function ManualRemittanceTabClient({
                   setPaymentStatus("completed");
                   
                   // Update localStorage
-                  localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
-                    status: "completed",
-                    timestamp: new Date().toISOString()
-                  }));
+                  safelyRemoveData(`payment_status_${missionaryId}`);
                   
                   // Set a timer to automatically reset to idle after 5 seconds
                   setTimeout(() => {
@@ -142,10 +154,7 @@ export function ManualRemittanceTabClient({
                   setPaymentStatus("failed");
                   
                   // Update localStorage
-                  localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
-                    status: "failed",
-                    timestamp: new Date().toISOString()
-                  }));
+                  safelyRemoveData(`payment_status_${missionaryId}`);
                 }
               } else {
                 // If no transaction is found in the database, try to check the status directly from Xendit API
@@ -158,10 +167,7 @@ export function ManualRemittanceTabClient({
           setPaymentStatus("idle");
           
           // Clear localStorage to prevent future checks from finding this old payment
-          localStorage.removeItem(`payment_status_${missionaryId}`);
-          localStorage.removeItem(`payment_state_${missionaryId}`);
-          localStorage.removeItem(`payment_${missionaryId}`);
-          localStorage.removeItem(`payment_polling_${missionaryId}`);
+          safelyRemoveData(`payment_status_${missionaryId}`);
         }
       } catch (error) {
         console.error("Error checking payment status:", error);
@@ -186,10 +192,7 @@ export function ManualRemittanceTabClient({
           setPaymentStatus("completed");
           
           // Update localStorage
-          localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
-            status: "completed",
-            timestamp: new Date().toISOString()
-          }));
+          safelyRemoveData(`payment_status_${missionaryId}`);
           
           // Set a timer to automatically reset to idle after 5 seconds
           setTimeout(() => {
@@ -199,10 +202,7 @@ export function ManualRemittanceTabClient({
           setPaymentStatus("failed");
           
           // Update localStorage
-          localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
-            status: "failed",
-            timestamp: new Date().toISOString()
-          }));
+          safelyRemoveData(`payment_status_${missionaryId}`);
         } else {
           console.log("Payment status from Xendit:", data.status);
         }
@@ -226,14 +226,14 @@ export function ManualRemittanceTabClient({
       window.removeEventListener('focus', handleFocus);
       
       // Clear any polling intervals when component unmounts
-      const pollingId = localStorage.getItem(`payment_polling_${missionaryId}`);
+      const pollingId = safelyGetData<string>(`payment_polling_${missionaryId}`, "");
       if (pollingId) {
         try {
           clearInterval(parseInt(pollingId));
         } catch (err) {
           console.error("Error clearing interval:", err);
         }
-        localStorage.removeItem(`payment_polling_${missionaryId}`);
+        safelyRemoveData(`payment_polling_${missionaryId}`);
       }
     };
   }, [missionaryId, handleResetPaymentStatus]);
@@ -244,10 +244,7 @@ export function ManualRemittanceTabClient({
     setPaymentStatus("pending");
     
     // Store payment status in localStorage
-    localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
-      status: "pending",
-      timestamp: new Date().toISOString()
-    }));
+    safelyRemoveData(`payment_status_${missionaryId}`);
     
     toast({
       title: "Success",
@@ -262,10 +259,7 @@ export function ManualRemittanceTabClient({
     setError(error);
     
     // Store payment status in localStorage
-    localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
-      status: "failed",
-      timestamp: new Date().toISOString()
-    }));
+    safelyRemoveData(`payment_status_${missionaryId}`);
     
     toast({
       title: "Error",
@@ -277,16 +271,22 @@ export function ManualRemittanceTabClient({
   // Function to get payment URL from localStorage
   const getPaymentUrl = useCallback(() => {
     // First try to get the payment info which contains the direct link
-    const paymentInfoStr = localStorage.getItem(`payment_${missionaryId}`);
-    const paymentStateStr = localStorage.getItem(`payment_state_${missionaryId}`);
-    const paymentStatusStr = localStorage.getItem(`payment_status_${missionaryId}`);
+    const paymentInfoStr = safelyGetData<{
+      invoiceUrl?: string;
+      invoiceId?: string;
+    } | null>(`payment_${missionaryId}`, null);
+    const paymentStatusStr = safelyGetData<{
+      status: string;
+      invoiceUrl?: string;
+      invoiceId?: string;
+    } | null>(`payment_status_${missionaryId}`, null);
     
     let paymentUrl = null;
     
     // Try to get the direct payment URL from various sources
     if (paymentStatusStr) {
       try {
-        const paymentStatusObj = JSON.parse(paymentStatusStr);
+        const paymentStatusObj = paymentStatusStr;
         if (paymentStatusObj.invoiceUrl) {
           paymentUrl = paymentStatusObj.invoiceUrl;
         } else if (paymentStatusObj.invoiceId) {
@@ -299,7 +299,7 @@ export function ManualRemittanceTabClient({
     
     if (!paymentUrl && paymentInfoStr) {
       try {
-        const paymentInfo = JSON.parse(paymentInfoStr);
+        const paymentInfo = paymentInfoStr;
         // Check if we have a direct URL stored
         if (paymentInfo.invoiceUrl) {
           paymentUrl = paymentInfo.invoiceUrl;
@@ -313,17 +313,23 @@ export function ManualRemittanceTabClient({
     }
     
     // If we couldn't get the URL from payment info, try the payment state
-    if (!paymentUrl && paymentStateStr) {
+    if (!paymentUrl && safelyGetData<{
+      invoiceUrl?: string;
+      invoiceId?: string;
+    } | null>(`payment_state_${missionaryId}`, null)) {
       try {
-        const paymentState = JSON.parse(paymentStateStr);
-        if (paymentState.invoiceUrl) {
+        const paymentState = safelyGetData<{
+          invoiceUrl?: string;
+          invoiceId?: string;
+        } | null>(`payment_state_${missionaryId}`, null);
+        if (paymentState && paymentState.invoiceUrl) {
           paymentUrl = paymentState.invoiceUrl;
-        } else if (paymentState.invoiceId) {
+        } else if (paymentState && paymentState.invoiceId) {
           // Fallback to constructing URL from invoice ID
           paymentUrl = `https://checkout.xendit.co/web/${paymentState.invoiceId}`;
         }
-      } catch (e) {
-        console.error("Error parsing payment state:", e);
+      } catch (err) {
+        console.error("Error parsing payment state:", err);
       }
     }
     
@@ -395,7 +401,7 @@ export function ManualRemittanceTabClient({
                   layout
                 >
                   <Alert className="mb-3 sm:mb-4 border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20">
-                    <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                    <AlertCircleIcon className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                     <AlertTitle className="text-sm sm:text-base text-yellow-800 dark:text-yellow-300">Payment in progress</AlertTitle>
                     <AlertDescription className="text-xs sm:text-sm text-yellow-700 dark:text-yellow-400">
                       Your payment is being processed. Please complete the payment in the opened tab.
@@ -413,7 +419,7 @@ export function ManualRemittanceTabClient({
                               className="mt-2 sm:mt-3 p-2 sm:p-3 bg-white dark:bg-gray-800 rounded-md border border-yellow-200 dark:border-yellow-800"
                             >
                               <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 flex items-center">
-                                <AlertCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                                <AlertCircleIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1 sm:mr-1.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
                                 If the payment tab didn&apos;t open automatically:
                               </p>
                               <a 
@@ -459,7 +465,7 @@ export function ManualRemittanceTabClient({
                   layout
                 >
                   <Alert className="bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800">
-                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <CheckCircleIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
                     <AlertTitle>Payment completed</AlertTitle>
                     <AlertDescription>
                       Your payment has been successfully processed. The donations have been recorded.
@@ -486,7 +492,7 @@ export function ManualRemittanceTabClient({
                   layout
                 >
                   <Alert className="bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800">
-                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    <AlertCircleIcon className="h-4 w-4 text-red-600 dark:text-red-400" />
                     <AlertTitle>Payment failed</AlertTitle>
                     <AlertDescription>
                       There was an issue processing your payment: {error || "Please try again"}.

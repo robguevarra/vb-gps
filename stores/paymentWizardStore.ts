@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist, PersistOptions } from "zustand/middleware";
+import { persist, PersistOptions, createJSONStorage } from "zustand/middleware";
+import { safelyRemoveData } from '@/utils/storage';
 
 /**
  * Donor interface
@@ -349,7 +350,7 @@ export const usePaymentWizardStore = create<PaymentWizardState>()(
       // Clear localStorage
       clearStorage: () => {
         if (typeof window !== 'undefined') {
-          localStorage.removeItem(STORAGE_KEY);
+          safelyRemoveData(STORAGE_KEY);
         }
       }
     }),

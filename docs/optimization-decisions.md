@@ -700,3 +700,99 @@ This document tracks the key decisions made during the optimization process of t
 - Monitor memory usage during component interactions
 - Test performance on various devices and network conditions
 - Document performance improvements for future reference 
+
+### Validation and Error Handling Improvements
+
+**Decision**: Implement comprehensive validation and error handling improvements for the payment processing flow.
+
+**Rationale**:
+- The payment processing flow was experiencing validation errors due to null values in donor data
+- React hook order issues in WizardStepFour were causing potential bugs and errors
+- Proper validation and error handling are critical for a reliable payment system
+- Default values for optional fields improve robustness and user experience
+
+**Implementation Details**:
+1. **React Hook Order Fix**:
+   - Moved the useEffect hook for polling interval cleanup above the conditional return statement
+   - Ensured hooks are always called in the same order, regardless of conditional rendering
+   - Fixed potential memory leaks by properly cleaning up intervals
+
+2. **Donor Data Validation**:
+   - Enhanced donor data preparation to ensure no null values are sent to the API
+   - Added default values for missing donor information (name, email, phone)
+   - Created personalized default emails based on donor names for better user experience
+   - Implemented proper handling for the primary donor information
+
+3. **API Validation Schema**:
+   - Updated the Zod schema to properly handle optional fields with default values
+   - Made phone fields default to empty strings instead of being null
+   - Added default values for donor names and emails
+   - Improved error messages for validation failures
+
+**Expected Impact**:
+- Eliminated validation errors in the payment processing flow
+- Improved reliability and robustness of the payment system
+- Better user experience with more informative error messages
+- Reduced likelihood of bugs and errors in the payment flow
+- More maintainable and predictable code with proper hook ordering
+
+**Results**:
+- Successfully fixed validation errors in the payment processing flow
+- Eliminated React hook order warnings
+- Improved robustness of the payment system with proper default values
+- Enhanced user experience with better error handling
+
+### Donor Search Optimization
+
+**Decision**: Implement an enterprise-grade donor search solution with pagination, infinite scrolling, and database optimizations.
+
+**Rationale**:
+- The donor database is expected to grow to 10,000+ records
+- Previous implementation limited search results to a small number of donors
+- Users were unable to find donors beyond a certain point (around donor #702)
+- A more scalable solution is needed to handle the growing dataset
+
+**Implementation Details**:
+1. **Database Optimization**:
+   - Added trigram indexes for efficient partial text matching
+   - Created optimized indexes for name and email fields
+   - Implemented proper SQL query patterns for text search
+
+2. **API Enhancement**:
+   - Implemented proper pagination with metadata
+   - Enhanced search to support multi-term queries
+   - Added detailed logging for troubleshooting
+   - Improved error handling and response formatting
+
+3. **Client-Side Optimization**:
+   - Implemented React Query with infinite loading
+   - Added debouncing to prevent excessive API calls
+   - Used virtualization to render only visible items
+   - Implemented intersection observer for infinite scrolling
+
+4. **User Experience Improvements**:
+   - Added better feedback for search results
+   - Improved empty state and loading indicators
+   - Enhanced error messages and search tips
+   - Maintained smooth animations with reduced motion support
+
+**Expected Impact**:
+- All donors in the system will now be searchable
+- Better performance with large datasets
+- Improved user experience with smoother scrolling
+- More efficient data transfer and rendering
+- Better maintainability and scalability
+
+**Results**:
+- Successfully implemented a solution that can handle 10,000+ donor records
+- Improved search experience with faster response times
+- Enhanced user interface with better feedback and loading states
+- Optimized database queries for better performance
+
+## Conclusion
+
+The optimization process has resulted in significant improvements in the performance and user experience of the Staff Portal application. The decisions made during the optimization process have been carefully considered and implemented to ensure that the application remains efficient, accessible, and reliable. The results of these optimizations are evident in the reduced initial page load time, improved Time to Interactive, and enhanced user experience.
+
+The validation and error handling improvements have further solidified the reliability of the payment processing flow, ensuring that the application can handle various edge cases and provide a seamless user experience.
+
+The optimization process continues to be an ongoing effort, with regular monitoring and evaluation to ensure that the application remains up-to-date and responsive to user needs. 

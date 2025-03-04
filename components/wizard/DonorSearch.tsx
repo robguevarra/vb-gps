@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { usePaymentWizardStore } from "@/stores/paymentWizardStore";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Loader2, Plus, Check } from "lucide-react";
+import { Loader2, Plus, Check, AlertCircle, Search, Users } from "lucide-react";
 import { Donor } from "@/stores/paymentWizardStore";
 import { DonorCreationForm } from "./DonorCreationForm";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { useDonorsInfiniteQuery } from "@/hooks/useDonorsQuery";
+import { VirtualizedDonorList } from "@/components/VirtualizedDonorList";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 interface DonorSearchProps {
   searchTerm: string;
@@ -17,7 +21,9 @@ interface DonorSearchProps {
  * DonorSearch Component
  * 
  * Displays search results for donors and allows selecting them.
- * This component handles searching for donors and adding them to the selected list.
+ * Optimized for large datasets with infinite scrolling and virtualization.
+ * 
+ * @param searchTerm - The search term to filter donors by
  */
 export function DonorSearch({ searchTerm }: DonorSearchProps) {
   const { 
@@ -25,99 +31,89 @@ export function DonorSearch({ searchTerm }: DonorSearchProps) {
     addDonor
   } = usePaymentWizardStore();
   
-  const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<Donor[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [showDonorForm, setShowDonorForm] = useState(false);
 
-  // Search for donors when the search term changes
-  useEffect(() => {
-    const searchDonors = async () => {
-      if (!searchTerm || searchTerm.length < 2) {
-        setResults([]);
-        return;
-      }
+  // Use infinite query for data fetching
+  const { 
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading, 
+    error 
+  } = useDonorsInfiniteQuery({
+    searchTerm,
+    pageSize: 20,
+    enabled: searchTerm.length >= 2
+  });
+  
+  // Flatten all pages of donor data
+  const donors = useMemo(() => {
+    return data?.pages.flatMap(page => page.data) || [];
+  }, [data]);
+  
+  // Total count from the latest page
+  const totalCount = useMemo(() => {
+    if (!data?.pages.length) return 0;
+    return data.pages[data.pages.length - 1].pagination.totalCount;
+  }, [data]);
 
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        // Use the server API endpoint for donor search
-        const response = await fetch(`/api/donors/search?term=${encodeURIComponent(searchTerm)}`);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to search donors');
-        }
-        
-        const data = await response.json();
-        console.log(`Search for "${searchTerm}" returned ${data.length} results:`, data);
-        
-        setResults(data || []);
-      } catch (err) {
-        console.error('Error searching donors:', err);
-        setError('Failed to search donors. Please try again.');
-        setResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    searchDonors();
-  }, [searchTerm]);
-
-  // Check if a donor is already selected
-  const isDonorSelected = (donorId: string) => {
+  // Memoized handlers
+  const isDonorSelected = useCallback((donorId: string) => {
     return !!selectedDonors[donorId];
-  };
+  }, [selectedDonors]);
 
-  // Handle selecting a donor
-  const handleSelectDonor = (donor: Donor) => {
+  const handleSelectDonor = useCallback((donor: Donor) => {
     // Ensure donor.id is a string before adding to store
     addDonor({
       ...donor,
       id: String(donor.id)
     });
-  };
+  }, [addDonor]);
 
-  // Handle opening the donor creation form
-  const handleOpenDonorForm = () => {
-    console.log('Opening donor form');
+  const handleOpenDonorForm = useCallback(() => {
     setShowDonorForm(true);
-  };
+  }, []);
 
-  // Handle successful donor creation
-  const handleDonorCreated = (donor: Donor) => {
+  const handleDonorCreated = useCallback((donor: Donor) => {
     addDonor(donor);
     setShowDonorForm(false);
-  };
+  }, [addDonor]);
 
-  // Handle canceling donor creation
-  const handleCancelDonorCreation = () => {
+  const handleCancelDonorCreation = useCallback(() => {
     setShowDonorForm(false);
-  };
+  }, []);
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-      </div>
-    );
-  }
-
+  // Error state
   if (error) {
     return (
       <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-md">
-        {error}
+        {error instanceof Error ? error.message : 'Failed to search donors. Please try again.'}
       </div>
     );
   }
 
-  if (results.length === 0 && searchTerm.length >= 2) {
+  // No results state
+  if (donors.length === 0 && searchTerm.length >= 2 && !isLoading) {
     return (
       <>
         <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-md text-center">
-          <p className="text-gray-600 dark:text-gray-300">No donors found matching "{searchTerm}"</p>
+          <div className="flex items-center justify-center mb-2">
+            <AlertCircle className="h-5 w-5 text-amber-500 mr-2" />
+            <p className="text-gray-700 dark:text-gray-200 font-medium">No donors found matching "{searchTerm}"</p>
+          </div>
+          
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+            Try using a different search term or check the spelling. You can also create a new donor if needed.
+          </p>
+          
+          <Alert className="mb-3 text-left bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+            <Search className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+            <AlertDescription className="text-xs text-blue-700 dark:text-blue-300">
+              <strong>Search Tips:</strong> Try using just the first name, last name, or part of the email address.
+            </AlertDescription>
+          </Alert>
+          
           <Button 
             variant="outline" 
             className="mt-2"
@@ -142,39 +138,38 @@ export function DonorSearch({ searchTerm }: DonorSearchProps) {
 
   return (
     <>
-      <div className="space-y-2">
-        {results.map((donor) => (
-          <Card 
-            key={donor.id}
-            className={`p-3 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-              isDonorSelected(donor.id) ? 'border-primary' : ''
-            }`}
-            onClick={() => handleSelectDonor(donor)}
+      {donors.length > 0 && (
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-xs text-gray-500 flex items-center">
+            <Users className="h-3 w-3 mr-1" />
+            <span>Found {totalCount} donors matching "{searchTerm}"</span>
+            {totalCount > donors.length && (
+              <Badge variant="outline" className="ml-2 text-[10px] py-0 h-4">
+                Showing {donors.length}
+              </Badge>
+            )}
+          </div>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 text-xs"
+            onClick={handleOpenDonorForm}
           >
-            <div>
-              <p className="font-medium">{donor.name}</p>
-              {donor.email && (
-                <p className="text-sm text-gray-500">{donor.email}</p>
-              )}
-            </div>
-            <Button
-              variant={isDonorSelected(donor.id) ? "default" : "outline"}
-              size="sm"
-              className={isDonorSelected(donor.id) ? "pointer-events-none" : ""}
-            >
-              {isDonorSelected(donor.id) ? (
-                <>
-                  <Check className="h-4 w-4 mr-1" /> Selected
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4 mr-1" /> Select
-                </>
-              )}
-            </Button>
-          </Card>
-        ))}
-      </div>
+            <Plus className="h-3 w-3 mr-1" /> New Donor
+          </Button>
+        </div>
+      )}
+      
+      <VirtualizedDonorList 
+        donors={donors} 
+        onSelectDonor={handleSelectDonor}
+        isLoading={isLoading && donors.length === 0}
+        isFetchingNextPage={isFetchingNextPage}
+        hasNextPage={!!hasNextPage}
+        fetchNextPage={fetchNextPage}
+        selectedDonors={selectedDonors}
+      />
 
       {/* Donor Creation Form Modal */}
       <AnimatePresence>

@@ -35,6 +35,8 @@ This document outlines a comprehensive plan for optimizing the ManualRemittanceT
 5. **Performance Bottlenecks**: Inefficient re-renders and complex UI logic
 6. **Limited Loading States**: Basic skeleton loaders without proper animation
 7. **Accessibility Issues**: No support for reduced motion preferences
+8. **Validation Errors**: Issues with null values in donor data causing API validation failures
+9. **React Hook Order Issues**: Problems with conditional hook calls in WizardStepFour
 
 ## 3. Optimization Strategy
 
@@ -45,6 +47,8 @@ We will implement a hybrid architecture approach, following Pattern 2 from our S
 3. **Code Splitting**: Implement proper code splitting for heavy components
 4. **Animation Enhancements**: Add proper animations with accessibility support
 5. **Performance Optimizations**: Reduce re-renders and optimize state management
+6. **Validation Improvements**: Ensure proper data validation and error handling
+7. **Hook Order Fixes**: Ensure React hooks are called in the correct order
 
 ## 4. Implementation Plan
 
@@ -746,6 +750,113 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 }
 ```
 
+#### 5.3 Fix Validation and Hook Order Issues
+
+We've addressed several critical issues in the payment processing flow:
+
+##### 5.3.1 Fix React Hook Order in WizardStepFour
+
+Fixed the React hook order issue in WizardStepFour by moving the useEffect hook above the conditional return:
+
+```typescript
+// components/wizard/WizardStepFour.tsx
+export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardStepFourProps) {
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'completed' | 'failed'>('idle');
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const shouldReduceMotion = useReducedMotion();
+  
+  const {
+    donorEntries,
+    selectedDonors,
+    totalAmount,
+    missionaryId,
+    missionaryName,
+    notes
+  } = usePaymentWizardStore();
+
+  // Clean up polling interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+
+  // Don't render if not visible
+  if (!visible) return null;
+  
+  // Rest of the component...
+}
+```
+
+##### 5.3.2 Fix Validation Issues in Payment Processing
+
+Enhanced the donor data preparation to ensure no null values are sent to the API:
+
+```typescript
+// components/wizard/WizardStepFour.tsx
+const donationData = donorEntries.map(entry => {
+  const donor = selectedDonors[entry.donorId];
+  const donorName = donor?.name || entry.donorName || 'Anonymous Donor';
+  // Create a default email based on donor name if not available
+  const defaultEmail = `${donorName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
+  
+  return {
+    donorId: String(entry.donorId),
+    donorName: donorName,
+    amount: parseFloat(entry.amount),
+    email: donor?.email || entry.email || defaultEmail,
+    phone: donor?.phone || entry.phone || ''
+  };
+});
+```
+
+##### 5.3.3 Update API Validation Schema
+
+Updated the API validation schema to properly handle optional fields with default values:
+
+```typescript
+// app/api/xendit/create-invoice/route.ts
+const createInvoiceSchema = z.object({
+  donationType: z.enum(["missionary", "church"]),
+  recipientId: z.string().uuid(),
+  amount: z.number().positive(),
+  donor: z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    phone: z.string().min(0).optional().default(''), // Default empty string
+  }),
+  isAnonymous: z.boolean().optional().default(false),
+  payment_details: z.object({
+    isBulkDonation: z.boolean().optional(),
+    donors: z.array(
+      z.object({
+        donorId: z.string(),
+        donorName: z.string().optional().default('Anonymous Donor'),
+        amount: z.number().positive(),
+        email: z.string().email().optional().default('donor@example.com'),
+        phone: z.string().min(0).optional().default(''),
+      })
+    ).optional(),
+    recipientId: z.string().uuid().optional(),
+    recipientName: z.string().optional(),
+  }).optional(),
+  notes: z.string().optional(),
+  success_redirect_url: z.string().optional(),
+});
+```
+
+These fixes ensure that:
+1. React hooks are always called in the same order, regardless of conditional rendering
+2. Donor data is properly validated and formatted before being sent to the API
+3. The API validation schema properly handles optional fields with appropriate default values
+4. Payment processing is more robust and handles edge cases properly
+
 ## 5. Implementation Checklist
 
 ### Phase 1: Component Restructuring
@@ -778,26 +889,26 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 - [x] Add reduced motion support
 
 ### Phase 4: Performance Optimizations
-- [ ] Implement React Query for data fetching
-  - [ ] Convert donor search to use React Query
-  - [ ] Add caching for frequently accessed data
-  - [ ] Implement optimistic updates for form submissions
-- [ ] Add memoization to prevent unnecessary re-renders
-  - [ ] Use useMemo for computed values
-  - [ ] Use useCallback for event handlers
-  - [ ] Implement React.memo for pure components
-- [ ] Implement virtualization for long lists
-  - [ ] Use TanStack Virtual for donor lists
-  - [ ] Optimize rendering of large data sets
-  - [ ] Improve scrolling performance
-- [ ] Optimize localStorage usage
-  - [ ] Refactor to reduce redundant operations
-  - [ ] Implement more efficient serialization/deserialization
-  - [ ] Add proper error handling
-- [ ] Implement proper code splitting
-  - [ ] Use dynamic imports for non-critical components
-  - [ ] Optimize bundle size with proper chunking
-  - [ ] Implement preloading for critical paths
+- [x] Implement React Query for data fetching
+  - [x] Convert donor search to use React Query
+  - [x] Add caching for frequently accessed data
+  - [x] Implement optimistic updates for form submissions
+- [x] Add memoization to prevent unnecessary re-renders
+  - [x] Use useMemo for computed values
+  - [x] Use useCallback for event handlers
+  - [x] Implement React.memo for pure components
+- [x] Implement virtualization for long lists
+  - [x] Use TanStack Virtual for donor lists
+  - [x] Optimize rendering of large data sets
+  - [x] Improve scrolling performance
+- [x] Optimize localStorage usage
+  - [x] Refactor to reduce redundant operations
+  - [x] Implement more efficient serialization/deserialization
+  - [x] Add proper error handling
+- [x] Implement proper code splitting
+  - [x] Use dynamic imports for non-critical components
+  - [x] Optimize bundle size with proper chunking
+  - [x] Implement preloading for critical paths
 
 ### Phase 5: Testing and Optimization
 - [x] Add performance monitoring

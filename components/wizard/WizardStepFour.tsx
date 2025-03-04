@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { usePaymentWizardStore } from "@/stores/paymentWizardStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { motion, useReducedMotion } from "framer-motion";
 import { createClient } from "@/utils/supabase/client";
 import { cn } from "@/lib/utils";
+import { safelyStoreData, safelyRemoveData } from '@/utils/storage';
+import { trackPerformance, measureExecutionTime } from '@/utils/performance';
 
 interface WizardStepFourProps {
   onPrev: () => void;
@@ -46,6 +48,12 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
     notes
   } = usePaymentWizardStore();
 
+  // Track component performance
+  useEffect(() => {
+    const endTracking = trackPerformance('WizardStepFour');
+    return endTracking;
+  }, []);
+
   // Clean up polling interval on component unmount
   useEffect(() => {
     return () => {
@@ -55,7 +63,30 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
     };
   }, [pollingInterval]);
 
-  // Don't render if not visible
+  // Memoize donation data preparation to avoid recalculating on every render
+  const donationData = useMemo(() => {
+    return donorEntries.map(entry => {
+      const donor = selectedDonors[entry.donorId];
+      const donorName = donor?.name || entry.donorName || 'Anonymous Donor';
+      // Create a default email based on donor name if not available
+      const defaultEmail = `${donorName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
+      
+      return {
+        donorId: String(entry.donorId),
+        donorName: donorName,
+        amount: parseFloat(entry.amount),
+        email: donor?.email || entry.email || defaultEmail,
+        phone: donor?.phone || entry.phone || ''
+      };
+    });
+  }, [donorEntries, selectedDonors]);
+
+  // Memoize primary donor to avoid recalculating on every render
+  const primaryDonor = useMemo(() => {
+    return donorEntries.length > 0 ? selectedDonors[donorEntries[0].donorId] : null;
+  }, [donorEntries, selectedDonors]);
+
+  // Don't render if not visible - AFTER all hooks are defined
   if (!visible) return null;
 
   const handleGeneratePaymentLink = async () => {
@@ -65,117 +96,48 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
     try {
       const supabase = createClient();
       
-      // Prepare the donation data
-      const donationData = donorEntries.map(entry => {
-        const donor = selectedDonors[entry.donorId];
-        const donorName = donor?.name || entry.donorName || 'Anonymous Donor';
-        // Create a default email based on donor name if not available
-        const defaultEmail = `${donorName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
-        
-        return {
-          donorId: String(entry.donorId),
-          donorName: donorName,
-          amount: parseFloat(entry.amount),
-          email: donor?.email || entry.email || defaultEmail,
-          phone: donor?.phone || entry.phone || ''
-        };
-      });
-      
       // Add detailed logging for debugging
       console.log('Mapped donation data:', JSON.stringify(donationData, null, 2));
-      
-      // Get the first donor for the main donor information
-      const primaryDonor = donorEntries.length > 0 ? 
-        selectedDonors[donorEntries[0].donorId] : null;
       
       if (!primaryDonor) {
         throw new Error('No donors selected');
       }
-
-      const primaryDonorName = primaryDonor.name || 'Anonymous Donor';
-      const defaultPrimaryEmail = `${primaryDonorName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
-
-      // Log the request payload for debugging
-      const requestPayload = {
+      
+      // Prepare the request payload
+      const payload = {
         donationType: "missionary",
         recipientId: missionaryId,
         amount: totalAmount,
         donor: {
-          name: primaryDonorName,
-          email: primaryDonor.email || defaultPrimaryEmail,
+          name: primaryDonor.name,
+          email: primaryDonor.email || `${primaryDonor.name.toLowerCase().replace(/\s+/g, '.')}@example.com`,
           phone: primaryDonor.phone || ''
         },
-        isAnonymous: false,
         payment_details: {
           isBulkDonation: true,
           donors: donationData,
           recipientId: missionaryId,
           recipientName: missionaryName
         },
-        notes: notes || ''
+        notes: notes || 'Manual remittance'
       };
       
-      console.log('Payment request payload:', requestPayload);
+      // Log the payload for debugging
+      console.log('Payment request payload:', JSON.stringify(payload, null, 2));
       
-      // Call the API to generate a payment link
+      // Send the request to create the invoice
       const response = await fetch('/api/xendit/create-invoice', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(requestPayload),
+        body: JSON.stringify(payload)
       });
       
-      // Log the response status for debugging
-      console.log('API response status:', response.status, response.statusText);
-      
-      // Handle non-JSON responses
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const textResponse = await response.text();
-        console.error('Non-JSON response:', textResponse);
-        throw new Error(`Server returned non-JSON response: ${response.status} ${response.statusText}`);
-      }
-      
       if (!response.ok) {
-        // Check if the response has content before trying to parse it
-        const contentType = response.headers.get('content-type');
-        let errorData: { error?: string; details?: string; message?: string } = {};
-        
-        if (contentType && contentType.includes('application/json')) {
-          const responseText = await response.text();
-          if (responseText) {
-            try {
-              errorData = JSON.parse(responseText);
-              // Log the full error details for debugging
-              console.error('Full API error details:', JSON.stringify(errorData, null, 2));
-            } catch (parseError) {
-              console.error('Error parsing JSON response:', parseError);
-              errorData = { error: 'Invalid JSON response' };
-            }
-          }
-        }
-        
-        console.error('API error response:', errorData, 'Status:', response.status, response.statusText);
-        
-        // Provide more specific error messages based on status code
-        if (response.status === 400) {
-          // For validation errors, try to extract the specific validation issue
-          if (errorData.details && typeof errorData.details === 'object') {
-            const validationDetails = JSON.stringify(errorData.details);
-            throw new Error(`Validation error: ${validationDetails}`);
-          } else {
-            throw new Error(errorData.error || 'Invalid request data. Please check donor information.');
-          }
-        } else if (response.status === 401 || response.status === 403) {
-          throw new Error('Authentication error. Please log in again.');
-        } else if (response.status === 404) {
-          throw new Error('Payment service endpoint not found.');
-        } else if (response.status === 500) {
-          throw new Error('Server error processing payment. Please try again later.');
-        } else {
-          throw new Error(errorData.error || errorData.details || `Failed to generate payment link (${response.status}: ${response.statusText})`);
-        }
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response:', errorData);
+        throw new Error(errorData.error || 'Failed to generate payment link');
       }
       
       const data = await response.json();
@@ -187,12 +149,12 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
       setPaymentStatus('pending');
       
       // Store payment state in localStorage for persistence
-      localStorage.setItem(`payment_state_${missionaryId}`, JSON.stringify({
+      safelyStoreData(`payment_state_${missionaryId}`, {
         missionaryId,
         invoiceId: data.invoiceId,
         invoiceUrl: data.invoiceUrl,
         timestamp: new Date().toISOString()
-      }));
+      });
       
       // Open the payment link in a new tab
       window.open(data.invoiceUrl, '_blank');
@@ -232,10 +194,10 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
           clearInterval(interval);
           
           // Update localStorage
-          localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+          safelyStoreData(`payment_status_${missionaryId}`, {
             status: 'completed',
             timestamp: new Date().toISOString()
-          }));
+          });
           
           // Call the onSuccess callback if provided
           if (onSuccess) {
@@ -246,10 +208,10 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
           clearInterval(interval);
           
           // Update localStorage
-          localStorage.setItem(`payment_status_${missionaryId}`, JSON.stringify({
+          safelyStoreData(`payment_status_${missionaryId}`, {
             status: 'failed',
             timestamp: new Date().toISOString()
-          }));
+          });
           
           // Call the onError callback if provided
           if (onError) {
@@ -267,9 +229,7 @@ export function WizardStepFour({ onPrev, visible, onSuccess, onError }: WizardSt
     setPollingInterval(interval);
     
     // Also store it in localStorage for recovery after page refresh
-    localStorage.setItem(`payment_polling_${missionaryId}`, interval.toString());
-    
-    // No need to return cleanup function here as we're managing the interval in state
+    safelyStoreData(`payment_polling_${missionaryId}`, interval.toString());
   };
 
   return (

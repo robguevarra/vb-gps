@@ -9,7 +9,7 @@
 
 "use client"
 
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { usePaymentWizardStore } from "@/stores/paymentWizardStore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -20,6 +20,7 @@ import { WizardStepThree } from "@/components/wizard/WizardStepThree";
 import { WizardStepFour } from "@/components/wizard/WizardStepFour";
 import { DonorCreationForm } from "@/components/wizard/DonorCreationForm";
 import { AnimatePresence } from "framer-motion";
+import { trackPerformance } from "@/utils/performance";
 
 interface BulkOnlinePaymentWizardProps {
   /** ID of the missionary generating the payment link */
@@ -54,40 +55,53 @@ export function BulkOnlinePaymentWizard({
   onSuccess,
   onError
 }: BulkOnlinePaymentWizardProps) {
+  // Track component performance
+  useEffect(() => {
+    const endTracking = trackPerformance('BulkOnlinePaymentWizard');
+    return endTracking;
+  }, []);
+
+  // Use local state for wizard step
+  const [currentStep, setCurrentStep] = useState(1);
+
   const { 
     initializeWithMissionary, 
     isNewDonorFormOpen,
-    paymentStatus,
-    setError
+    setIsNewDonorFormOpen
   } = usePaymentWizardStore();
   
   // Initialize the store with missionary data
   useEffect(() => {
     initializeWithMissionary(missionaryId, missionaryName);
     
-    // Set up callbacks
-    if (onSuccess) {
-      const handleSuccess = () => {
-        if (paymentStatus === 'completed') {
-          onSuccess();
+    // Set up callbacks for localStorage events
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `payment_status_${missionaryId}`) {
+        try {
+          const status = JSON.parse(e.newValue || '{}');
+          if (status.status === 'completed' && onSuccess) {
+            onSuccess();
+          } else if (status.status === 'failed' && onError) {
+            onError('Payment failed');
+          }
+        } catch (err) {
+          console.error('Error parsing storage event:', err);
         }
-      };
-      
-      window.addEventListener('storage', handleSuccess);
-      return () => window.removeEventListener('storage', handleSuccess);
-    }
+      }
+    };
     
-    if (onError) {
-      const handleError = () => {
-        if (paymentStatus === 'failed') {
-          onError('Payment failed');
-        }
-      };
-      
-      window.addEventListener('storage', handleError);
-      return () => window.removeEventListener('storage', handleError);
-    }
-  }, [missionaryId, missionaryName, initializeWithMissionary, paymentStatus, onSuccess, onError]);
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [missionaryId, missionaryName, initializeWithMissionary, onSuccess, onError]);
+  
+  // Navigation handlers
+  const handleNext = useCallback(() => {
+    setCurrentStep(prev => prev + 1);
+  }, []);
+
+  const handlePrev = useCallback(() => {
+    setCurrentStep(prev => prev - 1);
+  }, []);
   
   // Custom error fallback UI
   const errorFallback = (
@@ -106,27 +120,43 @@ export function BulkOnlinePaymentWizard({
       <div className="space-y-4">
         <h2 className="text-2xl font-bold">{title}</h2>
         
-        {/* Wizard Steps */}
-        <WizardStepOne />
-        <WizardStepTwo />
-        <WizardStepThree />
-        <WizardStepFour />
+        {/* Wizard Steps - Only render the current step */}
+        <WizardStepOne 
+          onNext={handleNext} 
+          visible={currentStep === 1} 
+        />
+        
+        <WizardStepTwo 
+          onNext={handleNext} 
+          onPrev={handlePrev} 
+          visible={currentStep === 2} 
+        />
+        
+        <WizardStepThree 
+          onNext={handleNext} 
+          onPrev={handlePrev} 
+          visible={currentStep === 3} 
+        />
+        
+        <WizardStepFour 
+          onPrev={handlePrev} 
+          visible={currentStep === 4} 
+          onSuccess={onSuccess}
+          onError={onError}
+        />
         
         {/* New Donor Form Modal */}
         <AnimatePresence>
           {isNewDonorFormOpen && (
             <DonorCreationForm 
               onSuccess={(donor) => {
-                // Add the new donor to the selected donors and create an entry
-                const { addSelectedDonor, addDonorEntry } = usePaymentWizardStore.getState();
-                addSelectedDonor(donor);
-                addDonorEntry({
-                  donorId: donor.id,
-                  donorName: donor.name,
-                  amount: "",
-                  email: donor.email,
-                  phone: donor.phone
-                });
+                // Add the new donor to the selected donors
+                const { addDonor } = usePaymentWizardStore.getState();
+                addDonor(donor);
+                setIsNewDonorFormOpen(false);
+              }}
+              onCancel={() => {
+                setIsNewDonorFormOpen(false);
               }}
             />
           )}
