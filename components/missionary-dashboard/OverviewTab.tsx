@@ -12,6 +12,7 @@
  * - Passes data to client components for interactive elements
  * - Implements nested Suspense boundaries for progressive loading
  * - Uses streaming to improve perceived performance
+ * - Preloads other tab data in the background after rendering
  * 
  * Data Fetching Strategy:
  * - Two-step query to handle foreign key relationship issues with Supabase
@@ -29,6 +30,7 @@ import { ErrorBoundaryProvider } from "@/components/ErrorBoundaryProvider";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
+import { BackgroundTabPreloader } from "@/components/missionary-dashboard/BackgroundTabPreloader";
 
 // Define interfaces for type safety
 interface DonationData {
@@ -137,6 +139,9 @@ export default async function OverviewTab({ missionaryId }: OverviewTabProps) {
         }>
           <RecentDonationsWrapper missionaryId={missionaryId} />
         </Suspense>
+        
+        {/* Background preloader for other tabs */}
+        <BackgroundTabPreloader missionaryId={missionaryId} />
       </div>
     </ErrorBoundaryProvider>
   );

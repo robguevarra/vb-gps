@@ -10,6 +10,7 @@
  * - Improves perceived performance by showing the UI shell first
  * - Maintains the sidebar offset and header across all dashboard views
  * - Includes streaming markers for performance testing
+ * - Accommodates the tab switcher for client-side navigation
  * 
  * @component
  */

@@ -17,6 +17,7 @@
  * - Isolated data-fetching components to prevent blocking the entire page
  * - Added skeleton loaders for better perceived performance
  * - Used progressive enhancement for a better user experience
+ * - Added client-side tab prefetching for instant tab switching
  * 
  * @page
  */
@@ -40,6 +41,7 @@ import { AnimatedHeader } from "@/components/AnimatedHeader";
 import { Suspense } from "react";
 import { DashboardTabSkeleton } from "@/components/missionary-dashboard/DashboardTabSkeleton";
 import { DashboardShell } from "@/components/missionary-dashboard/DashboardShell";
+import { TabSwitcher } from "@/components/missionary-dashboard/TabSwitcher";
 
 export default async function MissionaryDashboard({
   searchParams,
@@ -146,6 +148,22 @@ export default async function MissionaryDashboard({
     }
   };
 
+  // Define available tabs based on user role
+  const availableTabs = [
+    { id: "overview", label: "Overview" },
+    { id: "history", label: "Request History" },
+    { id: "manual-remittance", label: "Manual Remittance" },
+    { id: "reports", label: "My Reports" },
+  ];
+
+  // Add campus director tabs if user has access
+  if (hasAccessToCampusDirectorTabs) {
+    availableTabs.push(
+      { id: "approvals", label: "Approvals" },
+      { id: "staff-reports", label: "Staff Reports" }
+    );
+  }
+
   // Determine which tab content to render with Suspense boundaries
   const renderTabContent = () => {
     switch(currentTab) {
@@ -242,6 +260,13 @@ export default async function MissionaryDashboard({
       subtitle={subtitle}
       userId={userIdParam || user.id}
     >
+      {/* Tab Switcher with client-side navigation */}
+      <TabSwitcher 
+        tabs={availableTabs} 
+        currentTab={currentTab}
+        userId={userIdParam || user.id}
+      />
+
       {/* Tab content with page transitions */}
       <PageTransition mode="elastic">
         <DashboardTabWrapper>
