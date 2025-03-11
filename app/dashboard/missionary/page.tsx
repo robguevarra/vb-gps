@@ -11,6 +11,13 @@
  * The dashboard is dynamic and adapts its features based on the user's role
  * (missionary or campus director) and permissions.
  * 
+ * Optimization improvements:
+ * - Implemented component streaming with Suspense boundaries
+ * - Prioritized UI shell and static content to load first
+ * - Isolated data-fetching components to prevent blocking the entire page
+ * - Added skeleton loaders for better perceived performance
+ * - Used progressive enhancement for a better user experience
+ * 
  * @page
  */
 
@@ -30,6 +37,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PageTransition } from "@/components/PageTransition";
 import { DashboardTabWrapper } from "@/components/DashboardTabWrapper";
 import { AnimatedHeader } from "@/components/AnimatedHeader";
+import { Suspense } from "react";
+import { DashboardTabSkeleton } from "@/components/missionary-dashboard/DashboardTabSkeleton";
+import { DashboardShell } from "@/components/missionary-dashboard/DashboardShell";
 
 export default async function MissionaryDashboard({
   searchParams,
@@ -136,69 +146,87 @@ export default async function MissionaryDashboard({
     }
   };
 
-  // Determine which tab content to render
+  // Determine which tab content to render with Suspense boundaries
   const renderTabContent = () => {
     switch(currentTab) {
       case "overview":
         return (
-          <OverviewTab 
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
+            <OverviewTab 
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
       case "history":
         return (
-          <RequestHistoryTabWrapper
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="history" />}>
+            <RequestHistoryTabWrapper
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
       case "approvals":
         // Only render approvals tab for campus directors and superadmins
         if (hasAccessToCampusDirectorTabs) {
           return (
-            <ApprovalsTabWrapper
-              campusDirectorId={profileData.id}
-            />
+            <Suspense fallback={<DashboardTabSkeleton type="approvals" />}>
+              <ApprovalsTabWrapper
+                campusDirectorId={profileData.id}
+              />
+            </Suspense>
           );
         }
         // If not authorized, default to overview
         return (
-          <OverviewTab 
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
+            <OverviewTab 
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
       case "manual-remittance":
         return (
-          <ManualRemittanceTabWrapper
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="manual-remittance" />}>
+            <ManualRemittanceTabWrapper
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
       case "reports":
         return (
-          <ReportsTabWrapper
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="reports" />}>
+            <ReportsTabWrapper
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
       case "staff-reports":
         // Only render staff reports tab for campus directors and superadmins
         if (hasAccessToCampusDirectorTabs) {
           return (
-            <TooltipProvider>
-              <ChurchReportsTab churchIds={[profileData.local_church_id]} />
-            </TooltipProvider>
+            <Suspense fallback={<DashboardTabSkeleton type="staff-reports" />}>
+              <TooltipProvider>
+                <ChurchReportsTab churchIds={[profileData.local_church_id]} />
+              </TooltipProvider>
+            </Suspense>
           );
         }
         // If not authorized, default to overview
         return (
-          <OverviewTab 
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
+            <OverviewTab 
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
       default:
         // Default to overview if tab is not recognized
         return (
-          <OverviewTab 
-            missionaryId={userIdParam || user.id}
-          />
+          <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
+            <OverviewTab 
+              missionaryId={userIdParam || user.id}
+            />
+          </Suspense>
         );
     }
   };
@@ -206,24 +234,20 @@ export default async function MissionaryDashboard({
   const { title, subtitle } = getTabInfo();
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-gray-900" key={userIdParam || user.id}>
-      {/* Main Content - No need for sidebar offset on mobile */}
-      <div className="lg:ml-64 px-4 sm:px-6 lg:px-8 py-8">
-        <AnimatedHeader 
-          fullName={profileData.full_name || user.email}
-          role={profileData.role.replace(/_/g, " ")}
-          churchName={churchName}
-          title={title}
-          subtitle={subtitle}
-        />
-
-        {/* Tab content with page transitions */}
-        <PageTransition mode="elastic">
-          <DashboardTabWrapper>
-            {renderTabContent()}
-          </DashboardTabWrapper>
-        </PageTransition>
-      </div>
-    </div>
+    <DashboardShell
+      fullName={profileData.full_name || user.email}
+      role={profileData.role.replace(/_/g, " ")}
+      churchName={churchName}
+      title={title}
+      subtitle={subtitle}
+      userId={userIdParam || user.id}
+    >
+      {/* Tab content with page transitions */}
+      <PageTransition mode="elastic">
+        <DashboardTabWrapper>
+          {renderTabContent()}
+        </DashboardTabWrapper>
+      </PageTransition>
+    </DashboardShell>
   );
 }

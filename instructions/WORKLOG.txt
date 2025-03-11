@@ -10,6 +10,18 @@ xendit integration working on misisonary dashboard.
 - need to test online doantions again if they'r working. 
 - need to diagnose why success page is not working properly. should redirect back to dashboard.
 
+work on recurring payments. 
+work on faster load times. cache stuff. 
+
+staff reports supposed graph not working. 
+
+staff reports not showing 
+
+email 
+surplus logic
+
+disbursement reports
+
 -----------
 
 

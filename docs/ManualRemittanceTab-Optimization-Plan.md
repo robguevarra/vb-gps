@@ -857,7 +857,174 @@ These fixes ensure that:
 3. The API validation schema properly handles optional fields with appropriate default values
 4. Payment processing is more robust and handles edge cases properly
 
-## 5. Implementation Checklist
+### 5.4 UI Enhancements (July 2024)
+
+As part of our ongoing optimization efforts, we've made significant improvements to the donor search UI to enhance usability and visual design:
+
+#### VirtualizedDonorList Component Enhancements
+
+```typescript
+// Enhanced VirtualizedDonorList with improved UI
+export function VirtualizedDonorList({ 
+  donors, 
+  onSelectDonor,
+  isLoading = false,
+  isFetchingNextPage = false,
+  hasNextPage = false,
+  fetchNextPage,
+  emptyMessage = "No donors found",
+  selectedDonors = {}
+}: VirtualizedDonorListProps) {
+  // ... implementation details ...
+  
+  return (
+    <div ref={parentRef} className="h-[300px] overflow-auto border rounded-md">
+      <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const donor = donors[virtualItem.index];
+          const isSelected = donor.id in selectedDonors;
+          
+          return (
+            <motion.div
+              key={donor.id}
+              className="absolute top-0 left-0 w-full p-3 border-b hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+              style={{
+                height: `${virtualItem.size}px`,
+                transform: `translateY(${virtualItem.start}px)`,
+                willChange: "transform, opacity"
+              }}
+              onClick={() => onSelectDonor(donor)}
+            >
+              <div className="flex justify-between items-center h-full">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm sm:text-base truncate">{donor.name}</div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                    {donor.email && (
+                      <div className="flex items-center text-xs text-gray-500 truncate">
+                        <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">{donor.email}</span>
+                      </div>
+                    )}
+                    {donor.phone && (
+                      <div className="flex items-center text-xs text-gray-500">
+                        <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                        <span>{donor.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="ml-2 flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full border-2 border-primary-100 flex items-center justify-center">
+                    <div className={`w-3 h-3 rounded-full ${
+                      isSelected ? "bg-primary" : "bg-transparent"
+                    }`} />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+        
+        {/* Loading indicator for next page */}
+        {isFetchingNextPage && (
+          <div className="absolute w-full flex justify-center py-2">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+#### DonorSearch Component Enhancements
+
+```typescript
+// Enhanced DonorSearch component with improved UI
+export function DonorSearch({ searchTerm }: DonorSearchProps) {
+  // ... implementation details ...
+  
+  return (
+    <>
+      {donors.length > 0 && (
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-xs text-gray-500 flex items-center">
+            <Users className="h-3 w-3 mr-1" />
+            <span>Found {totalCount} donors matching "{searchTerm}"</span>
+            {totalCount > donors.length && (
+              <Badge variant="outline" className="ml-2 text-[10px] py-0 h-4">
+                Showing {donors.length}
+              </Badge>
+            )}
+          </div>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 text-xs"
+            onClick={handleOpenDonorForm}
+          >
+            <Plus className="h-3 w-3 mr-1" /> New Donor
+          </Button>
+        </div>
+      )}
+      
+      <VirtualizedDonorList 
+        donors={donors} 
+        onSelectDonor={handleSelectDonor}
+        isLoading={isLoading && donors.length === 0}
+        isFetchingNextPage={isFetchingNextPage}
+        hasNextPage={!!hasNextPage}
+        fetchNextPage={fetchNextPage}
+        selectedDonors={selectedDonors}
+      />
+      
+      {/* Donor Creation Form Modal */}
+      <AnimatePresence>
+        {showDonorForm && (
+          <DonorCreationForm
+            onSuccess={handleDonorCreated}
+            onCancel={handleCancelDonorCreation}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+```
+
+#### Key UI Improvements
+
+1. **Enhanced Information Display**:
+   - Removed irrelevant donor ID display to save space
+   - Added icons for email and phone for better visual distinction
+   - Implemented proper truncation for long text
+   - Created a more compact layout with better information hierarchy
+
+2. **Improved Selection Indicator**:
+   - Replaced text-based selection with a circular checkbox
+   - Added visual feedback for selected state
+   - Made selection more visually intuitive
+
+3. **Better Results Header**:
+   - Added a Users icon to the results count
+   - Created a cleaner layout for the "Found X donors" message
+   - Added a proper badge for "Showing X" instead of text in parentheses
+   - Added a "New Donor" button directly in the results header
+
+4. **Enhanced Empty and Loading States**:
+   - Added subtle background colors to empty and loading states
+   - Improved the visual feedback during loading
+   - Enhanced error messages and search tips
+
+5. **Accessibility Improvements**:
+   - Added proper contrast for text elements
+   - Used appropriate sizing for touch targets
+   - Maintained support for reduced motion preferences
+
+These UI enhancements significantly improve the user experience while maintaining all the performance benefits of virtualization and infinite scrolling. The improved layout makes better use of space, provides clearer visual hierarchy, and makes the donor search functionality more intuitive and efficient to use.
+
+## 6. Implementation Checklist
 
 ### Phase 1: Component Restructuring
 - [x] Create ManualRemittanceTab.tsx (server component)
@@ -913,186 +1080,9 @@ These fixes ensure that:
 ### Phase 5: Testing and Optimization
 - [x] Add performance monitoring
 - [x] Implement error boundaries
+- [x] Enhance donor search UI with improved layout and visual design
 - [ ] Test on various devices and network conditions
 - [ ] Measure bundle size improvements
-- [ ] Document optimization results
-
-## 6. Implementation Progress
-
-### Completed Components
-
-#### Server Components
-- **ManualRemittanceTab.tsx**: Server component that fetches missionary data and renders the client component
-- **ManualRemittanceTabWrapper.tsx**: Wrapper component that handles data fetching and error handling
-
-#### Client Components
-- **ManualRemittanceTabClient.tsx**: Client component that handles the interactive elements of the manual remittance tab
-- **BulkOnlinePaymentWizardWrapper.tsx**: Wrapper component that lazy loads the BulkOnlinePaymentWizard
-- **PaymentWizardSkeleton.tsx**: Skeleton loader for the payment wizard with animations
-
-#### Wizard Components
-- **WizardStepOne.tsx**: First step of the payment wizard for donor selection
-- **WizardStepTwo.tsx**: Second step of the payment wizard for amount entry
-- **WizardStepThree.tsx**: Third step of the payment wizard for payment processing
-- **WizardStepFour.tsx**: Fourth step of the payment wizard for sharing and completion
-- **DonorSearch.tsx**: Component for searching and selecting donors
-- **DonorCreationForm.tsx**: Form for creating new donors
-- **PaymentStatusIndicator.tsx**: Component for displaying payment status with appropriate styling
-
-#### Animation Components
-- **FadeIn.tsx**: Reusable component for fade-in animations with reduced motion support
-- **SlideIn.tsx**: Reusable component for slide-in animations with reduced motion support
-- **AnimatedButton.tsx**: Enhanced button component with micro-interactions and reduced motion support
-
-#### Error Handling Components
-- **ErrorBoundary.tsx**: Class component for catching and handling errors
-- **ErrorBoundaryProvider.tsx**: Simplified wrapper for the ErrorBoundary component
-
-#### State Management
-- **paymentWizardStore.ts**: Zustand store for centralized state management of the payment wizard
-
-### Next Steps
-
-Our immediate focus is on implementing Phase 4 (Performance Optimizations):
-
-#### 1. React Query Implementation
-
-React Query will be used to optimize data fetching, particularly for the donor search functionality:
-
-```typescript
-// hooks/useDonorsQuery.ts
-import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/utils/supabase/client";
-
-export function useDonorsQuery(searchTerm: string, enabled: boolean = true) {
-  return useQuery({
-    queryKey: ["donors", searchTerm],
-    queryFn: async () => {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("donors")
-        .select("id, name, email, phone")
-        .ilike("name", `%${searchTerm}%`)
-        .order("name")
-        .limit(20);
-        
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: enabled && searchTerm.length >= 2,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
-  });
-}
-```
-
-#### 2. Memoization Implementation
-
-We'll add memoization to prevent unnecessary re-renders:
-
-```typescript
-// Example in WizardStepOne.tsx
-import { useMemo, useCallback } from "react";
-
-// Memoize computed values
-const filteredDonors = useMemo(() => {
-  return donors.filter(donor => 
-    donor.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-}, [donors, searchTerm]);
-
-// Memoize event handlers
-const handleSelectDonor = useCallback((donor: Donor) => {
-  if (selectedDonors[donor.id]) {
-    removeSelectedDonor(donor.id);
-  } else {
-    addSelectedDonor(donor);
-  }
-}, [selectedDonors, removeSelectedDonor, addSelectedDonor]);
-```
-
-#### 3. List Virtualization
-
-For donor lists, we'll implement virtualization to improve performance:
-
-```typescript
-// components/VirtualizedDonorList.tsx
-import { useVirtualizer } from "@tanstack/react-virtual";
-
-export function VirtualizedDonorList({ 
-  donors, 
-  onSelectDonor 
-}: VirtualizedDonorListProps) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  
-  const virtualizer = useVirtualizer({
-    count: donors.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 50,
-    overscan: 5,
-  });
-  
-  return (
-    <div 
-      ref={parentRef} 
-      className="h-[300px] overflow-auto border rounded-md"
-    >
-      <div
-        className="relative w-full"
-        style={{ height: `${virtualizer.getTotalSize()}px` }}
-      >
-        {virtualizer.getVirtualItems().map((virtualItem) => {
-          const donor = donors[virtualItem.index];
-          return (
-            <div
-              key={donor.id}
-              className="absolute top-0 left-0 w-full p-3 border-b hover:bg-gray-50 cursor-pointer"
-              style={{
-                height: `${virtualItem.size}px`,
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-              onClick={() => onSelectDonor(donor)}
-            >
-              {/* Donor item content */}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-```
-
-#### 4. LocalStorage Optimization
-
-We'll optimize localStorage usage to improve performance and reliability:
-
-```typescript
-// utils/storage.ts
-export function safelyStoreData(key: string, data: any): boolean {
-  try {
-    const serialized = JSON.stringify(data);
-    localStorage.setItem(key, serialized);
-    return true;
-  } catch (err) {
-    console.error(`Error storing data for key ${key}:`, err);
-    return false;
-  }
-}
-
-export function safelyGetData<T>(key: string, defaultValue: T): T {
-  try {
-    const serialized = localStorage.getItem(key);
-    if (serialized === null) return defaultValue;
-    return JSON.parse(serialized) as T;
-  } catch (err) {
-    console.error(`Error retrieving data for key ${key}:`, err);
-    return defaultValue;
-  }
-}
-```
-
-These optimizations will significantly improve the performance, responsiveness, and reliability of the ManualRemittanceTab and BulkOnlinePaymentWizard components.
 
 ## 7. Expected Outcomes
 
@@ -1107,6 +1097,7 @@ These optimizations will significantly improve the performance, responsiveness, 
 - **Feedback**: Better visual feedback through micro-interactions
 - **Accessibility**: Support for reduced motion preferences
 - **Responsiveness**: Faster response to user interactions
+- **Visual Design**: Enhanced UI with better space utilization and information hierarchy
 
 ### Code Quality Improvements
 - **Maintainability**: Smaller, more focused components

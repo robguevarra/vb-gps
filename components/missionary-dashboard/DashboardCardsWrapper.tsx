@@ -8,6 +8,7 @@
  * - Server-side data fetching for better performance
  * - Client-side animations for enhanced user experience
  * - Proper error handling and loading states
+ * - Includes streaming markers for performance testing
  * 
  * @component
  */
@@ -90,13 +91,15 @@ export async function DashboardCardsWrapper({ missionaryId }: DashboardCardsWrap
       return (
         <ErrorBoundary fallback={<DashboardCardsSkeleton />}>
           <Suspense fallback={<DashboardCardsSkeleton />}>
-            <DashboardCardClient
-              monthlyGoal={typedStatsData.monthly_goal || 0}
-              currentDonations={typedStatsData.current_donations || 0}
-              currentPartnersCount={typedStatsData.active_partners_count || 0}
-              surplusBalance={typedStatsData.surplus_balance || 0}
-              newPartnersCount={typedStatsData.new_partners_count || 0}
-            />
+            <div data-streaming-marker="dashboard-cards">
+              <DashboardCardClient
+                monthlyGoal={typedStatsData.monthly_goal || 0}
+                currentDonations={typedStatsData.current_donations || 0}
+                currentPartnersCount={typedStatsData.active_partners_count || 0}
+                surplusBalance={typedStatsData.surplus_balance || 0}
+                newPartnersCount={typedStatsData.new_partners_count || 0}
+              />
+            </div>
           </Suspense>
         </ErrorBoundary>
       );
@@ -201,13 +204,15 @@ export async function DashboardCardsWrapper({ missionaryId }: DashboardCardsWrap
     return (
       <ErrorBoundary fallback={dashboardCardsErrorFallback}>
         <Suspense fallback={<DashboardCardsSkeleton />}>
-          <DashboardCardClient
-            monthlyGoal={typedProfileData?.monthly_goal || 0}
-            currentDonations={currentDonations}
-            currentPartnersCount={currentPartnersCount}
-            surplusBalance={surplusBalance}
-            newPartnersCount={newPartnersCount}
-          />
+          <div data-streaming-marker="dashboard-cards">
+            <DashboardCardClient
+              monthlyGoal={typedProfileData?.monthly_goal || 0}
+              currentDonations={currentDonations}
+              currentPartnersCount={currentPartnersCount}
+              surplusBalance={surplusBalance}
+              newPartnersCount={newPartnersCount}
+            />
+          </div>
         </Suspense>
       </ErrorBoundary>
     );

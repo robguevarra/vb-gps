@@ -5,6 +5,12 @@
  * to be displayed in the RecentDonationsClient component. This
  * component follows the hybrid architecture pattern with server-side
  * data fetching and client-side interactivity.
+ * 
+ * Features:
+ * - Server-side data fetching for better performance
+ * - Client-side animations for enhanced user experience
+ * - Proper error handling and loading states
+ * - Includes streaming markers for performance testing
  *
  * @component
  */
@@ -19,6 +25,14 @@ interface RecentDonationsWrapperProps {
   missionaryId: string;
 }
 
+// Define the donation type for type safety
+interface ProcessedDonation {
+  id: string | number;
+  donor_name: string;
+  amount: number;
+  date: string;
+}
+
 export async function RecentDonationsWrapper({ missionaryId }: RecentDonationsWrapperProps) {
   const supabase = await createClient();
   
@@ -31,7 +45,7 @@ export async function RecentDonationsWrapper({ missionaryId }: RecentDonationsWr
     .limit(10);
   
   // Process donations data
-  const processedDonations = [];
+  const processedDonations: ProcessedDonation[] = [];
   
   if (recentDonations && recentDonations.length > 0) {
     // Get unique donor IDs and fetch donor names in a single query
@@ -64,10 +78,12 @@ export async function RecentDonationsWrapper({ missionaryId }: RecentDonationsWr
   return (
     <ErrorBoundaryProvider componentName="Recent Donations">
       <Suspense fallback={<RecentDonationsSkeleton />}>
-        <RecentDonationsClient 
-          donations={processedDonations} 
-          missionaryId={missionaryId} 
-        />
+        <div data-streaming-marker="recent-donations">
+          <RecentDonationsClient 
+            donations={processedDonations} 
+            missionaryId={missionaryId} 
+          />
+        </div>
       </Suspense>
     </ErrorBoundaryProvider>
   );

@@ -10,11 +10,14 @@
  * - Uses server-side Supabase client to bypass RLS restrictions
  * - Separates data fetching from UI rendering for better performance
  * - Passes data to client components for interactive elements
+ * - Implements nested Suspense boundaries for progressive loading
+ * - Uses streaming to improve perceived performance
  * 
  * Data Fetching Strategy:
  * - Two-step query to handle foreign key relationship issues with Supabase
  * - Fallback mechanism for missing donor data
  * - Uses server-side Supabase client to bypass RLS restrictions
+ * - Parallel data fetching for independent sections
  */
 
 import { createClient } from "@/utils/supabase/server";
@@ -23,6 +26,9 @@ import { DashboardCardsWrapper } from "@/components/missionary-dashboard/Dashboa
 import { LeaveRequestModalWrapper } from "@/components/missionary-dashboard/LeaveRequestModalWrapper";
 import { SurplusRequestModalWrapper } from "@/components/missionary-dashboard/SurplusRequestModalWrapper";
 import { ErrorBoundaryProvider } from "@/components/ErrorBoundaryProvider";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card } from "@/components/ui/card";
 
 // Define interfaces for type safety
 interface DonationData {
@@ -37,55 +43,19 @@ interface OverviewTabProps {
   missionaryId: string;
 }
 
-export default async function OverviewTab({ missionaryId }: OverviewTabProps) {
-  // Create server-side Supabase client
+// Skeleton loaders for individual sections
+function ActionButtonsSkeleton() {
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 justify-between">
+      <Skeleton className="h-10 w-40" />
+      <Skeleton className="h-10 w-40" />
+    </div>
+  );
+}
+
+// Async component for fetching and rendering surplus balance
+async function SurplusRequestSection({ missionaryId }: { missionaryId: string }) {
   const supabase = await createClient();
-  
-  // Fetch recent donations
-  const { data: recentDonations } = await supabase
-    .from("donor_donations")
-    .select("id, donor_id, amount, date")
-    .eq("missionary_id", missionaryId)
-    .order("date", { ascending: false })
-    .limit(10);
-  
-  // Process donations data
-  const processedDonations: Array<{
-    id: string | number;
-    donor_name: string;
-    amount: number;
-    date: string;
-  }> = [];
-  
-  if (recentDonations && recentDonations.length > 0) {
-    // Get unique donor IDs
-    const donorIds = [...new Set(recentDonations.map(donation => donation.donor_id))];
-    
-    // Fetch donor names in a single query
-    const { data: donors } = await supabase
-      .from("donors")
-      .select("id, name")
-      .in("id", donorIds);
-    
-    // Create a map of donor IDs to names for quick lookup
-    const donorMap = new Map();
-    if (donors) {
-      donors.forEach(donor => {
-        donorMap.set(donor.id, donor.name);
-      });
-    }
-    
-    // Process each donation with donor name
-    recentDonations.forEach(donation => {
-      const donorName = donorMap.get(donation.donor_id) || `Donor #${donation.donor_id}`;
-      processedDonations.push({
-        id: donation.id,
-        donor_name: donorName,
-        amount: donation.amount,
-        date: donation.date
-      });
-    });
-  }
   
   // Fetch surplus balance for the SurplusRequestModalWrapper
   const { data: surplusData } = await supabase
@@ -97,22 +67,76 @@ export default async function OverviewTab({ missionaryId }: OverviewTabProps) {
   const surplusBalance = parseFloat(surplusData?.balance || "0");
   
   return (
+    <SurplusRequestModalWrapper 
+      surplusBalance={surplusBalance} 
+      missionaryId={missionaryId} 
+    />
+  );
+}
+
+export default async function OverviewTab({ missionaryId }: OverviewTabProps) {
+  return (
     <ErrorBoundaryProvider componentName="Overview Tab">
       <div className="space-y-8">
         <h2 className="text-2xl font-semibold">Overview</h2>
         
+        {/* Action Buttons Section with Suspense */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
+          {/* Leave Request Button loads immediately */}
           <LeaveRequestModalWrapper missionaryId={missionaryId} />
-          <SurplusRequestModalWrapper 
-            surplusBalance={surplusBalance} 
-            missionaryId={missionaryId} 
-          />
+          
+          {/* Surplus Request Button with Suspense for data fetching */}
+          <Suspense fallback={<Skeleton className="h-10 w-40" />}>
+            <SurplusRequestSection missionaryId={missionaryId} />
+          </Suspense>
         </div>
         
-        {/* Use the new DashboardCardsWrapper component */}
-        <DashboardCardsWrapper missionaryId={missionaryId} />
+        {/* Dashboard Cards Section with Suspense */}
+        <Suspense fallback={
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="p-6 space-y-4 border rounded-lg bg-card animate-pulse">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <Skeleton className="h-6 w-16" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-8 w-32" />
+                </div>
+                <Skeleton className="h-2 w-full mt-4" />
+              </div>
+            ))}
+          </div>
+        }>
+          <DashboardCardsWrapper missionaryId={missionaryId} />
+        </Suspense>
         
-        <RecentDonationsWrapper missionaryId={missionaryId} />
+        {/* Recent Donations Section with Suspense */}
+        <Suspense fallback={
+          <Card className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <Skeleton className="h-7 w-48" />
+              <Skeleton className="h-9 w-32" />
+            </div>
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between py-2 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div>
+                      <Skeleton className="h-4 w-32 mb-2" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-6 w-20" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        }>
+          <RecentDonationsWrapper missionaryId={missionaryId} />
+        </Suspense>
       </div>
     </ErrorBoundaryProvider>
   );

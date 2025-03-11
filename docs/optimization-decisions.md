@@ -16,6 +16,23 @@ This document tracks key architectural and implementation decisions made during 
 2. Hybrid Architecture: Server wrapper + client islands for interactive components (ManualRemittanceTab)
 3. Client-only: For highly interactive components with minimal data requirements (AnimatedHeader)
 
+## Component Streaming Strategy
+
+**Decision**: Implement multi-level nested Suspense boundaries for granular streaming.
+
+**Rationale**:
+- Traditional approaches wait for all data before rendering anything
+- Single-level Suspense boundaries still block entire sections
+- Multi-level nested Suspense allows for more granular streaming
+- Users see meaningful UI almost instantly, with content progressively filling in
+
+**Implementation Pattern**:
+1. UI Shell Layer: Loads immediately (DashboardShell)
+2. Component Structure Layer: Loads next (section headers, containers)
+3. Data-Dependent Layer: Loads progressively (cards, tables, charts)
+4. Tailored skeleton loaders for each component
+5. Component-level data fetching for better separation of concerns
+
 ## Animation Implementation
 
 **Decision**: Implement a comprehensive animation system with accessibility support.
