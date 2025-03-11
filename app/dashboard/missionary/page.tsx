@@ -19,6 +19,7 @@
  * - Used progressive enhancement for a better user experience
  * - Added client-side tab prefetching for instant tab switching
  * - Removed duplicate navigation (tabs) to simplify UI
+ * - Implemented caching for the Overview tab to prevent unnecessary reloads
  * 
  * @page
  */
@@ -58,6 +59,9 @@ export default async function MissionaryDashboard({
     : typeof params.userId === "string"
     ? params.userId
     : undefined;
+  
+  // Check if this is a refresh request (used for the Overview tab)
+  const isRefreshRequest = params.refresh !== undefined;
 
   // Initialize Supabase client and get current user
   const supabase = await createClient();
@@ -172,9 +176,18 @@ export default async function MissionaryDashboard({
       case "overview":
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTabWrapper 
-              missionaryId={userIdParam || user.id}
-            />
+            <>
+              {/* Add the refresh button for the Overview tab */}
+              <OverviewTabWrapper 
+                missionaryId={userIdParam || user.id}
+              />
+              
+              {/* The actual Overview tab content */}
+              <OverviewTab 
+                missionaryId={userIdParam || user.id}
+                key={isRefreshRequest ? `refresh-${params.refresh}` : 'overview'}
+              />
+            </>
           </Suspense>
         );
       case "history":
@@ -199,7 +212,7 @@ export default async function MissionaryDashboard({
         // If not authorized, default to overview
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTabWrapper 
+            <OverviewTab 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>
@@ -234,7 +247,7 @@ export default async function MissionaryDashboard({
         // If not authorized, default to overview
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTabWrapper 
+            <OverviewTab 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>
@@ -243,7 +256,7 @@ export default async function MissionaryDashboard({
         // Default to overview if tab is not recognized
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTabWrapper 
+            <OverviewTab 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>

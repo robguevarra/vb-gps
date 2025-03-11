@@ -4,7 +4,7 @@
 
 We've simplified the navigation in the Staff Portal by removing the duplicate tab navigation at the top of the dashboard. Now, all navigation is handled through the sidebar, providing a cleaner, more consistent experience.
 
-We've also enhanced the caching mechanism for the Overview tab to eliminate the delay when returning to it.
+We've also implemented advanced caching for the Overview tab to eliminate the delay when returning to it.
 
 ## Why We Made This Change
 
@@ -30,18 +30,22 @@ Additionally, we observed that the Overview tab was reloading data when users na
 - Clicking a navigation item instantly loads the corresponding content
 - The sidebar highlights your current location
 - On mobile, the sidebar becomes a drawer menu accessible via the menu button
-- The Overview tab content is cached after first load and reused when you return to it
+- The Overview tab is cached using HTTP cache headers for fast access
 - A "Refresh Data" button allows you to manually refresh the Overview tab when needed
 
 ## Technical Details
 
-While we've simplified the UI, we've maintained all the technical benefits of our previous implementation:
+Our implementation uses several advanced techniques to ensure optimal performance:
 
-- Client-side navigation for instant page transitions
-- Background prefetching of content for faster navigation
-- Content caching for frequently accessed sections
-- Optimized loading patterns that prioritize important content first
-- Enhanced caching for the Overview tab to prevent unnecessary reloads
+1. **HTTP Caching**: We use middleware to set appropriate cache headers for different tabs, with longer cache times for the Overview tab.
+
+2. **Client-side Navigation**: The sidebar uses Next.js client-side navigation to update the URL without full page reloads.
+
+3. **Cache Busting**: The "Refresh Data" button adds a timestamp parameter to the URL, forcing a fresh server request when needed.
+
+4. **Optimized Loading Patterns**: We prioritize loading the most important content first, with skeleton loaders for a smooth experience.
+
+5. **Background Prefetching**: We preload other tab content in the background after the initial tab is loaded.
 
 ## Performance Improvements
 

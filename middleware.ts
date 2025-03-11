@@ -4,6 +4,19 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
+/**
+ * Middleware for handling caching and navigation optimizations
+ * 
+ * This middleware:
+ * 1. Sets appropriate cache headers for different dashboard tabs
+ * 2. Implements special caching for the Overview tab to prevent unnecessary reloads
+ * 3. Respects refresh requests to bypass the cache when needed
+ * 
+ * The caching strategy improves performance by:
+ * - Caching the Overview tab content in the browser
+ * - Allowing manual refresh when fresh data is needed
+ * - Using different cache settings for different tabs based on data volatility
+ */
 export async function middleware(request: NextRequest) {
   // If this is an OPTIONS request for an API route, handle it immediately
   if (request.method === 'OPTIONS' && request.nextUrl.pathname.startsWith('/api/')) {
@@ -97,6 +110,37 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session if expired (required for Server Components)
   await supabase.auth.getSession();
+
+  const url = new URL(request.url);
+  
+  // Only apply caching to dashboard routes
+  if (url.pathname.includes('/dashboard/missionary')) {
+    const searchParams = url.searchParams;
+    const tab = searchParams.get('tab') || 'overview';
+    const isRefreshRequest = searchParams.has('refresh');
+    
+    // Set different cache control headers based on the tab
+    if (tab === 'overview' && !isRefreshRequest) {
+      // Cache Overview tab for 5 minutes unless explicitly refreshed
+      // This prevents the 2-3 second reload when switching back to Overview
+      response.headers.set(
+        'Cache-Control',
+        'public, s-maxage=300, stale-while-revalidate=60'
+      );
+    } else if (isRefreshRequest) {
+      // For refresh requests, bypass the cache completely
+      response.headers.set(
+        'Cache-Control',
+        'no-store, must-revalidate'
+      );
+    } else {
+      // For other tabs, use a shorter cache time
+      response.headers.set(
+        'Cache-Control',
+        'public, s-maxage=60, stale-while-revalidate=30'
+      );
+    }
+  }
 
   return response;
 }
