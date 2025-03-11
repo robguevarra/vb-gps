@@ -18,7 +18,7 @@
  */
 
 import { createClient } from "@/utils/supabase/server";
-import RecentDonations from "@/components/RecentDonations";
+import { RecentDonationsWrapper } from "@/components/RecentDonationsWrapper";
 import { DashboardCardsWrapper } from "@/components/missionary-dashboard/DashboardCardsWrapper";
 import { LeaveRequestModalWrapper } from "@/components/missionary-dashboard/LeaveRequestModalWrapper";
 import { SurplusRequestModalWrapper } from "@/components/missionary-dashboard/SurplusRequestModalWrapper";
@@ -112,10 +112,7 @@ export default async function OverviewTab({ missionaryId }: OverviewTabProps) {
         {/* Use the new DashboardCardsWrapper component */}
         <DashboardCardsWrapper missionaryId={missionaryId} />
         
-        <RecentDonations 
-          donations={processedDonations} 
-          missionaryId={missionaryId} 
-        />
+        <RecentDonationsWrapper missionaryId={missionaryId} />
       </div>
     </ErrorBoundaryProvider>
   );

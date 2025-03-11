@@ -183,7 +183,7 @@ export default function DashboardCards({
 
   return (
     <motion.div 
-      className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+      className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" // Updated grid - 1 column on mobile
       variants={containerVariants}
       initial="hidden"
       animate={shouldAnimate ? "show" : "hidden"}
@@ -237,7 +237,7 @@ export default function DashboardCards({
                 </h3>
                 <motion.p 
                   variants={valueVariants}
-                  className="text-2xl font-bold tracking-tight"
+                  className="text-2xl font-bold tracking-tight truncate" // Added truncate for mobile
                 >
                   {card.isCurrency 
                     ? `₱${(card.value ?? 0).toLocaleString()}` 

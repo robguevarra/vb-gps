@@ -159,9 +159,10 @@ export default function Navbar() {
         {/* Mobile menu button - only show when sidebar is closed */}
         <button 
           className="md:hidden p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
+          style={{ minHeight: '44px', minWidth: '44px' }} // Increased touch target
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-6 w-6" /> {/* Slightly larger icon */}
           <span className="sr-only">Toggle menu</span>
         </button>
 
@@ -198,6 +199,7 @@ export default function Navbar() {
           {mobileMenuOpen && (
             <motion.div 
               className="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-md p-4 flex flex-col gap-3 z-50"
+              style={{ maxHeight: 'calc(100vh - 4rem)', overflowY: 'auto' }} // Ensure it doesn't overflow viewport
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -211,10 +213,11 @@ export default function Navbar() {
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="h-8 w-8 p-0 rounded-full"
+                  className="h-10 w-10 p-0 rounded-full" // Larger touch target
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   <span className="sr-only">Close menu</span>
+                  ×{/* Add a visible close icon */}
                 </Button>
               </div>
               

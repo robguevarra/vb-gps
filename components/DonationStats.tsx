@@ -30,15 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/utils/supabase/client";
 import { Loader2, TrendingUp, TrendingDown, Users, Target } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import dynamic from "next/dynamic";
-
-// Lazy load chart components
-const LineChart = dynamic(() => import("@/components/charts/LineChart"), { 
-  ssr: false,
-  loading: () => <div className="h-[300px] flex items-center justify-center">
-    <Loader2 className="h-8 w-8 animate-spin" />
-  </div>
-});
+import { LineChartWrapper } from "@/components/charts/LineChartWrapper";
 
 /**
  * Interface for donation data structure
@@ -256,7 +248,7 @@ export default function DonationStats({ missionaryId, monthlyGoal }: DonationSta
               <CardTitle>Monthly Donations</CardTitle>
             </CardHeader>
             <CardContent>
-              <LineChart
+              <LineChartWrapper
                 data={monthlyStats.map(stat => ({
                   x: stat.month,
                   y: stat.total

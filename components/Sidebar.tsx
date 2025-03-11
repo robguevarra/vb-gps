@@ -146,7 +146,7 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <SheetContent 
           side="left" 
-          className="w-[85vw] sm:w-80 p-0 border-r shadow-lg"
+          className="w-[90vw] max-w-[320px] p-0 border-r shadow-lg"
           // Enhanced animations
           style={{
             transition: "transform 0.3s ease-in-out, opacity 0.3s ease-in-out"
@@ -189,7 +189,7 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
                         onClick={() => setIsOpen(false)}
                         className={cn(
                           "flex items-center justify-between px-4 py-3 rounded-lg",
-                          "transition-all duration-200",
+                          "transition-all duration-200 min-h-[60px]", // Increased touch target
                           isActive 
                             ? "bg-primary/10 text-primary font-medium" 
                             : "text-muted-foreground hover:bg-accent hover:text-foreground"
