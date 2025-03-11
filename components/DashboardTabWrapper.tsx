@@ -2,6 +2,7 @@
 
 import React, { ReactNode, useEffect, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { useSearchParams } from "next/navigation";
 
 interface DashboardTabWrapperProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ interface DashboardTabWrapperProps {
  * 
  * Provides animated wrapper for dashboard tab content with staggered animations.
  * Implements accessibility considerations and performance optimizations.
+ * Now includes data attributes for tab content caching.
  * 
  * @param children - The tab content to be animated
  * @param title - Optional title to display above the content
@@ -26,6 +28,9 @@ export function DashboardTabWrapper({
 }: DashboardTabWrapperProps) {
   const [isVisible, setIsVisible] = useState(false);
   const shouldReduceMotion = useReducedMotion();
+  const searchParams = useSearchParams();
+  // Default to 'overview' if searchParams is null or tab param is not present
+  const currentTab = searchParams ? searchParams.get('tab') || 'overview' : 'overview';
   
   useEffect(() => {
     // Small delay to ensure smooth animation
@@ -149,6 +154,7 @@ export function DashboardTabWrapper({
             transformOrigin: "center top",
             ...(shouldReduceMotion ? {} : { willChange: "opacity, transform" })
           }}
+          data-tab-content={currentTab}
         >
           <div className="relative z-10">
             {children}

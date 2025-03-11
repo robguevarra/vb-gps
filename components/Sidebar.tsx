@@ -1,8 +1,27 @@
 // components/Sidebar.tsx
 "use client";
 
+/**
+ * Sidebar Component
+ * 
+ * This component provides the main navigation for the application.
+ * It has been updated to include tab navigation links that were previously
+ * duplicated in the TabSwitcher component, consolidating all navigation
+ * into a single, consistent interface.
+ * 
+ * Features:
+ * - Responsive design with mobile drawer and desktop sidebar
+ * - Role-based navigation items
+ * - Visual indicators for active routes
+ * - Smooth animations for transitions
+ * - Client-side navigation for instant page transitions
+ * - Preserves URL parameters for consistent navigation
+ * 
+ * @component
+ */
+
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { 
   Sheet, 
@@ -22,7 +41,9 @@ import {
   BarChart2, 
   Users,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  PieChart,
+  FileText
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useState, useEffect, Suspense } from "react";
@@ -39,7 +60,9 @@ interface SidebarProps {
 function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMenuOpen }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const currentTab = searchParams?.get("tab") || "overview";
+  const userId = searchParams?.get("userId");
   const supabase = createClient();
   const [userRole, setUserRole] = useState("");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -92,53 +115,126 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
       icon: <CreditCard className="h-5 w-5" />,
       description: "Record manual donations"
     },
-    ...(showCampusDirectorTabs ? [{ 
-      name: "Approvals", 
-      href: "?tab=approvals", 
-      icon: <CheckSquare className="h-5 w-5" />,
-      description: "Manage pending approvals"
-    }] : []),
     { 
       name: "My Reports", 
       href: "?tab=reports", 
       icon: <BarChart2 className="h-5 w-5" />,
       description: "View your performance reports"
     },
-    ...(showCampusDirectorTabs ? [{ 
-      name: "Staff Reports", 
-      href: "?tab=staff-reports", 
-      icon: <Users className="h-5 w-5" />,
-      description: "Monitor staff performance"
-    }] : []),
+    ...(showCampusDirectorTabs ? [
+      { 
+        name: "Approvals", 
+        href: "?tab=approvals", 
+        icon: <CheckSquare className="h-5 w-5" />,
+        description: "Manage pending approvals"
+      },
+      { 
+        name: "Staff Reports", 
+        href: "?tab=staff-reports", 
+        icon: <PieChart className="h-5 w-5" />,
+        description: "View staff performance metrics"
+      }
+    ] : []),
   ];
 
-  // Helper function to handle params
-  const getUpdatedParams = (itemHref: string) => {
-    const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
-    const newParams = new URLSearchParams(itemHref.split("?")[1] || "");
+  // Function to handle client-side navigation with tab switching
+  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    e.preventDefault();
     
-    params.forEach((value, key) => {
-      if (key !== "tab" && !newParams.has(key)) {
-        newParams.set(key, value);
-      }
-    });
+    // Extract the tab parameter from the href
+    const tabMatch = href.match(/\?tab=([^&]*)/);
+    const newTab = tabMatch ? tabMatch[1] : "overview";
+    
+    // Construct the new URL with the tab and userId parameters
+    const newUrl = `${pathname}?tab=${newTab}${userId ? `&userId=${userId}` : ''}`;
+    
+    // Use router.push for client-side navigation
+    router.push(newUrl);
+    
+    // Close the mobile menu if it's open
+    if (isOpen) {
+      setIsOpen(false);
+    }
+  };
+
+  // Function to get updated search params for navigation
+  const getUpdatedParams = (itemHref: string) => {
+    // Extract the tab parameter from the href
+    const tabMatch = itemHref.match(/\?tab=([^&]*)/);
+    const newTab = tabMatch ? tabMatch[1] : "overview";
+    
+    // Create a new URLSearchParams object
+    const newParams = new URLSearchParams(searchParams?.toString() || "");
+    
+    // Update the tab parameter
+    newParams.set("tab", newTab);
     
     return newParams.toString();
   };
 
-  // Animation variants for mobile menu items
+  // Animation variants for list items
   const itemVariants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: (i: number) => ({
-      opacity: 1,
-      x: 0,
+    hidden: (i: number) => ({
+      opacity: 0,
+      y: 10,
       transition: {
         delay: i * 0.05,
-        duration: 0.3,
-        ease: "easeOut"
-      }
-    })
+      },
+    }),
+    visible: (i: number) => ({
+      opacity: 1,
+      y: 0,
+      transition: {
+        delay: i * 0.05,
+      },
+    }),
   };
+
+  // Render navigation items for both mobile and desktop
+  const renderNavItems = (isMobile = false) => (
+    <AnimatePresence>
+      {navItems.map((item, index) => {
+        const isActive = currentTab === item.href.split("=")[1];
+        const newParams = getUpdatedParams(item.href);
+
+        return (
+          <motion.div
+            key={item.name}
+            custom={index}
+            initial="hidden"
+            animate="visible"
+            variants={itemVariants}
+          >
+            <Link
+              href={`${pathname}?${newParams}`}
+              onClick={(e) => handleNavigation(e, item.href)}
+              className={cn(
+                "flex items-center justify-between px-4 py-3 rounded-lg",
+                "transition-all duration-200",
+                isMobile ? "min-h-[60px]" : "", // Increased touch target for mobile
+                isActive
+                  ? "bg-primary/10 text-primary font-medium" 
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                {item.icon}
+                <div>
+                  <div className="font-medium">{item.name}</div>
+                  {isMobile && (
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {item.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {isActive && <ChevronRight className="h-4 w-4 text-primary" />}
+            </Link>
+          </motion.div>
+        );
+      })}
+    </AnimatePresence>
+  );
 
   return (
     <>
@@ -159,8 +255,8 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
                 Access your missionary tools and reports
               </SheetDescription>
             </SheetHeader>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="icon" 
               onClick={() => setIsOpen(false)}
               className="h-8 w-8 rounded-full"
@@ -171,45 +267,7 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
           </div>
           <ScrollArea className="h-[calc(100vh-5rem)]">
             <nav className="flex flex-col p-3 space-y-1">
-              <AnimatePresence>
-                {navItems.map((item, index) => {
-                  const newParams = getUpdatedParams(item.href);
-                  const isActive = currentTab === item.href.split("=")[1];
-                  
-                  return (
-                    <motion.div
-                      key={item.name}
-                      custom={index}
-                      initial="hidden"
-                      animate="visible"
-                      variants={itemVariants}
-                    >
-                      <Link
-                        href={`${pathname}?${newParams}`}
-                        onClick={() => setIsOpen(false)}
-                        className={cn(
-                          "flex items-center justify-between px-4 py-3 rounded-lg",
-                          "transition-all duration-200 min-h-[60px]", // Increased touch target
-                          isActive 
-                            ? "bg-primary/10 text-primary font-medium" 
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          {item.icon}
-                          <div>
-                            <div className="font-medium">{item.name}</div>
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              {item.description}
-                            </p>
-                          </div>
-                        </div>
-                        {isActive && <ChevronRight className="h-4 w-4 text-primary" />}
-                      </Link>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
+              {renderNavItems(true)}
             </nav>
           </ScrollArea>
         </SheetContent>
@@ -240,30 +298,7 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
         </div>
         <ScrollArea className="h-[calc(100vh-8rem)]">
           <nav className="flex flex-col p-3 space-y-1">
-            {navItems.map((item) => {
-              const newParams = getUpdatedParams(item.href);
-              const isActive = currentTab === item.href.split("=")[1];
-              
-              return (
-                <Link
-                  key={item.name}
-                  href={`${pathname}?${newParams}`}
-                  className={cn(
-                    "flex items-center justify-between px-4 py-3 rounded-lg",
-                    "transition-all duration-200",
-                    isActive 
-                      ? "bg-primary/10 text-primary font-medium" 
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    {item.icon}
-                    <span>{item.name}</span>
-                  </div>
-                  {isActive && <ChevronRight className="h-4 w-4 text-primary" />}
-                </Link>
-              );
-            })}
+            {renderNavItems(false)}
           </nav>
         </ScrollArea>
       </div>
@@ -271,19 +306,9 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
   );
 }
 
-// Export the Sidebar component wrapped in Suspense
 export function Sidebar(props: SidebarProps) {
   return (
-    <Suspense fallback={
-      <div className="hidden lg:flex lg:flex-col lg:fixed lg:top-16 lg:left-0 lg:w-64 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:bg-white lg:dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 z-30">
-        <div className="p-4 border-b">
-          <h3 className="text-lg font-semibold">Loading...</h3>
-        </div>
-        <div className="flex justify-center items-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={null}>
       <SidebarContent {...props} />
     </Suspense>
   );

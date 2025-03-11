@@ -9,12 +9,13 @@
  * 2. Prefetching tab data when hovering over tabs
  * 3. Showing immediate visual feedback when switching tabs
  * 4. Maintaining tab state between navigations
+ * 5. Caching the overview tab for instant access
  * 
  * @component
  */
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePathname } from "next/navigation";
 
@@ -38,18 +39,59 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   const [isNavigating, setIsNavigating] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
   
+  // Reference to store the overview tab content
+  const overviewTabRef = useRef<HTMLDivElement | null>(null);
+  const overviewTabContentRef = useRef<string | null>(null);
+  
   // Update active tab when currentTab changes (e.g. from URL)
   useEffect(() => {
     setActiveTab(currentTab);
+    
+    // If we're on the overview tab, store its content for quick access
+    if (currentTab === 'overview' && !overviewTabContentRef.current) {
+      const overviewContent = document.querySelector('[data-tab-content="overview"]');
+      if (overviewContent) {
+        overviewTabContentRef.current = overviewContent.innerHTML;
+      }
+    }
   }, [currentTab]);
 
   // Handle tab change
   const handleTabChange = useCallback((value: string) => {
+    // If we're already on this tab, do nothing
+    if (value === activeTab) return;
+    
     // Set navigating state to show immediate feedback
     setIsNavigating(true);
     setActiveTab(value);
     
-    // Navigate to the new tab
+    // Special case for overview tab - use cached content if available
+    if (value === 'overview' && overviewTabContentRef.current) {
+      // Use cached content for overview tab
+      const tabContentElement = document.querySelector('[data-tab-content]');
+      if (tabContentElement) {
+        // Save current scroll position
+        const scrollPosition = window.scrollY;
+        
+        // Update URL without full navigation
+        window.history.pushState({}, '', `${pathname}?tab=overview${userId ? `&userId=${userId}` : ''}`);
+        
+        // Apply cached content
+        tabContentElement.innerHTML = overviewTabContentRef.current;
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollPosition);
+        
+        // Reset navigating state
+        setTimeout(() => {
+          setIsNavigating(false);
+        }, 100);
+        
+        return;
+      }
+    }
+    
+    // For other tabs, navigate normally
     const url = `${pathname}?tab=${value}${userId ? `&userId=${userId}` : ''}`;
     router.push(url);
     
@@ -57,7 +99,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
     setTimeout(() => {
       setIsNavigating(false);
     }, 300);
-  }, [pathname, router, userId]);
+  }, [activeTab, pathname, router, userId, overviewTabContentRef]);
 
   // Prefetch tab data when hovering over a tab
   const prefetchTab = useCallback((tabId: string) => {

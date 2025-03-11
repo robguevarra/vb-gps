@@ -18,6 +18,7 @@
  * - Added skeleton loaders for better perceived performance
  * - Used progressive enhancement for a better user experience
  * - Added client-side tab prefetching for instant tab switching
+ * - Removed duplicate navigation (tabs) to simplify UI
  * 
  * @page
  */
@@ -41,7 +42,7 @@ import { AnimatedHeader } from "@/components/AnimatedHeader";
 import { Suspense } from "react";
 import { DashboardTabSkeleton } from "@/components/missionary-dashboard/DashboardTabSkeleton";
 import { DashboardShell } from "@/components/missionary-dashboard/DashboardShell";
-import { TabSwitcher } from "@/components/missionary-dashboard/TabSwitcher";
+import { BackgroundTabPreloader } from "@/components/missionary-dashboard/BackgroundTabPreloader";
 
 export default async function MissionaryDashboard({
   searchParams,
@@ -148,7 +149,7 @@ export default async function MissionaryDashboard({
     }
   };
 
-  // Define available tabs based on user role
+  // Define available tabs for background preloading
   const availableTabs = [
     { id: "overview", label: "Overview" },
     { id: "history", label: "Request History" },
@@ -260,11 +261,10 @@ export default async function MissionaryDashboard({
       subtitle={subtitle}
       userId={userIdParam || user.id}
     >
-      {/* Tab Switcher with client-side navigation */}
-      <TabSwitcher 
-        tabs={availableTabs} 
-        currentTab={currentTab}
-        userId={userIdParam || user.id}
+      {/* Background preloader for other tabs */}
+      <BackgroundTabPreloader 
+        missionaryId={userIdParam || user.id} 
+        availableTabs={availableTabs.map(tab => tab.id)}
       />
 
       {/* Tab content with page transitions */}
