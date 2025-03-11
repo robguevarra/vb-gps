@@ -31,6 +31,7 @@ import { redirect } from "next/navigation";
 import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
 import OverviewTab from "@/components/missionary-dashboard/OverviewTab";
+import { OverviewTabWrapper } from "@/components/missionary-dashboard/OverviewTabWrapper";
 import { RequestHistoryTabWrapper } from "@/components/missionary-dashboard/RequestHistoryTab";
 import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/ApprovalsTab";
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
@@ -171,7 +172,7 @@ export default async function MissionaryDashboard({
       case "overview":
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTab 
+            <OverviewTabWrapper 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>
@@ -198,7 +199,7 @@ export default async function MissionaryDashboard({
         // If not authorized, default to overview
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTab 
+            <OverviewTabWrapper 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>
@@ -233,7 +234,7 @@ export default async function MissionaryDashboard({
         // If not authorized, default to overview
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTab 
+            <OverviewTabWrapper 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>
@@ -242,7 +243,7 @@ export default async function MissionaryDashboard({
         // Default to overview if tab is not recognized
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <OverviewTab 
+            <OverviewTabWrapper 
               missionaryId={userIdParam || user.id}
             />
           </Suspense>
