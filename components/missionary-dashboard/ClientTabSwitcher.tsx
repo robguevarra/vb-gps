@@ -16,6 +16,7 @@
  * - Triggers background preloading of other tabs
  * - Shows loading indicators during content fetching
  * - Provides immediate visual feedback on tab changes
+ * - Listens for tab change events for instant UI updates
  * 
  * @component
  */
@@ -53,6 +54,7 @@ export function ClientTabSwitcher({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
   const [isLoading, setIsLoading] = useState(false);
+  const [clientSideTab, setClientSideTab] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -63,8 +65,30 @@ export function ClientTabSwitcher({
       tabContentRef.current[currentTab] = initialContent;
     }
     setActiveTab(currentTab);
+    setClientSideTab(null);
     setIsLoading(false);
   }, [currentTab, initialContent]);
+  
+  // Listen for tab change events from TabSwitcher
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      const { tab, userId } = event.detail;
+      
+      // Update client-side tab immediately
+      setClientSideTab(tab);
+      setIsLoading(true);
+      
+      // No need to navigate here as TabSwitcher already does that
+    };
+    
+    // Add event listener
+    window.addEventListener('tabchange', handleTabChange as EventListener);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('tabchange', handleTabChange as EventListener);
+    };
+  }, []);
   
   // Trigger preloading of other tabs
   useEffect(() => {
@@ -111,7 +135,10 @@ export function ClientTabSwitcher({
   
   // Get the appropriate tab type for the skeleton
   const getTabType = () => {
-    switch(activeTab) {
+    // If we have a client-side tab change, use that
+    const tabToUse = clientSideTab || activeTab;
+    
+    switch(tabToUse) {
       case "overview": return "overview";
       case "history": return "history";
       case "approvals": return "approvals";
@@ -120,6 +147,21 @@ export function ClientTabSwitcher({
       case "staff-reports": return "staff-reports";
       default: return "overview";
     }
+  };
+  
+  // Determine which content to show
+  const getContent = () => {
+    // If we have a client-side tab change, show skeleton for that tab
+    if (clientSideTab && clientSideTab !== activeTab) {
+      return (
+        <DashboardTabSkeleton type={getTabType()} />
+      );
+    }
+    
+    // Otherwise show cached content or loading state
+    return isLoading 
+      ? <DashboardTabSkeleton type={getTabType()} />
+      : tabContentRef.current[activeTab] || initialContent;
   };
   
   return (
@@ -137,30 +179,21 @@ export function ClientTabSwitcher({
         </Button>
       </div>
       
-      {/* Show cached content if available, otherwise show initial content */}
-      <div data-tab-content={activeTab} className="relative">
+      {/* Show content based on state */}
+      <div 
+        data-tab-content={clientSideTab || activeTab} 
+        className="relative"
+      >
         <AnimatePresence mode="wait">
-          {isLoading ? (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <DashboardTabSkeleton type={getTabType()} />
-            </motion.div>
-          ) : (
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {tabContentRef.current[activeTab] || initialContent}
-            </motion.div>
-          )}
+          <motion.div
+            key={clientSideTab || (isLoading ? `loading-${activeTab}` : activeTab)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            {getContent()}
+          </motion.div>
         </AnimatePresence>
       </div>
     </div>

@@ -16,6 +16,8 @@
  * - Smooth animations for transitions
  * - Client-side navigation for instant page transitions
  * - Preserves URL parameters for consistent navigation
+ * - Provides instant visual feedback on tab changes
+ * - Dispatches events to coordinate with other components
  * 
  * @component
  */
@@ -43,7 +45,8 @@ import {
   ChevronRight,
   ArrowLeft,
   PieChart,
-  FileText
+  FileText,
+  Loader2
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { useState, useEffect, Suspense } from "react";
@@ -66,11 +69,19 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
   const supabase = createClient();
   const [userRole, setUserRole] = useState("");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState(currentTab);
+  const [loadingTab, setLoadingTab] = useState<string | null>(null);
   
   // Use the prop if provided, otherwise manage state internally
   const [isOpenInternal, setIsOpenInternal] = useState(false);
   const isOpen = mobileMenuOpen !== undefined ? mobileMenuOpen : isOpenInternal;
   const setIsOpen = setMobileMenuOpen || setIsOpenInternal;
+
+  // Update active tab when URL changes
+  useEffect(() => {
+    setActiveTab(currentTab);
+    setLoadingTab(null);
+  }, [currentTab]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -145,6 +156,16 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
     const tabMatch = href.match(/\?tab=([^&]*)/);
     const newTab = tabMatch ? tabMatch[1] : "overview";
     
+    // Set loading state immediately for instant feedback
+    setActiveTab(newTab);
+    setLoadingTab(newTab);
+    
+    // Dispatch a custom event that other components can listen for
+    const tabChangeEvent = new CustomEvent('tabchange', { 
+      detail: { tab: newTab, userId } 
+    });
+    window.dispatchEvent(tabChangeEvent);
+    
     // Construct the new URL with the tab and userId parameters
     const newUrl = `${pathname}?tab=${newTab}${userId ? `&userId=${userId}` : ''}`;
     
@@ -155,6 +176,11 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
     if (isOpen) {
       setIsOpen(false);
     }
+    
+    // Reset loading state after a delay
+    setTimeout(() => {
+      setLoadingTab(null);
+    }, 500);
   };
 
   // Function to get updated search params for navigation
@@ -194,7 +220,8 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
   const renderNavItems = (isMobile = false) => (
     <AnimatePresence>
       {navItems.map((item, index) => {
-        const isActive = currentTab === item.href.split("=")[1];
+        const isActive = activeTab === item.href.split("=")[1];
+        const isLoading = loadingTab === item.href.split("=")[1];
         const newParams = getUpdatedParams(item.href);
 
         return (
@@ -220,7 +247,12 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
               <div className="flex items-center gap-3">
                 {item.icon}
                 <div>
-                  <div className="font-medium">{item.name}</div>
+                  <div className="font-medium flex items-center gap-2">
+                    {item.name}
+                    {isLoading && (
+                      <Loader2 className="h-3 w-3 animate-spin inline-block" />
+                    )}
+                  </div>
                   {isMobile && (
                     <p className="text-xs text-muted-foreground line-clamp-1">
                       {item.description}
@@ -240,6 +272,12 @@ function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMen
     <>
       {/* Mobile: collapsible sidebar via a Sheet */}
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-50">
+          <Button variant="outline" size="icon" className="rounded-full">
+            <Menu className="h-5 w-5" />
+            <span className="sr-only">Open sidebar</span>
+          </Button>
+        </SheetTrigger>
         <SheetContent 
           side="left" 
           className="w-[90vw] max-w-[320px] p-0 border-r shadow-lg"

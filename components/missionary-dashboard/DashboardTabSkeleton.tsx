@@ -10,23 +10,27 @@
  * - Subtle animations to indicate loading state
  * - Responsive design that matches the actual components
  * - Optimized for perceived performance
+ * - Lightweight implementation for instant rendering
+ * - Reduced complexity for faster initial display
  * 
  * @component
  */
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
+import { memo } from "react";
 
 interface DashboardTabSkeletonProps {
   /** The type of tab to show a skeleton for */
   type: "overview" | "history" | "approvals" | "manual-remittance" | "reports" | "staff-reports";
 }
 
-export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
+// Memoize the component to prevent unnecessary re-renders
+export const DashboardTabSkeleton = memo(function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
   // Common skeleton components
   const DashboardCardsSkeleton = () => (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {[...Array(5)].map((_, i) => (
+      {[...Array(4)].map((_, i) => (
         <div key={i} className="p-6 space-y-4 border rounded-lg bg-card animate-pulse">
           <div className="flex items-center justify-between">
             <Skeleton className="h-10 w-10 rounded-full" />
@@ -36,7 +40,6 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-8 w-32" />
           </div>
-          <Skeleton className="h-2 w-full mt-4" />
         </div>
       ))}
     </div>
@@ -49,7 +52,7 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
         <Skeleton className="h-9 w-32" />
       </div>
       <div className="space-y-4">
-        {[...Array(5)].map((_, i) => (
+        {[...Array(3)].map((_, i) => (
           <div key={i} className="flex items-center justify-between py-2 animate-pulse">
             <div className="flex items-center gap-3">
               <Skeleton className="h-10 w-10 rounded-full" />
@@ -71,7 +74,7 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
         <Skeleton className="h-8 w-48" />
       </div>
       <div className="divide-y">
-        {[...Array(5)].map((_, i) => (
+        {[...Array(3)].map((_, i) => (
           <div key={i} className="p-4 flex justify-between items-center animate-pulse">
             <div className="space-y-2">
               <Skeleton className="h-5 w-48" />
@@ -102,11 +105,7 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-10 w-full" />
         </div>
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-24 w-full" />
-        </div>
-        <div className="flex justify-end">
+        <div className="flex justify-end mt-4">
           <Skeleton className="h-10 w-32" />
         </div>
       </div>
@@ -116,7 +115,7 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
   const ChartSkeleton = () => (
     <Card className="p-6 mt-6">
       <Skeleton className="h-8 w-48 mb-6" />
-      <Skeleton className="h-[300px] w-full rounded-md" />
+      <Skeleton className="h-[200px] w-full rounded-md" />
     </Card>
   );
 
@@ -124,7 +123,7 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
   switch (type) {
     case "overview":
       return (
-        <div className="space-y-8">
+        <div className="space-y-6">
           <h2 className="text-2xl font-semibold">Overview</h2>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-between">
@@ -179,9 +178,7 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
           <div className="flex gap-2 mb-6">
             <Skeleton className="h-10 w-24" />
             <Skeleton className="h-10 w-24" />
-            <Skeleton className="h-10 w-24" />
           </div>
-          <DashboardCardsSkeleton />
           <ChartSkeleton />
         </div>
       );
@@ -201,10 +198,10 @@ export function DashboardTabSkeleton({ type }: DashboardTabSkeletonProps) {
     
     default:
       return (
-        <div className="space-y-8">
+        <div className="space-y-6">
           <h2 className="text-2xl font-semibold">Loading...</h2>
           <DashboardCardsSkeleton />
         </div>
       );
   }
-} 
+}); 

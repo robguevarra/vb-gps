@@ -20,6 +20,7 @@
  * - Added client-side tab prefetching for instant tab switching
  * - Removed duplicate navigation (tabs) to simplify UI
  * - Implemented client-side tab content caching for instant tab switching
+ * - Added persistent client-side sidebar for instant feedback
  * 
  * @page
  */
@@ -37,13 +38,9 @@ import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/Approvals
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
 import { ReportsTabWrapper } from "@/components/missionary-dashboard/ReportsTab";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { PageTransition } from "@/components/PageTransition";
-import { DashboardTabWrapper } from "@/components/DashboardTabWrapper";
-import { AnimatedHeader } from "@/components/AnimatedHeader";
 import { Suspense } from "react";
 import { DashboardTabSkeleton } from "@/components/missionary-dashboard/DashboardTabSkeleton";
-import { DashboardShell } from "@/components/missionary-dashboard/DashboardShell";
-import { ClientTabSwitcher } from "@/components/missionary-dashboard/ClientTabSwitcher";
+import { ClientDashboardLayout } from "@/components/missionary-dashboard/ClientDashboardLayout";
 
 export default async function MissionaryDashboard({
   searchParams,
@@ -98,19 +95,24 @@ export default async function MissionaryDashboard({
         role: "superadmin",
         local_church_id: null,
         monthly_goal: 0,
-        surplus_balance: 0,
       }
     : null);
 
+  // If no profile data and not superadmin, redirect to profile creation
   if (!profileData) {
-    redirect("/login");
+    redirect("/profile/create");
   }
 
-  const churchName = churchData?.name || (isSuperAdmin ? "All Churches" : "Unknown Church");
-  const isCampusDirector = profileData.role === "campus_director";
-  
-  // Check if user should have access to campus director tabs
-  const hasAccessToCampusDirectorTabs = isCampusDirector || isSuperAdmin;
+  // Get church name
+  const churchName = profileData.local_church_id && churchData
+    ? churchData.name
+    : "No Church Assigned";
+
+  // Check if user has access to campus director tabs
+  const hasAccessToCampusDirectorTabs = 
+    profileData.role === "campus_director" || 
+    profileData.role === "superadmin" || 
+    isSuperAdmin;
 
   // Get tab title and subtitle for the current tab
   const getTabInfo = () => {
@@ -258,26 +260,19 @@ export default async function MissionaryDashboard({
   const { title, subtitle } = getTabInfo();
   const tabContent = getTabContent();
 
+  // Render the client-side dashboard layout with the initial tab content
   return (
-    <DashboardShell
+    <ClientDashboardLayout
+      initialContent={tabContent}
+      currentTab={currentTab}
+      missionaryId={userIdParam || user.id}
+      availableTabs={availableTabs}
+      isCampusDirector={hasAccessToCampusDirectorTabs}
       fullName={profileData.full_name || user.email}
       role={profileData.role.replace(/_/g, " ")}
       churchName={churchName}
       title={title}
       subtitle={subtitle}
-      userId={userIdParam || user.id}
-    >
-      {/* Tab content with page transitions and client-side caching */}
-      <PageTransition mode="elastic">
-        <DashboardTabWrapper>
-          <ClientTabSwitcher
-            initialContent={tabContent}
-            currentTab={currentTab}
-            missionaryId={userIdParam || user.id}
-            availableTabs={availableTabs.map(tab => tab.id)}
-          />
-        </DashboardTabWrapper>
-      </PageTransition>
-    </DashboardShell>
+    />
   );
 }

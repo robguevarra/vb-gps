@@ -11,6 +11,7 @@
  * 4. Maintaining tab state between navigations
  * 5. Caching the overview tab for instant access
  * 6. Adding visual loading indicators for better feedback
+ * 7. Providing truly instant UI feedback regardless of data loading
  * 
  * @component
  */
@@ -41,6 +42,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   const [isNavigating, setIsNavigating] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
+  const [clickedTab, setClickedTab] = useState<string | null>(null);
   
   // Reference to store the overview tab content
   const overviewTabRef = useRef<HTMLDivElement | null>(null);
@@ -50,6 +52,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   useEffect(() => {
     setActiveTab(currentTab);
     setLoadingTab(null);
+    setClickedTab(null);
     
     // If we're on the overview tab, store its content for quick access
     if (currentTab === 'overview' && !overviewTabContentRef.current) {
@@ -65,10 +68,20 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
     // If we're already on this tab, do nothing
     if (value === activeTab) return;
     
-    // Set navigating state to show immediate feedback
-    setIsNavigating(true);
+    // INSTANT FEEDBACK: Set active tab immediately
     setActiveTab(value);
+    setClickedTab(value);
+    
+    // Set navigating state to show loading indicator
+    setIsNavigating(true);
     setLoadingTab(value);
+    
+    // Dispatch a custom event that the ClientTabSwitcher can listen for
+    // This allows for coordination between components without prop drilling
+    const tabChangeEvent = new CustomEvent('tabchange', { 
+      detail: { tab: value, userId } 
+    });
+    window.dispatchEvent(tabChangeEvent);
     
     // Special case for overview tab - use cached content if available
     if (value === 'overview' && overviewTabContentRef.current) {
@@ -91,6 +104,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
         setTimeout(() => {
           setIsNavigating(false);
           setLoadingTab(null);
+          setClickedTab(null);
         }, 100);
         
         return;
@@ -124,8 +138,8 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
             value={tab.id}
             onMouseEnter={() => prefetchTab(tab.id)}
             onFocus={() => prefetchTab(tab.id)}
-            disabled={isNavigating}
-            className="relative min-w-[100px] flex items-center justify-center gap-2 transition-all"
+            disabled={isNavigating && tab.id !== clickedTab} // Only disable non-clicked tabs
+            className={`relative min-w-[100px] flex items-center justify-center gap-2 transition-all ${clickedTab === tab.id ? 'opacity-100' : isNavigating ? 'opacity-50' : 'opacity-100'}`}
           >
             {tab.label}
             {loadingTab === tab.id && (
@@ -148,6 +162,13 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
         @keyframes tabIndicatorIn {
           from { transform: scaleX(0.5); opacity: 0.5; }
           to { transform: scaleX(1); opacity: 1; }
+        }
+        
+        /* Add a subtle pulse animation for the clicked tab */
+        @keyframes tabPulse {
+          0% { background-color: transparent; }
+          50% { background-color: hsl(var(--primary) / 0.1); }
+          100% { background-color: transparent; }
         }
       `}</style>
     </Tabs>

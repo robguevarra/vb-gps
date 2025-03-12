@@ -16,6 +16,7 @@ interface DashboardTabWrapperProps {
  * Provides animated wrapper for dashboard tab content with staggered animations.
  * Implements accessibility considerations and performance optimizations.
  * Now includes data attributes for tab content caching and optimized animations.
+ * Ultra-fast transitions for immediate visual feedback.
  * 
  * @param children - The tab content to be animated
  * @param title - Optional title to display above the content
@@ -32,24 +33,42 @@ export function DashboardTabWrapper({
   // Default to 'overview' if searchParams is null or tab param is not present
   const currentTab = searchParams ? searchParams.get('tab') || 'overview' : 'overview';
   
+  // Listen for tab change events from TabSwitcher
   useEffect(() => {
-    // Small delay to ensure smooth animation
+    const handleTabChange = () => {
+      // Reset visibility briefly to trigger animation
+      setIsVisible(false);
+      
+      // Then quickly make it visible again
+      requestAnimationFrame(() => {
+        setIsVisible(true);
+      });
+    };
+    
+    // Add event listener
+    window.addEventListener('tabchange', handleTabChange);
+    
+    // Initial visibility
     const timer = setTimeout(() => {
       setIsVisible(true);
-    }, shouldReduceMotion ? 0 : 20); // Reduced delay for faster response
+    }, shouldReduceMotion ? 0 : 10); // Ultra-reduced delay for faster response
     
-    return () => clearTimeout(timer);
+    // Clean up
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('tabchange', handleTabChange);
+    };
   }, [shouldReduceMotion]);
 
-  // Animation variants for the container
+  // Animation variants for the container - simplified for speed
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
         when: "beforeChildren",
-        staggerChildren: shouldReduceMotion ? 0 : 0.05, // Reduced stagger time
-        duration: shouldReduceMotion ? 0.1 : 0.2, // Reduced duration
+        staggerChildren: shouldReduceMotion ? 0 : 0.03, // Minimal stagger time
+        duration: shouldReduceMotion ? 0.1 : 0.15, // Ultra-reduced duration
         ease: [0.25, 0.1, 0.25, 1.0]
       }
     },
@@ -57,16 +76,16 @@ export function DashboardTabWrapper({
       opacity: 0,
       transition: {
         when: "afterChildren",
-        staggerChildren: shouldReduceMotion ? 0 : 0.03, // Reduced stagger time
+        staggerChildren: shouldReduceMotion ? 0 : 0.02, // Minimal stagger time
         staggerDirection: -1,
-        duration: shouldReduceMotion ? 0.1 : 0.15 // Reduced duration
+        duration: shouldReduceMotion ? 0.1 : 0.1 // Ultra-reduced duration
       }
     }
   };
 
-  // Animation variants for the title
+  // Animation variants for the title - simplified for speed
   const titleVariants = {
-    hidden: { opacity: 0, y: shouldReduceMotion ? 0 : -10 }, // Reduced distance
+    hidden: { opacity: 0, y: shouldReduceMotion ? 0 : -5 }, // Minimal distance
     visible: {
       opacity: 1,
       y: 0,
@@ -74,26 +93,26 @@ export function DashboardTabWrapper({
         ? { duration: 0.1 }
         : {
             type: "spring",
-            stiffness: 400, // Increased stiffness
-            damping: 30,    // Increased damping
-            duration: 0.25  // Reduced duration
+            stiffness: 500, // Higher stiffness
+            damping: 35,    // Higher damping
+            duration: 0.2   // Reduced duration
           }
     },
     exit: {
       opacity: 0,
-      y: shouldReduceMotion ? 0 : -5, // Reduced distance
+      y: shouldReduceMotion ? 0 : -3, // Minimal distance
       transition: {
-        duration: shouldReduceMotion ? 0.1 : 0.15 // Reduced duration
+        duration: shouldReduceMotion ? 0.1 : 0.1 // Ultra-reduced duration
       }
     }
   };
 
-  // Animation variants for the content
+  // Animation variants for the content - simplified for speed
   const contentVariants = {
     hidden: { 
       opacity: 0, 
-      y: shouldReduceMotion ? 0 : 10, // Reduced distance
-      scale: shouldReduceMotion ? 1 : 0.99 // Less scaling for faster animation
+      y: shouldReduceMotion ? 0 : 5, // Minimal distance
+      scale: shouldReduceMotion ? 1 : 0.995 // Minimal scaling for faster animation
     },
     visible: {
       opacity: 1,
@@ -103,23 +122,23 @@ export function DashboardTabWrapper({
         ? { duration: 0.1 }
         : {
             type: "spring",
-            stiffness: 300,
-            damping: 25,
-            duration: 0.3,
-            delay: 0.03 // Reduced delay
+            stiffness: 400,
+            damping: 30,
+            duration: 0.2,
+            delay: 0.01 // Minimal delay
           }
     },
     exit: {
       opacity: 0,
-      y: shouldReduceMotion ? 0 : 5, // Reduced distance
+      y: shouldReduceMotion ? 0 : 3, // Minimal distance
       transition: {
-        duration: shouldReduceMotion ? 0.1 : 0.15 // Reduced duration
+        duration: shouldReduceMotion ? 0.1 : 0.1 // Ultra-reduced duration
       }
     }
   };
 
   return (
-    <AnimatePresence mode="sync"> {/* Changed from "wait" to "sync" for faster transitions */}
+    <AnimatePresence mode="sync">
       <motion.div
         key="dashboard-tab-wrapper"
         initial="hidden"
@@ -166,8 +185,8 @@ export function DashboardTabWrapper({
               className="absolute inset-0 bg-gradient-to-b from-transparent to-background/5 rounded-lg pointer-events-none"
               initial={{ opacity: 0 }}
               animate={{ 
-                opacity: 0.5,
-                transition: { delay: 0.1, duration: 0.4 } // Reduced delay
+                opacity: 0.3, // Reduced opacity
+                transition: { delay: 0.05, duration: 0.3 } // Reduced delay and duration
               }}
             />
           )}
