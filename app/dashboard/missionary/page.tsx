@@ -19,7 +19,7 @@
  * - Used progressive enhancement for a better user experience
  * - Added client-side tab prefetching for instant tab switching
  * - Removed duplicate navigation (tabs) to simplify UI
- * - Implemented caching for the Overview tab to prevent unnecessary reloads
+ * - Implemented client-side tab content caching for instant tab switching
  * 
  * @page
  */
@@ -32,7 +32,6 @@ import { redirect } from "next/navigation";
 import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
 import OverviewTab from "@/components/missionary-dashboard/OverviewTab";
-import { OverviewTabWrapper } from "@/components/missionary-dashboard/OverviewTabWrapper";
 import { RequestHistoryTabWrapper } from "@/components/missionary-dashboard/RequestHistoryTab";
 import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/ApprovalsTab";
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";
@@ -44,7 +43,7 @@ import { AnimatedHeader } from "@/components/AnimatedHeader";
 import { Suspense } from "react";
 import { DashboardTabSkeleton } from "@/components/missionary-dashboard/DashboardTabSkeleton";
 import { DashboardShell } from "@/components/missionary-dashboard/DashboardShell";
-import { BackgroundTabPreloader } from "@/components/missionary-dashboard/BackgroundTabPreloader";
+import { ClientTabSwitcher } from "@/components/missionary-dashboard/ClientTabSwitcher";
 
 export default async function MissionaryDashboard({
   searchParams,
@@ -60,7 +59,7 @@ export default async function MissionaryDashboard({
     ? params.userId
     : undefined;
   
-  // Check if this is a refresh request (used for the Overview tab)
+  // Check if this is a refresh request
   const isRefreshRequest = params.refresh !== undefined;
 
   // Initialize Supabase client and get current user
@@ -170,24 +169,16 @@ export default async function MissionaryDashboard({
     );
   }
 
-  // Determine which tab content to render with Suspense boundaries
-  const renderTabContent = () => {
+  // Generate the tab content based on the current tab
+  const getTabContent = () => {
     switch(currentTab) {
       case "overview":
         return (
           <Suspense fallback={<DashboardTabSkeleton type="overview" />}>
-            <>
-              {/* Add the refresh button for the Overview tab */}
-              <OverviewTabWrapper 
-                missionaryId={userIdParam || user.id}
-              />
-              
-              {/* The actual Overview tab content */}
-              <OverviewTab 
-                missionaryId={userIdParam || user.id}
-                key={isRefreshRequest ? `refresh-${params.refresh}` : 'overview'}
-              />
-            </>
+            <OverviewTab 
+              missionaryId={userIdParam || user.id}
+              key={isRefreshRequest ? `refresh-${params.refresh}` : 'overview'}
+            />
           </Suspense>
         );
       case "history":
@@ -265,6 +256,7 @@ export default async function MissionaryDashboard({
   };
 
   const { title, subtitle } = getTabInfo();
+  const tabContent = getTabContent();
 
   return (
     <DashboardShell
@@ -275,16 +267,15 @@ export default async function MissionaryDashboard({
       subtitle={subtitle}
       userId={userIdParam || user.id}
     >
-      {/* Background preloader for other tabs */}
-      <BackgroundTabPreloader 
-        missionaryId={userIdParam || user.id} 
-        availableTabs={availableTabs.map(tab => tab.id)}
-      />
-
-      {/* Tab content with page transitions */}
+      {/* Tab content with page transitions and client-side caching */}
       <PageTransition mode="elastic">
         <DashboardTabWrapper>
-          {renderTabContent()}
+          <ClientTabSwitcher
+            initialContent={tabContent}
+            currentTab={currentTab}
+            missionaryId={userIdParam || user.id}
+            availableTabs={availableTabs.map(tab => tab.id)}
+          />
         </DashboardTabWrapper>
       </PageTransition>
     </DashboardShell>
