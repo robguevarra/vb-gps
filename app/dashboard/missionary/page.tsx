@@ -30,7 +30,7 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { getUserRole } from "@/utils/getUserRole";
 import { ChurchReportsTab } from "@/components/ChurchReportsTab";
-import OverviewTab from "@/components/missionary-dashboard/OverviewTab";
+import OverviewTab from "@/components/missionary-dashboard/OverviewTabPage";
 import { RequestHistoryTabWrapper } from "@/components/missionary-dashboard/RequestHistoryTab";
 import { ApprovalsTabWrapper } from "@/components/missionary-dashboard/ApprovalsTab";
 import { ManualRemittanceTabWrapper } from "@/components/missionary-dashboard/ManualRemittanceTab";

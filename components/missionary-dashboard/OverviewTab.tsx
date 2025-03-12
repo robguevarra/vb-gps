@@ -1,143 +1,130 @@
 /**
  * OverviewTab Component
  * 
- * Server Component that displays the missionary dashboard overview tab.
- * This component has been optimized to fetch data on the server side
- * and pass it to client components for rendering.
+ * Client component that displays the missionary dashboard overview tab.
+ * This component receives pre-fetched data from the server component
+ * and handles client-side interactivity.
  * 
  * Implementation Notes:
- * - Converted to a Server Component to optimize data fetching
- * - Uses server-side Supabase client to bypass RLS restrictions
- * - Separates data fetching from UI rendering for better performance
- * - Passes data to client components for interactive elements
- * - Implements nested Suspense boundaries for progressive loading
- * - Uses streaming to improve perceived performance
+ * - Receives data from server component for better performance
+ * - Handles client-side interactivity and animations
+ * - Implements modular component architecture
+ * - Uses React Server Components pattern with client islands
  * 
- * Data Fetching Strategy:
- * - Two-step query to handle foreign key relationship issues with Supabase
- * - Fallback mechanism for missing donor data
- * - Uses server-side Supabase client to bypass RLS restrictions
- * - Parallel data fetching for independent sections
+ * @component
  */
 
-import { createClient } from "@/utils/supabase/server";
-import { RecentDonationsWrapper } from "@/components/RecentDonationsWrapper";
-import { DashboardCardsWrapper } from "@/components/missionary-dashboard/DashboardCardsWrapper";
-import { LeaveRequestModalWrapper } from "@/components/missionary-dashboard/LeaveRequestModalWrapper";
-import { SurplusRequestModalWrapper } from "@/components/missionary-dashboard/SurplusRequestModalWrapper";
-import { ErrorBoundaryProvider } from "@/components/ErrorBoundaryProvider";
-import { Suspense } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Card } from "@/components/ui/card";
+"use client";
+
+import { LeaveRequestModal } from "@/components/missionary-dashboard/LeaveRequestModal";
+import { SurplusRequestModal } from "@/components/missionary-dashboard/SurplusRequestModal";
+import { DashboardCards } from "@/components/missionary-dashboard/DashboardCards";
+import { RecentDonations } from "@/components/missionary-dashboard/RecentDonations";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 // Define interfaces for type safety
 interface DonationData {
-  id: string;
-  donor_id: number;
+  id: number;
   amount: number;
   date: string;
-  donor_name?: string;
+  donor_id: number;
+  donors: { id: number; name: string } | null;
+}
+
+interface StatsData {
+  monthly_goal: number;
+  current_donations: number;
+  active_partners_count: number;
+  surplus_balance: number;
+  new_partners_count: number;
 }
 
 interface OverviewTabProps {
   missionaryId: string;
+  statsData?: StatsData;
+  surplusBalance?: number;
+  recentDonations?: DonationData[];
 }
 
-// Skeleton loaders for individual sections
-function ActionButtonsSkeleton() {
-  return (
-    <div className="flex flex-col sm:flex-row gap-4 justify-between">
-      <Skeleton className="h-10 w-40" />
-      <Skeleton className="h-10 w-40" />
-    </div>
-  );
-}
+export default function OverviewTab({ 
+  missionaryId, 
+  statsData = {
+    monthly_goal: 0,
+    current_donations: 0,
+    active_partners_count: 0,
+    surplus_balance: 0,
+    new_partners_count: 0
+  }, 
+  surplusBalance = 0, 
+  recentDonations = [] 
+}: OverviewTabProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  
+  // Handle manual refresh
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    
+    // Add a timestamp parameter to force a fresh server request
+    const newParams = new URLSearchParams(searchParams?.toString() || "");
+    newParams.set("refresh", Date.now().toString());
+    router.push(`${pathname}?${newParams.toString()}`);
+    
+    // Reset the refreshing state after a delay
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 1000);
+  };
 
-// Async component for fetching and rendering surplus balance
-async function SurplusRequestSection({ missionaryId }: { missionaryId: string }) {
-  const supabase = await createClient();
-  
-  // Fetch surplus balance for the SurplusRequestModalWrapper
-  const { data: surplusData } = await supabase
-    .from("surplus_balance")
-    .select("balance")
-    .eq("missionary_id", missionaryId)
-    .single();
-  
-  const surplusBalance = parseFloat(surplusData?.balance || "0");
-  
   return (
-    <SurplusRequestModalWrapper 
-      surplusBalance={surplusBalance} 
-      missionaryId={missionaryId} 
-    />
-  );
-}
-
-export default async function OverviewTab({ missionaryId }: OverviewTabProps) {
-  return (
-    <ErrorBoundaryProvider componentName="Overview Tab">
-      <div className="space-y-8">
-        <h2 className="text-2xl font-semibold">Overview</h2>
-        
-        {/* Action Buttons Section with Suspense */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
-          {/* Leave Request Button loads immediately */}
-          <LeaveRequestModalWrapper missionaryId={missionaryId} />
-          
-          {/* Surplus Request Button with Suspense for data fetching */}
-          <Suspense fallback={<Skeleton className="h-10 w-40" />}>
-            <SurplusRequestSection missionaryId={missionaryId} />
-          </Suspense>
-        </div>
-        
-        {/* Dashboard Cards Section with Suspense */}
-        <Suspense fallback={
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="p-6 space-y-4 border rounded-lg bg-card animate-pulse">
-                <div className="flex items-center justify-between">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <Skeleton className="h-6 w-16" />
-                </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-8 w-32" />
-                </div>
-                <Skeleton className="h-2 w-full mt-4" />
-              </div>
-            ))}
-          </div>
-        }>
-          <DashboardCardsWrapper missionaryId={missionaryId} />
-        </Suspense>
-        
-        {/* Recent Donations Section with Suspense */}
-        <Suspense fallback={
-          <Card className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <Skeleton className="h-7 w-48" />
-              <Skeleton className="h-9 w-32" />
-            </div>
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center justify-between py-2 animate-pulse">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-full" />
-                    <div>
-                      <Skeleton className="h-4 w-32 mb-2" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                  </div>
-                  <Skeleton className="h-6 w-20" />
-                </div>
-              ))}
-            </div>
-          </Card>
-        }>
-          <RecentDonationsWrapper missionaryId={missionaryId} />
-        </Suspense>
+    <div className="space-y-8">
+      {/* Refresh Button */}
+      <div className="flex justify-end">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleRefresh}
+          className="flex items-center gap-1 text-xs"
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+        </Button>
       </div>
-    </ErrorBoundaryProvider>
+      
+      {/* Action Buttons Section */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between">
+        <LeaveRequestModal missionaryId={missionaryId} />
+        <SurplusRequestModal 
+          surplusBalance={surplusBalance} 
+          missionaryId={missionaryId} 
+        />
+      </div>
+      
+      {/* Dashboard Cards Section */}
+      <DashboardCards
+        monthlyGoal={statsData.monthly_goal}
+        currentDonations={statsData.current_donations}
+        currentPartnersCount={statsData.active_partners_count}
+        surplusBalance={statsData.surplus_balance}
+        newPartnersCount={statsData.new_partners_count}
+      />
+      
+      {/* Recent Donations Section */}
+      <RecentDonations
+        donations={recentDonations.map(d => ({
+          id: d.id,
+          donor_name: d.donors?.name || `Donor #${d.donor_id}`,
+          amount: d.amount,
+          date: d.date
+        }))}
+        missionaryId={missionaryId}
+      />
+    </div>
   );
 } 
