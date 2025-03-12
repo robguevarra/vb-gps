@@ -9,9 +9,8 @@
  * 2. Prefetching tab data when hovering over tabs
  * 3. Showing immediate visual feedback when switching tabs
  * 4. Maintaining tab state between navigations
- * 5. Caching the overview tab for instant access
- * 6. Adding visual loading indicators for better feedback
- * 7. Providing truly instant UI feedback regardless of data loading
+ * 5. Adding visual loading indicators for better feedback
+ * 6. Providing truly instant UI feedback regardless of data loading
  * 
  * @component
  */
@@ -43,30 +42,55 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   const [activeTab, setActiveTab] = useState(currentTab);
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
   const [clickedTab, setClickedTab] = useState<string | null>(null);
-  
-  // Reference to store the overview tab content
-  const overviewTabRef = useRef<HTMLDivElement | null>(null);
-  const overviewTabContentRef = useRef<string | null>(null);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Update active tab when currentTab changes (e.g. from URL)
   useEffect(() => {
-    setActiveTab(currentTab);
-    setLoadingTab(null);
-    setClickedTab(null);
-    
-    // If we're on the overview tab, store its content for quick access
-    if (currentTab === 'overview' && !overviewTabContentRef.current) {
-      const overviewContent = document.querySelector('[data-tab-content="overview"]');
-      if (overviewContent) {
-        overviewTabContentRef.current = overviewContent.innerHTML;
+    // Only update if the tab has actually changed
+    if (currentTab !== activeTab) {
+      setActiveTab(currentTab);
+      
+      // Only clear loading state if it matches the current tab
+      if (loadingTab === currentTab) {
+        setLoadingTab(null);
       }
+      
+      setClickedTab(null);
     }
-  }, [currentTab]);
+  }, [currentTab, activeTab, loadingTab]);
+
+  // Listen for page load completion
+  useEffect(() => {
+    const handleLoadComplete = () => {
+      // Clear loading state after the page has fully loaded
+      if (loadingTab === currentTab) {
+        // Add a small delay to ensure the UI has settled
+        setTimeout(() => {
+          setLoadingTab(null);
+          setIsNavigating(false);
+        }, 200);
+      }
+    };
+    
+    // Listen for the load event
+    window.addEventListener('load', handleLoadComplete);
+    
+    // Also listen for custom event that could be dispatched when content is loaded
+    window.addEventListener('content-loaded', handleLoadComplete);
+    
+    return () => {
+      window.removeEventListener('load', handleLoadComplete);
+      window.removeEventListener('content-loaded', handleLoadComplete);
+    };
+  }, [loadingTab, currentTab]);
 
   // Handle tab change
   const handleTabChange = useCallback((value: string) => {
     // If we're already on this tab, do nothing
     if (value === activeTab) return;
+    
+    // If we're already navigating, don't allow another navigation
+    if (isNavigating && value !== clickedTab) return;
     
     // INSTANT FEEDBACK: Set active tab immediately
     setActiveTab(value);
@@ -83,43 +107,20 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
     });
     window.dispatchEvent(tabChangeEvent);
     
-    // Special case for overview tab - use cached content if available
-    if (value === 'overview' && overviewTabContentRef.current) {
-      // Use cached content for overview tab
-      const tabContentElement = document.querySelector('[data-tab-content]');
-      if (tabContentElement) {
-        // Save current scroll position
-        const scrollPosition = window.scrollY;
-        
-        // Update URL without full navigation
-        window.history.pushState({}, '', `${pathname}?tab=overview${userId ? `&userId=${userId}` : ''}`);
-        
-        // Apply cached content
-        tabContentElement.innerHTML = overviewTabContentRef.current;
-        
-        // Restore scroll position
-        window.scrollTo(0, scrollPosition);
-        
-        // Reset navigating state
-        setTimeout(() => {
-          setIsNavigating(false);
-          setLoadingTab(null);
-          setClickedTab(null);
-        }, 100);
-        
-        return;
-      }
+    // Clear any existing navigation timeout
+    if (navigationTimeoutRef.current) {
+      clearTimeout(navigationTimeoutRef.current);
     }
     
-    // For other tabs, navigate normally
-    const url = `${pathname}?tab=${value}${userId ? `&userId=${userId}` : ''}`;
-    router.push(url);
-    
-    // Reset navigating state after a short delay
-    setTimeout(() => {
-      setIsNavigating(false);
-    }, 300);
-  }, [activeTab, pathname, router, userId, overviewTabContentRef]);
+    // Use setTimeout to ensure the UI updates before navigation
+    // This prevents the current page from refreshing before showing the skeleton
+    navigationTimeoutRef.current = setTimeout(() => {
+      // For all tabs, navigate normally
+      const url = `${pathname}?tab=${value}${userId ? `&userId=${userId}` : ''}`;
+      router.push(url);
+      navigationTimeoutRef.current = null;
+    }, 10);
+  }, [activeTab, pathname, router, userId, isNavigating, clickedTab]);
 
   // Prefetch tab data when hovering over a tab
   const prefetchTab = useCallback((tabId: string) => {
@@ -132,43 +133,41 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
       <TabsList className="w-full md:w-auto flex overflow-x-auto">
-        {tabs.map((tab) => (
-          <TabsTrigger
-            key={tab.id}
-            value={tab.id}
-            onMouseEnter={() => prefetchTab(tab.id)}
-            onFocus={() => prefetchTab(tab.id)}
-            disabled={isNavigating && tab.id !== clickedTab} // Only disable non-clicked tabs
-            className={`relative min-w-[100px] flex items-center justify-center gap-2 transition-all ${clickedTab === tab.id ? 'opacity-100' : isNavigating ? 'opacity-50' : 'opacity-100'}`}
-          >
-            {tab.label}
-            {loadingTab === tab.id && (
-              <Loader2 className="h-3 w-3 animate-spin inline-block ml-1" />
-            )}
-            {/* Active tab indicator with animation */}
-            {activeTab === tab.id && (
-              <span 
-                className="absolute bottom-0 left-0 w-full h-[3px] bg-primary rounded-t-full" 
-                style={{
-                  animation: "tabIndicatorIn 0.2s ease forwards"
-                }}
-              />
-            )}
-          </TabsTrigger>
-        ))}
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          const isLoading = loadingTab === tab.id;
+          
+          return (
+            <TabsTrigger
+              key={tab.id}
+              value={tab.id}
+              onMouseEnter={() => prefetchTab(tab.id)}
+              onFocus={() => prefetchTab(tab.id)}
+              disabled={isNavigating && tab.id !== clickedTab} // Only disable non-clicked tabs
+              className={`relative min-w-[100px] flex items-center justify-center gap-2 transition-all ${clickedTab === tab.id ? 'opacity-100' : isNavigating ? 'opacity-50' : 'opacity-100'}`}
+            >
+              {tab.label}
+              {isLoading && (
+                <Loader2 className="h-3 w-3 animate-spin inline-block ml-1" />
+              )}
+              {/* Active tab indicator with animation */}
+              {isActive && !isLoading && (
+                <span 
+                  className="absolute bottom-0 left-0 w-full h-[3px] bg-primary rounded-t-full" 
+                  style={{
+                    animation: "tabIndicatorIn 0.2s ease forwards"
+                  }}
+                />
+              )}
+            </TabsTrigger>
+          );
+        })}
       </TabsList>
       
       <style jsx global>{`
         @keyframes tabIndicatorIn {
           from { transform: scaleX(0.5); opacity: 0.5; }
           to { transform: scaleX(1); opacity: 1; }
-        }
-        
-        /* Add a subtle pulse animation for the clicked tab */
-        @keyframes tabPulse {
-          0% { background-color: transparent; }
-          50% { background-color: hsl(var(--primary) / 0.1); }
-          100% { background-color: transparent; }
         }
       `}</style>
     </Tabs>

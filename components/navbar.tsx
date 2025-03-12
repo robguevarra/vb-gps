@@ -1,7 +1,24 @@
 // components/Navbar.tsx
 "use client";
 
-import { useRouter, usePathname } from 'next/navigation';
+/**
+ * Navbar Component
+ * 
+ * This client component provides the main navigation bar for the application.
+ * It coordinates with the sidebar and tab switching system for a seamless experience.
+ * 
+ * Features:
+ * - User authentication status and sign out
+ * - Dashboard selection for superadmins
+ * - Responsive design with mobile menu
+ * - Sidebar toggle integration
+ * - Profile information display
+ * - Coordination with tab switching events
+ * 
+ * @component
+ */
+
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import ProfileSelector from '@/components/ProfileSelector';
@@ -21,6 +38,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selectedDashboard, setSelectedDashboard] = useState("");
   const [userRole, setUserRole] = useState<string | null>(null);
   const supabase = createClient();
@@ -30,6 +48,41 @@ export default function Navbar() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [isCampusDirector, setIsCampusDirector] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Listen for tab change events
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      const { tab } = event.detail;
+      setActiveTab(tab);
+      setIsLoading(true);
+    };
+    
+    window.addEventListener('tabchange', handleTabChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('tabchange', handleTabChange as EventListener);
+    };
+  }, []);
+  
+  // Listen for content loaded events
+  useEffect(() => {
+    const handleContentLoaded = (event: CustomEvent) => {
+      setIsLoading(false);
+    };
+    
+    window.addEventListener('contentloaded', handleContentLoaded as EventListener);
+    return () => {
+      window.removeEventListener('contentloaded', handleContentLoaded as EventListener);
+    };
+  }, []);
+
+  // Update active tab from URL
+  useEffect(() => {
+    const tabFromUrl = searchParams?.get("tab") || "overview";
+    setActiveTab(tabFromUrl);
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -252,15 +305,19 @@ export default function Navbar() {
                         ? new URLSearchParams(window.location.search).get('userId') || undefined 
                         : undefined
                     }
+                    onClose={() => setMobileMenuOpen(false)}
                   />
                 </div>
               )}
               
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-3">
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-3 mt-2">
                 <Button 
-                  variant="ghost"
-                  onClick={handleSignOut}
-                  className="w-full justify-start text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                  variant="ghost" 
+                  className="w-full justify-start text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  onClick={() => {
+                    handleSignOut();
+                    setMobileMenuOpen(false);
+                  }}
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Sign Out
@@ -270,15 +327,9 @@ export default function Navbar() {
           )}
         </AnimatePresence>
       </nav>
-
-      {/* Mobile sidebar */}
-      {pathname?.startsWith('/dashboard/missionary') && (
-        <Sidebar 
-          isCampusDirector={hasAccessToCampusDirectorTabs}
-          mobileMenuOpen={sidebarOpen} 
-          setMobileMenuOpen={setSidebarOpen} 
-        />
-      )}
+      
+      {/* Add padding to account for fixed navbar */}
+      <div className="h-16"></div>
     </>
   );
 }

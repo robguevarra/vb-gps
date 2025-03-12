@@ -9,17 +9,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
 interface ProfileSelectorProps {
   missionaries: any[]
   userId?: string
   className?: string
+  onClose?: () => void
 }
 
 export default function ProfileSelector({
   missionaries,
   userId: initialUserId,
-  className
+  className,
+  onClose
 }: ProfileSelectorProps) {
   const router = useRouter()
   const [selected, setSelected] = useState(initialUserId || 'clear')
@@ -44,21 +47,28 @@ export default function ProfileSelector({
     router.push(`${window.location.pathname}?${newParams.toString()}`, {
       scroll: false,
     })
+    
+    // Call onClose if provided
+    if (onClose) {
+      onClose()
+    }
   }
 
   return (
-    <Select value={selected} onValueChange={handleValueChange} className={className}>
-      <SelectTrigger className="w-[200px]">
-        <SelectValue placeholder="Select missionary" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="clear">View as myself</SelectItem>
-        {missionaries.map((missionary) => (
-          <SelectItem key={missionary.id} value={missionary.id}>
-            {missionary.full_name} ({missionary.role.replace(/_/g, ' ')})
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className={className}>
+      <Select value={selected} onValueChange={handleValueChange}>
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Select missionary" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="clear">View as myself</SelectItem>
+          {missionaries.map((missionary) => (
+            <SelectItem key={missionary.id} value={missionary.id}>
+              {missionary.full_name} ({missionary.role.replace(/_/g, ' ')})
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 }

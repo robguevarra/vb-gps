@@ -3,51 +3,35 @@
 /**
  * ClientDashboardLayout Component
  * 
- * This client component provides a persistent layout for the dashboard,
- * including a fixed sidebar that remains in place during tab navigation.
- * It handles all tab switching on the client side for instant feedback.
+ * A persistent layout for the dashboard that includes a fixed sidebar and client-side tab switching.
  * 
  * Features:
- * - Persistent sidebar that doesn't reload between tab changes
- * - Client-side tab switching with instant visual feedback
- * - Maintains URL state for deep linking and sharing
- * - Prefetches tab content for faster navigation
- * - Provides skeleton loaders during content loading
+ * - Persistent sidebar that remains during tab navigation
+ * - Client-side tab switching for instant feedback
+ * - URL state maintenance for deep linking
+ * - Skeleton loaders during content loading
  * - Optimized animations for smooth transitions
  * 
  * @component
  */
 
-import { ReactNode, useState, useEffect } from "react";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
-import { DashboardTabSkeleton } from "./DashboardTabSkeleton";
 import { motion, AnimatePresence } from "framer-motion";
-import { ClientTabSwitcher } from "./ClientTabSwitcher";
-import { PageTransition } from "@/components/PageTransition";
-import { DashboardTabWrapper } from "@/components/DashboardTabWrapper";
+
+interface TabItem {
+  id: string;
+  label: string;
+}
 
 interface ClientDashboardLayoutProps {
-  /** The initial tab content from the server */
-  initialContent: ReactNode;
-  /** The current tab from URL */
+  initialContent: React.ReactNode;
   currentTab: string;
-  /** The missionary ID */
   missionaryId: string;
-  /** Available tabs for navigation */
-  availableTabs: { id: string; label: string }[];
-  /** Whether the user has campus director access */
-  isCampusDirector: boolean;
-  /** The user's full name */
-  fullName: string;
-  /** The user's role */
-  role: string;
-  /** The user's church name */
+  availableTabs: TabItem[];
+  userRole: string;
   churchName: string;
-  /** The title for the current tab */
-  title: string;
-  /** The subtitle for the current tab */
-  subtitle: string;
 }
 
 export function ClientDashboardLayout({
@@ -55,138 +39,153 @@ export function ClientDashboardLayout({
   currentTab,
   missionaryId,
   availableTabs,
-  isCampusDirector,
-  fullName,
-  role,
+  userRole,
   churchName,
-  title: initialTitle,
-  subtitle: initialSubtitle
 }: ClientDashboardLayoutProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
-  const [isLoading, setIsLoading] = useState(false);
-  const [title, setTitle] = useState(initialTitle);
-  const [subtitle, setSubtitle] = useState(initialSubtitle);
+  const [loading, setLoading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   
-  // Update title and subtitle when tab changes
+  // Update active tab from URL
   useEffect(() => {
-    // Get tab info based on active tab
-    const getTabInfo = () => {
-      switch(activeTab) {
-        case "overview":
-          return {
-            title: "Dashboard Overview",
-            subtitle: "View your key metrics and performance indicators"
-          };
-        case "history":
-          return {
-            title: "Request History",
-            subtitle: "Track and manage your past requests"
-          };
-        case "approvals":
-          return {
-            title: "Pending Approvals",
-            subtitle: "Review and manage approval requests"
-          };
-        case "manual-remittance":
-          return {
-            title: "Manual Remittance",
-            subtitle: "Record donations received outside the system"
-          };
-        case "reports":
-          return {
-            title: "My Reports",
-            subtitle: "View detailed reports and analytics"
-          };
-        case "staff-reports":
-          return {
-            title: "Staff Performance",
-            subtitle: "Monitor your team's performance metrics"
-          };
-        default:
-          return {
-            title: "Dashboard",
-            subtitle: "Welcome to your missionary dashboard"
-          };
-      }
-    };
-    
-    const { title: newTitle, subtitle: newSubtitle } = getTabInfo();
-    setTitle(newTitle);
-    setSubtitle(newSubtitle);
-  }, [activeTab]);
-  
-  // Listen for URL changes to update active tab
-  useEffect(() => {
-    const tabFromUrl = searchParams?.get("tab") || "overview";
-    if (tabFromUrl !== activeTab) {
-      setActiveTab(tabFromUrl);
-    }
-  }, [searchParams, activeTab]);
+    const tab = searchParams?.get("tab") || currentTab;
+    setActiveTab(tab);
+    updateTitleAndSubtitle(tab);
+  }, [searchParams, currentTab]);
   
   // Listen for tab change events
   useEffect(() => {
     const handleTabChange = (event: CustomEvent) => {
-      const { tab } = event.detail;
+      const { tab, source } = event.detail;
+      
+      // Skip if this event was triggered by this component
+      if (source === "dashboard-layout") return;
+      
       setActiveTab(tab);
-      setIsLoading(true);
+      setLoading(true);
+      updateTitleAndSubtitle(tab);
     };
     
-    window.addEventListener('tabchange', handleTabChange as EventListener);
-    
+    window.addEventListener("tabchange", handleTabChange as EventListener);
     return () => {
-      window.removeEventListener('tabchange', handleTabChange as EventListener);
+      window.removeEventListener("tabchange", handleTabChange as EventListener);
     };
   }, []);
   
+  // Listen for content loaded events
+  useEffect(() => {
+    const handleContentLoaded = () => {
+      setLoading(false);
+    };
+    
+    window.addEventListener("contentloaded", handleContentLoaded);
+    return () => {
+      window.removeEventListener("contentloaded", handleContentLoaded);
+    };
+  }, []);
+  
+  // Update title and subtitle based on active tab
+  const updateTitleAndSubtitle = (tab: string) => {
+    switch(tab) {
+      case "overview":
+        setTitle("Dashboard Overview");
+        setSubtitle("");
+        break;
+      case "history":
+        setTitle("Request History");
+        setSubtitle("");
+        break;
+      case "approvals":
+        setTitle("Pending Approvals");
+        setSubtitle("");
+        break;
+      case "manual-remittance":
+        setTitle("Manual Remittance");
+        setSubtitle("");
+        break;
+      case "reports":
+        setTitle("Reports");
+        setSubtitle("");
+        break;
+      case "staff-reports":
+        setTitle("Staff Reports");
+        setSubtitle("");
+        break;
+      default:
+        setTitle("Dashboard");
+        setSubtitle("");
+    }
+  };
+  
+  // Determine if user should have access to campus director tabs
+  const isCampusDirector = userRole === "campus_director" || userRole === "superadmin";
+
+  // Dispatch contentloaded event when component mounts
+  useEffect(() => {
+    // Small delay to ensure the event is dispatched after the component is fully rendered
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("contentloaded"));
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Persistent Sidebar */}
+      {/* Sidebar */}
       <Sidebar 
         isCampusDirector={isCampusDirector}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
       />
       
-      {/* Main Content Area */}
-      <div className="flex-1 lg:ml-64">
-        <div className="px-4 sm:px-6 lg:px-8 py-8">
-          {/* Animated Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mb-8"
-          >
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {title}
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {subtitle}
-            </p>
-            <div className="flex items-center mt-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {fullName} • {role} • {churchName}
-              </div>
-            </div>
-          </motion.div>
+      {/* Main content */}
+      <main className="flex-1 lg:ml-72">
+        <div className="container px-4 py-6 max-w-7xl mx-auto">
+          {/* Header with animated title */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15 }}
+              className="mb-6"
+            >
+              <h1 className="text-2xl font-bold tracking-tight">
+                {title}
+                {loading && (
+                  <span className="ml-3 inline-block h-4 w-4 rounded-full border-2 border-t-transparent border-gray-400 animate-spin" />
+                )}
+              </h1>
+            </motion.div>
+          </AnimatePresence>
           
-          {/* Tab Content */}
-          <PageTransition mode="fade">
-            <DashboardTabWrapper>
-              <ClientTabSwitcher
-                initialContent={initialContent}
-                currentTab={activeTab}
-                missionaryId={missionaryId}
-                availableTabs={availableTabs.map(tab => tab.id)}
-              />
-            </DashboardTabWrapper>
-          </PageTransition>
+          {/* Tab content */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onAnimationComplete={() => {
+                // Ensure contentloaded event is dispatched when animation completes
+                if (loading) {
+                  setLoading(false);
+                  window.dispatchEvent(new CustomEvent("contentloaded"));
+                }
+              }}
+            >
+              {initialContent}
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </div>
+      </main>
     </div>
   );
 } 

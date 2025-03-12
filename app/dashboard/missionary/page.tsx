@@ -17,10 +17,8 @@
  * - Isolated data-fetching components to prevent blocking the entire page
  * - Added skeleton loaders for better perceived performance
  * - Used progressive enhancement for a better user experience
- * - Added client-side tab prefetching for instant tab switching
- * - Removed duplicate navigation (tabs) to simplify UI
- * - Implemented client-side tab content caching for instant tab switching
- * - Added persistent client-side sidebar for instant feedback
+ * - Added client-side tab switching for instant feedback
+ * - Persistent sidebar for consistent navigation experience
  * 
  * @page
  */
@@ -114,53 +112,12 @@ export default async function MissionaryDashboard({
     profileData.role === "superadmin" || 
     isSuperAdmin;
 
-  // Get tab title and subtitle for the current tab
-  const getTabInfo = () => {
-    switch(currentTab) {
-      case "overview":
-        return {
-          title: "Dashboard Overview",
-          subtitle: "View your key metrics and performance indicators"
-        };
-      case "history":
-        return {
-          title: "Request History",
-          subtitle: "Track and manage your past requests"
-        };
-      case "approvals":
-        return {
-          title: "Pending Approvals",
-          subtitle: "Review and manage approval requests"
-        };
-      case "manual-remittance":
-        return {
-          title: "Manual Remittance",
-          subtitle: "Record donations received outside the system"
-        };
-      case "reports":
-        return {
-          title: "My Reports",
-          subtitle: "View detailed reports and analytics"
-        };
-      case "staff-reports":
-        return {
-          title: "Staff Performance",
-          subtitle: "Monitor your team's performance metrics"
-        };
-      default:
-        return {
-          title: "Dashboard",
-          subtitle: "Welcome to your missionary dashboard"
-        };
-    }
-  };
-
-  // Define available tabs for background preloading
+  // Define available tabs based on user role
   const availableTabs = [
     { id: "overview", label: "Overview" },
     { id: "history", label: "Request History" },
     { id: "manual-remittance", label: "Manual Remittance" },
-    { id: "reports", label: "My Reports" },
+    { id: "reports", label: "Reports" },
   ];
 
   // Add campus director tabs if user has access
@@ -257,22 +214,15 @@ export default async function MissionaryDashboard({
     }
   };
 
-  const { title, subtitle } = getTabInfo();
-  const tabContent = getTabContent();
-
   // Render the client-side dashboard layout with the initial tab content
   return (
     <ClientDashboardLayout
-      initialContent={tabContent}
+      initialContent={getTabContent()}
       currentTab={currentTab}
       missionaryId={userIdParam || user.id}
       availableTabs={availableTabs}
-      isCampusDirector={hasAccessToCampusDirectorTabs}
-      fullName={profileData.full_name || user.email}
-      role={profileData.role.replace(/_/g, " ")}
+      userRole={profileData.role}
       churchName={churchName}
-      title={title}
-      subtitle={subtitle}
     />
   );
 }

@@ -4,55 +4,36 @@
 /**
  * Sidebar Component
  * 
- * This component provides the main navigation for the application.
- * It has been updated to include tab navigation links that were previously
- * duplicated in the TabSwitcher component, consolidating all navigation
- * into a single, consistent interface.
+ * A responsive sidebar navigation component for the dashboard.
  * 
  * Features:
- * - Responsive design with mobile drawer and desktop sidebar
+ * - Responsive design with mobile and desktop variants
  * - Role-based navigation items
- * - Visual indicators for active routes
- * - Smooth animations for transitions
  * - Client-side navigation for instant page transitions
- * - Preserves URL parameters for consistent navigation
- * - Provides instant visual feedback on tab changes
- * - Dispatches events to coordinate with other components
+ * - Visual feedback for active and loading states
+ * - Coordination with tab switching system
  * 
  * @component
  */
 
-import Link from "next/link";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetTrigger,
-  SheetClose
-} from "@/components/ui/sheet";
-import { 
-  Menu, 
-  Home, 
-  History, 
-  CreditCard, 
-  CheckSquare, 
-  BarChart2, 
-  Users,
-  ChevronRight,
-  ArrowLeft,
-  PieChart,
-  FileText,
-  Loader2
-} from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
-import { useState, useEffect, Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { motion, AnimatePresence } from "framer-motion";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { 
+  ChevronRight, 
+  LayoutDashboard, 
+  Clock, 
+  CheckCircle, 
+  FileText, 
+  BarChart, 
+  Users,
+  Loader2,
+  X
+} from "lucide-react";
+import { motion } from "framer-motion";
 
 interface SidebarProps {
   isCampusDirector?: boolean;
@@ -60,294 +41,239 @@ interface SidebarProps {
   setMobileMenuOpen?: (open: boolean) => void;
 }
 
-function SidebarContent({ isCampusDirector = false, mobileMenuOpen, setMobileMenuOpen }: SidebarProps) {
+// Main Sidebar component that wraps the content with Suspense
+export function Sidebar({ 
+  isCampusDirector = false,
+  mobileMenuOpen = false,
+  setMobileMenuOpen
+}: SidebarProps) {
+  return (
+    <Suspense fallback={<div className="w-64 bg-gray-100 dark:bg-gray-900 h-screen" />}>
+      <SidebarContent 
+        isCampusDirector={isCampusDirector}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
+    </Suspense>
+  );
+}
+
+// The actual sidebar content
+function SidebarContent({ 
+  isCampusDirector = false,
+  mobileMenuOpen = false,
+  setMobileMenuOpen
+}: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const currentTab = searchParams?.get("tab") || "overview";
-  const userId = searchParams?.get("userId");
-  const supabase = createClient();
-  const [userRole, setUserRole] = useState("");
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [activeTab, setActiveTab] = useState(currentTab);
+  const [activeTab, setActiveTab] = useState<string>("overview");
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
+  const navigationInProgressRef = useRef(false);
+  const eventDispatchedRef = useRef(false);
   
-  // Use the prop if provided, otherwise manage state internally
-  const [isOpenInternal, setIsOpenInternal] = useState(false);
-  const isOpen = mobileMenuOpen !== undefined ? mobileMenuOpen : isOpenInternal;
-  const setIsOpen = setMobileMenuOpen || setIsOpenInternal;
-
-  // Update active tab when URL changes
+  // Update active tab from URL on initial load and when URL changes
   useEffect(() => {
-    setActiveTab(currentTab);
+    const tab = searchParams?.get("tab") || "overview";
+    setActiveTab(tab);
+    // Clear loading state when URL changes to prevent stale loading states
     setLoadingTab(null);
-  }, [currentTab]);
-
+    navigationInProgressRef.current = false;
+    eventDispatchedRef.current = false;
+  }, [searchParams]);
+  
+  // Listen for content loaded events to clear loading state
   useEffect(() => {
-    const fetchUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-        
-        const role = profile?.role || "";
-        setUserRole(role);
-        setIsSuperAdmin(role === "superadmin" || user.email === "robneil@gmail.com");
-      }
+    const handleContentLoaded = () => {
+      setLoadingTab(null);
+      navigationInProgressRef.current = false;
+      eventDispatchedRef.current = false;
     };
-    fetchUser();
-  }, [supabase]);
-
-  // Use either the prop value or the state value for determining campus director status
-  const showCampusDirectorTabs = isCampusDirector || userRole === "campus_director" || isSuperAdmin;
-
-  // Enhanced navigation items with icons and descriptions
-  const navItems = [
-    { 
-      name: "Overview", 
-      href: "?tab=overview", 
-      icon: <Home className="h-5 w-5" />,
-      description: "Dashboard summary and key metrics"
-    },
-    { 
-      name: "Request History", 
-      href: "?tab=history", 
-      icon: <History className="h-5 w-5" />,
-      description: "View your past requests"
-    },
-    { 
-      name: "Manual Remittance", 
-      href: "?tab=manual-remittance", 
-      icon: <CreditCard className="h-5 w-5" />,
-      description: "Record manual donations"
-    },
-    { 
-      name: "My Reports", 
-      href: "?tab=reports", 
-      icon: <BarChart2 className="h-5 w-5" />,
-      description: "View your performance reports"
-    },
-    ...(showCampusDirectorTabs ? [
-      { 
-        name: "Approvals", 
-        href: "?tab=approvals", 
-        icon: <CheckSquare className="h-5 w-5" />,
-        description: "Manage pending approvals"
-      },
-      { 
-        name: "Staff Reports", 
-        href: "?tab=staff-reports", 
-        icon: <PieChart className="h-5 w-5" />,
-        description: "View staff performance metrics"
-      }
-    ] : []),
-  ];
-
-  // Function to handle client-side navigation with tab switching
-  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault();
     
-    // Extract the tab parameter from the href
-    const tabMatch = href.match(/\?tab=([^&]*)/);
-    const newTab = tabMatch ? tabMatch[1] : "overview";
+    window.addEventListener("contentloaded", handleContentLoaded);
+    return () => {
+      window.removeEventListener("contentloaded", handleContentLoaded);
+    };
+  }, []);
+
+  // Handle navigation item click
+  const handleNavigation = (tab: string) => {
+    // Don't do anything if this tab is already active or navigation is in progress
+    if ((tab === activeTab && !loadingTab) || navigationInProgressRef.current) return;
+    
+    // Set navigation in progress to prevent multiple clicks
+    navigationInProgressRef.current = true;
     
     // Set loading state immediately for instant feedback
-    setActiveTab(newTab);
-    setLoadingTab(newTab);
+    setLoadingTab(tab);
     
-    // Dispatch a custom event that other components can listen for
-    const tabChangeEvent = new CustomEvent('tabchange', { 
-      detail: { tab: newTab, userId } 
-    });
-    window.dispatchEvent(tabChangeEvent);
-    
-    // Construct the new URL with the tab and userId parameters
-    const newUrl = `${pathname}?tab=${newTab}${userId ? `&userId=${userId}` : ''}`;
-    
-    // Use router.push for client-side navigation
-    router.push(newUrl);
-    
-    // Close the mobile menu if it's open
-    if (isOpen) {
-      setIsOpen(false);
+    // Only dispatch the event if we haven't already for this navigation
+    if (!eventDispatchedRef.current) {
+      eventDispatchedRef.current = true;
+      
+      // Dispatch tab change event for other components to react
+      const tabChangeEvent = new CustomEvent("tabchange", {
+        detail: { tab, source: "sidebar" }
+      });
+      window.dispatchEvent(tabChangeEvent);
     }
     
-    // Reset loading state after a delay
+    // Update URL with the new tab - use a very small timeout to ensure the UI updates first
     setTimeout(() => {
-      setLoadingTab(null);
-    }, 500);
+      const newParams = new URLSearchParams(searchParams?.toString() || "");
+      newParams.set("tab", tab);
+      
+      // Use router.push for client-side navigation
+      router.push(`${pathname}?${newParams.toString()}`, { scroll: false });
+      
+      // Close mobile menu if applicable
+      if (setMobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    }, 10);
   };
 
-  // Function to get updated search params for navigation
-  const getUpdatedParams = (itemHref: string) => {
-    // Extract the tab parameter from the href
-    const tabMatch = itemHref.match(/\?tab=([^&]*)/);
-    const newTab = tabMatch ? tabMatch[1] : "overview";
-    
-    // Create a new URLSearchParams object
-    const newParams = new URLSearchParams(searchParams?.toString() || "");
-    
-    // Update the tab parameter
-    newParams.set("tab", newTab);
-    
-    return newParams.toString();
-  };
+  // Define navigation items with icons and descriptions
+  const navigationItems = [
+    {
+      name: "Overview",
+      tab: "overview",
+      icon: <LayoutDashboard className="h-5 w-5" />,
+      alwaysVisible: true
+    },
+    {
+      name: "Request History",
+      tab: "history",
+      icon: <Clock className="h-5 w-5" />,
+      alwaysVisible: true
+    },
+    {
+      name: "Manual Remittance",
+      tab: "manual-remittance",
+      icon: <FileText className="h-5 w-5" />,
+      alwaysVisible: true
+    },
+    {
+      name: "Reports",
+      tab: "reports",
+      icon: <BarChart className="h-5 w-5" />,
+      alwaysVisible: true
+    },
+    {
+      name: "Pending Approvals",
+      tab: "approvals",
+      icon: <CheckCircle className="h-5 w-5" />,
+      alwaysVisible: false,
+      campusDirectorOnly: true
+    },
+    {
+      name: "Staff Reports",
+      tab: "staff-reports",
+      icon: <Users className="h-5 w-5" />,
+      alwaysVisible: false,
+      campusDirectorOnly: true
+    }
+  ];
 
   // Animation variants for list items
-  const itemVariants = {
-    hidden: (i: number) => ({
-      opacity: 0,
-      y: 10,
-      transition: {
-        delay: i * 0.05,
-      },
-    }),
+  const listItemVariants = {
+    hidden: { 
+      opacity: 0, 
+      x: -5 // Reduced from -10 to -5 for subtler animation
+    },
     visible: (i: number) => ({
       opacity: 1,
-      y: 0,
+      x: 0,
       transition: {
-        delay: i * 0.05,
-      },
-    }),
+        delay: i * 0.03, // Reduced from 0.05 to 0.03 for faster animations
+        duration: 0.15 // Reduced from 0.2 to 0.15 for faster animations
+      }
+    })
   };
 
-  // Render navigation items for both mobile and desktop
-  const renderNavItems = (isMobile = false) => (
-    <AnimatePresence>
-      {navItems.map((item, index) => {
-        const isActive = activeTab === item.href.split("=")[1];
-        const isLoading = loadingTab === item.href.split("=")[1];
-        const newParams = getUpdatedParams(item.href);
-
-        return (
-          <motion.div
-            key={item.name}
-            custom={index}
-            initial="hidden"
-            animate="visible"
-            variants={itemVariants}
+  // Render navigation items
+  const renderNavItems = () => {
+    return navigationItems
+      .filter(item => item.alwaysVisible || (item.campusDirectorOnly && isCampusDirector))
+      .map((item, index) => (
+        <motion.li 
+          key={item.tab}
+          custom={index}
+          initial="hidden"
+          animate="visible"
+          variants={listItemVariants}
+          // Prevent re-animation on tab change
+          layoutId={`nav-item-${item.tab}`}
+        >
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full justify-start gap-3 px-3 py-2 text-left text-sm font-medium",
+              activeTab === item.tab 
+                ? "bg-gray-100 dark:bg-gray-800 text-[#00458d] dark:text-blue-400" 
+                : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+            )}
+            onClick={() => handleNavigation(item.tab)}
+            disabled={navigationInProgressRef.current}
           >
-            <Link
-              href={`${pathname}?${newParams}`}
-              onClick={(e) => handleNavigation(e, item.href)}
-              className={cn(
-                "flex items-center justify-between px-4 py-3 rounded-lg",
-                "transition-all duration-200",
-                isMobile ? "min-h-[60px]" : "", // Increased touch target for mobile
-                isActive
-                  ? "bg-primary/10 text-primary font-medium" 
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              <div className="flex items-center gap-3">
-                {item.icon}
-                <div>
-                  <div className="font-medium flex items-center gap-2">
-                    {item.name}
-                    {isLoading && (
-                      <Loader2 className="h-3 w-3 animate-spin inline-block" />
-                    )}
-                  </div>
-                  {isMobile && (
-                    <p className="text-xs text-muted-foreground line-clamp-1">
-                      {item.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-              {isActive && <ChevronRight className="h-4 w-4 text-primary" />}
-            </Link>
-          </motion.div>
-        );
-      })}
-    </AnimatePresence>
+            {loadingTab === item.tab ? (
+              <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+            ) : (
+              item.icon
+            )}
+            <span>{item.name}</span>
+            {activeTab === item.tab && !loadingTab && (
+              <ChevronRight className="ml-auto h-4 w-4" />
+            )}
+          </Button>
+        </motion.li>
+      ));
+  };
+
+  // Desktop sidebar
+  const DesktopSidebar = () => (
+    <div className="hidden lg:flex h-screen fixed left-0 top-16 z-30 w-72 flex-col border-r bg-white dark:bg-gray-900 dark:border-gray-800">
+      <ScrollArea className="flex-1 py-4">
+        <nav className="grid gap-1 px-2">
+          <ul className="space-y-2">
+            {renderNavItems()}
+          </ul>
+        </nav>
+      </ScrollArea>
+    </div>
+  );
+
+  // Mobile sidebar
+  const MobileSidebar = () => (
+    <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+      <SheetContent side="left" className="w-72 pt-16 z-20">
+        <div className="flex justify-between items-center mb-4 pr-4">
+          <h2 className="text-lg font-semibold">Dashboard Navigation</h2>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setMobileMenuOpen?.(false)}
+            className="h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </div>
+        <ScrollArea className="h-[calc(100vh-8rem)]">
+          <nav className="grid gap-1 px-2">
+            <ul className="space-y-2">
+              {renderNavItems()}
+            </ul>
+          </nav>
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
   );
 
   return (
     <>
-      {/* Mobile: collapsible sidebar via a Sheet */}
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger asChild className="lg:hidden fixed top-4 left-4 z-50">
-          <Button variant="outline" size="icon" className="rounded-full">
-            <Menu className="h-5 w-5" />
-            <span className="sr-only">Open sidebar</span>
-          </Button>
-        </SheetTrigger>
-        <SheetContent 
-          side="left" 
-          className="w-[90vw] max-w-[320px] p-0 border-r shadow-lg"
-          // Enhanced animations
-          style={{
-            transition: "transform 0.3s ease-in-out, opacity 0.3s ease-in-out"
-          }}
-        >
-          <div className="flex items-center justify-between p-4 border-b">
-            <SheetHeader className="text-left">
-              <SheetTitle className="text-lg">Missionary Dashboard</SheetTitle>
-              <SheetDescription className="text-sm">
-                Access your missionary tools and reports
-              </SheetDescription>
-            </SheetHeader>
-            <Button
-              variant="ghost"
-              size="icon" 
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 rounded-full"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="sr-only">Close sidebar</span>
-            </Button>
-          </div>
-          <ScrollArea className="h-[calc(100vh-5rem)]">
-            <nav className="flex flex-col p-3 space-y-1">
-              {renderNavItems(true)}
-            </nav>
-          </ScrollArea>
-        </SheetContent>
-      </Sheet>
-
-      {/* Desktop: pinned/fixed sidebar */}
-      <div
-        className="
-          hidden
-          lg:flex
-          lg:flex-col
-          lg:fixed
-          lg:top-16
-          lg:left-0
-          lg:w-64
-          lg:h-[calc(100vh-4rem)]
-          lg:overflow-y-auto
-          lg:bg-white
-          lg:dark:bg-gray-900
-          border-r
-          border-gray-200
-          dark:border-gray-700
-          z-30
-        "
-      >
-        <div className="p-4 border-b">
-          <h3 className="text-lg font-semibold">Missionary Dashboard</h3>
-        </div>
-        <ScrollArea className="h-[calc(100vh-8rem)]">
-          <nav className="flex flex-col p-3 space-y-1">
-            {renderNavItems(false)}
-          </nav>
-        </ScrollArea>
-      </div>
+      <DesktopSidebar />
+      <MobileSidebar />
     </>
-  );
-}
-
-export function Sidebar(props: SidebarProps) {
-  return (
-    <Suspense fallback={null}>
-      <SidebarContent {...props} />
-    </Suspense>
   );
 }

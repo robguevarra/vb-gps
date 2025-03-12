@@ -3,136 +3,220 @@
 /**
  * ClientTabSwitcher Component
  * 
- * This client component manages tab switching with efficient caching.
- * It stores rendered tab content in memory and reuses it when switching
- * back to a previously visited tab, eliminating the reload delay.
+ * A client-side tab switching component that provides instant feedback and caches rendered content.
  * 
  * Features:
- * - Client-side tab content caching
- * - Instant tab switching without server requests
- * - Preserves tab state between switches
- * - Provides manual refresh option for each tab
- * - Uses URL parameters for deep linking and sharing
- * - Triggers background preloading of other tabs
- * - Shows loading indicators during content fetching
- * - Provides immediate visual feedback on tab changes
- * - Listens for tab change events for instant UI updates
+ * - Caches rendered tab content for instant switching
+ * - Manages loading states for smooth transitions
+ * - Dispatches events for coordination with other components
+ * - Intelligent preloading of tabs in the background
+ * - Skeleton loading states for immediate visual feedback
  * 
  * @component
  */
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { DashboardTabSkeleton } from "./DashboardTabSkeleton";
-import { motion, AnimatePresence } from "framer-motion";
-
-interface TabContent {
-  [key: string]: React.ReactNode | null;
-}
 
 interface ClientTabSwitcherProps {
-  /** The initial tab content to render */
+  initialTab: string;
   initialContent: React.ReactNode;
-  /** The current tab from URL */
-  currentTab: string;
-  /** The missionary ID for the dashboard */
+  tabs: Record<string, () => Promise<{ default: React.ComponentType<any> }>>;
   missionaryId: string;
-  /** Available tabs for preloading */
-  availableTabs?: string[];
 }
 
-export function ClientTabSwitcher({ 
-  initialContent, 
-  currentTab,
+export default function ClientTabSwitcher({
+  initialTab,
+  initialContent,
+  tabs,
   missionaryId,
-  availableTabs = []
 }: ClientTabSwitcherProps) {
-  // Store rendered tab content in a ref to persist between renders
-  const tabContentRef = useRef<TabContent>({});
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState(currentTab);
-  const [isLoading, setIsLoading] = useState(false);
-  const [clientSideTab, setClientSideTab] = useState<string | null>(null);
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [clientSideTab, setClientSideTab] = useState(initialTab);
+  const [loading, setLoading] = useState(false);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [renderedTabs, setRenderedTabs] = useState<Record<string, React.ReactNode>>({
+    [initialTab]: initialContent,
+  });
   
-  // Initialize with the initial content
-  useEffect(() => {
-    if (!tabContentRef.current[currentTab]) {
-      tabContentRef.current[currentTab] = initialContent;
-    }
-    setActiveTab(currentTab);
-    setClientSideTab(null);
-    setIsLoading(false);
-  }, [currentTab, initialContent]);
+  // Track which tabs have been preloaded to avoid redundant preloading
+  const preloadedTabs = useRef<Set<string>>(new Set([initialTab]));
+  const preloadingTriggered = useRef(false);
   
-  // Listen for tab change events from TabSwitcher
-  useEffect(() => {
-    const handleTabChange = (event: CustomEvent) => {
-      const { tab, userId } = event.detail;
-      
-      // Update client-side tab immediately
-      setClientSideTab(tab);
-      setIsLoading(true);
-      
-      // No need to navigate here as TabSwitcher already does that
-    };
+  // Intelligent preloading function - only preload tabs once per session
+  const triggerPreloading = () => {
+    if (preloadingTriggered.current) return;
+    preloadingTriggered.current = true;
     
-    // Add event listener
-    window.addEventListener('tabchange', handleTabChange as EventListener);
+    // Get all tabs that haven't been preloaded yet
+    const tabsToPreload = Object.keys(tabs).filter(tab => !preloadedTabs.current.has(tab));
     
-    // Clean up
-    return () => {
-      window.removeEventListener('tabchange', handleTabChange as EventListener);
-    };
-  }, []);
-  
-  // Trigger preloading of other tabs
-  useEffect(() => {
-    // Skip if we're refreshing
-    if (isRefreshing) return;
-    
-    // Define the tabs to preload (all tabs except the current one)
-    const tabsToPreload = availableTabs.filter(tab => tab !== currentTab);
-    
-    // Stagger the preloading to avoid overwhelming the network
+    // Stagger preloading to avoid overwhelming the network
     tabsToPreload.forEach((tab, index) => {
       setTimeout(() => {
-        const url = `${pathname}?tab=${tab}&userId=${missionaryId}`;
-        router.prefetch(url);
-        
-        // Log preloading in development mode
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`Preloaded tab: ${tab}`);
-        }
+        console.log(`Preloading tab: ${tab}`);
+        preloadTab(tab);
       }, index * 1000); // Stagger by 1 second per tab
     });
-  }, [currentTab, missionaryId, pathname, router, availableTabs, isRefreshing]);
-  
-  // Handle manual refresh
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setIsLoading(true);
-    
-    // Create new search params with refresh timestamp
-    const newParams = new URLSearchParams(searchParams?.toString() || "");
-    newParams.set("refresh", Date.now().toString());
-    
-    // Clear the cached content for this tab
-    tabContentRef.current[activeTab] = null;
-    
-    // Navigate to the same tab with refresh parameter
-    router.push(`${pathname}?${newParams.toString()}`);
-    
-    // Reset refreshing state after a delay
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
   };
   
+  // Preload a specific tab
+  const preloadTab = async (tab: string) => {
+    if (preloadedTabs.current.has(tab)) return;
+    
+    try {
+      const Component = (await tabs[tab]()).default;
+      
+      // Handle different component types
+      let renderedComponent;
+      if (tab === 'staff-reports') {
+        renderedComponent = <Component churchIds={[]} />;
+      } else if (tab === 'approvals') {
+        renderedComponent = <Component campusDirectorId={missionaryId} />;
+      } else {
+        renderedComponent = <Component missionaryId={missionaryId} />;
+      }
+      
+      setRenderedTabs(prev => ({
+        ...prev,
+        [tab]: renderedComponent,
+      }));
+      preloadedTabs.current.add(tab);
+    } catch (error) {
+      console.error(`Error preloading tab ${tab}:`, error);
+    }
+  };
+
+  // Listen for tab change events from Sidebar
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      const { tab, source } = event.detail;
+      
+      // Skip if this event was triggered by URL change to avoid double-handling
+      if (source === "url") return;
+      
+      // Update client-side tab immediately for instant feedback
+      setClientSideTab(tab);
+      
+      // Show skeleton immediately for visual feedback
+      setShowSkeleton(true);
+      setLoading(true);
+      
+      // If we haven't loaded this tab yet, load it
+      if (!renderedTabs[tab]) {
+        loadTab(tab);
+      } else {
+        // For cached tabs, just show a very brief loading state
+        // This creates a smoother transition without a noticeable blink
+        setTimeout(() => {
+          setLoading(false);
+          setShowSkeleton(false);
+          // Dispatch contentloaded event
+          window.dispatchEvent(new CustomEvent("contentloaded"));
+        }, 50); // Reduced from 100ms to 50ms for faster response
+      }
+    };
+
+    window.addEventListener("tabchange", handleTabChange as EventListener);
+    return () => {
+      window.removeEventListener("tabchange", handleTabChange as EventListener);
+    };
+  }, [renderedTabs]);
+
+  // Update active tab from URL
+  useEffect(() => {
+    const tab = searchParams?.get("tab") || initialTab;
+    if (tab !== activeTab) {
+      // Update state
+      setActiveTab(tab);
+      setClientSideTab(tab);
+      
+      // If we haven't rendered this tab yet, show skeleton and load it
+      if (!renderedTabs[tab]) {
+        setShowSkeleton(true);
+        setLoading(true);
+        loadTab(tab);
+      } else {
+        // For already loaded tabs, just dispatch contentloaded event
+        // Don't show loading state for URL-based navigation of cached tabs
+        window.dispatchEvent(new CustomEvent("contentloaded"));
+      }
+    }
+    
+    // Trigger preloading after initial render
+    if (!preloadingTriggered.current) {
+      setTimeout(triggerPreloading, 3000); // Wait 3 seconds before starting preloading
+    }
+  }, [searchParams]);
+
+  // Load a tab dynamically
+  const loadTab = async (tab: string) => {
+    try {
+      const Component = (await tabs[tab]()).default;
+      
+      // Handle different component types
+      let renderedComponent;
+      if (tab === 'staff-reports') {
+        renderedComponent = <Component churchIds={[]} />;
+      } else if (tab === 'approvals') {
+        renderedComponent = <Component campusDirectorId={missionaryId} />;
+      } else {
+        renderedComponent = <Component missionaryId={missionaryId} />;
+      }
+      
+      setRenderedTabs(prev => ({
+        ...prev,
+        [tab]: renderedComponent,
+      }));
+      
+      preloadedTabs.current.add(tab);
+      setLoading(false);
+      setShowSkeleton(false);
+      
+      // Dispatch contentloaded event
+      window.dispatchEvent(new CustomEvent("contentloaded"));
+    } catch (error) {
+      console.error(`Error loading tab ${tab}:`, error);
+      setLoading(false);
+      setShowSkeleton(false);
+      
+      // Dispatch contentloaded event even on error
+      window.dispatchEvent(new CustomEvent("contentloaded"));
+    }
+  };
+
+  // Handle refresh button click
+  const handleRefresh = () => {
+    // Clear the cached content for the current tab
+    setRenderedTabs(prev => {
+      const newRenderedTabs = { ...prev };
+      delete newRenderedTabs[activeTab];
+      return newRenderedTabs;
+    });
+    
+    // Show skeleton and loading state
+    setShowSkeleton(true);
+    setLoading(true);
+    
+    // Load the tab again
+    loadTab(activeTab);
+  };
+
+  // Get the content to display
+  const getContent = () => {
+    // If we're showing a skeleton, return that
+    if (showSkeleton) {
+      return <DashboardTabSkeleton type={getTabType()} />;
+    }
+    
+    // Otherwise return the rendered tab content
+    return renderedTabs[clientSideTab] || renderedTabs[activeTab] || <DashboardTabSkeleton type={getTabType()} />;
+  };
+
   // Get the appropriate tab type for the skeleton
   const getTabType = () => {
     // If we have a client-side tab change, use that
@@ -148,54 +232,26 @@ export function ClientTabSwitcher({
       default: return "overview";
     }
   };
-  
-  // Determine which content to show
-  const getContent = () => {
-    // If we have a client-side tab change, show skeleton for that tab
-    if (clientSideTab && clientSideTab !== activeTab) {
-      return (
-        <DashboardTabSkeleton type={getTabType()} />
-      );
-    }
-    
-    // Otherwise show cached content or loading state
-    return isLoading 
-      ? <DashboardTabSkeleton type={getTabType()} />
-      : tabContentRef.current[activeTab] || initialContent;
-  };
-  
+
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleRefresh}
-          className="flex items-center gap-1 text-xs"
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-        </Button>
-      </div>
-      
-      {/* Show content based on state */}
-      <div 
-        data-tab-content={clientSideTab || activeTab} 
-        className="relative"
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={clientSideTab}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }} // Reduced from 0.2s to 0.15s for faster transitions
+        onAnimationComplete={() => {
+          // Ensure contentloaded event is dispatched when animation completes
+          if (loading) {
+            setLoading(false);
+            setShowSkeleton(false);
+            window.dispatchEvent(new CustomEvent("contentloaded"));
+          }
+        }}
       >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={clientSideTab || (isLoading ? `loading-${activeTab}` : activeTab)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            {getContent()}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-    </div>
+        {getContent()}
+      </motion.div>
+    </AnimatePresence>
   );
 } 
