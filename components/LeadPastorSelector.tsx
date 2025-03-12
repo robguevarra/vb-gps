@@ -1,22 +1,50 @@
+/**
+ * LeadPastorSelector Component
+ * 
+ * Client component that allows selecting a lead pastor from a dropdown.
+ * This component is used in the lead pastor dashboard to switch between different lead pastors.
+ * 
+ * @component
+ */
+
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { User } from "lucide-react"
 
-const LeadPastorSelector = ({ leadPastors, userId: initialUserId }) => {
+interface LeadPastor {
+  id: string;
+  full_name: string;
+  role: string;
+}
+
+interface LeadPastorSelectorProps {
+  leadPastors: LeadPastor[];
+  userId: string;
+}
+
+/**
+ * SelectorContent Component
+ * 
+ * This component handles the actual selection logic and URL updates.
+ * It's separated to properly handle the useSearchParams hook which needs
+ * to be wrapped in a Suspense boundary.
+ */
+function SelectorContent({ leadPastors, userId }: LeadPastorSelectorProps) {
   const router = useRouter()
-  const [selected, setSelected] = useState(initialUserId || "clear")
+  const searchParams = useSearchParams()
+  const [selected, setSelected] = useState(userId || "clear")
 
   useEffect(() => {
-    setSelected(initialUserId || "clear")
-  }, [initialUserId])
+    setSelected(userId || "clear")
+  }, [userId])
 
   const handleValueChange = (value: string) => {
     setSelected(value)
 
-    const newParams = new URLSearchParams(window.location.search)
+    const newParams = new URLSearchParams(searchParams?.toString() || "")
     newParams.set("_t", Date.now().toString())
 
     if (value === "clear") {
@@ -45,6 +73,25 @@ const LeadPastorSelector = ({ leadPastors, userId: initialUserId }) => {
         ))}
       </SelectContent>
     </Select>
+  )
+}
+
+/**
+ * LeadPastorSelector Component
+ * 
+ * Wrapper component that provides a Suspense boundary for the SelectorContent.
+ */
+const LeadPastorSelector = (props: LeadPastorSelectorProps) => {
+  return (
+    <Suspense fallback={
+      <Select disabled value={props.userId || "clear"}>
+        <SelectTrigger className="w-[250px]">
+          <SelectValue placeholder="Loading..." />
+        </SelectTrigger>
+      </Select>
+    }>
+      <SelectorContent {...props} />
+    </Suspense>
   )
 }
 

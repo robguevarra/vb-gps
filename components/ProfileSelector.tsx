@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
   Select,
   SelectContent,
@@ -18,13 +18,27 @@ interface ProfileSelectorProps {
   onClose?: () => void
 }
 
-export default function ProfileSelector({
+/**
+ * SelectorContent Component
+ * 
+ * This component handles the actual selection logic and URL updates.
+ * It's separated to properly handle the useSearchParams hook which needs
+ * to be wrapped in a Suspense boundary.
+ */
+function SelectorContent({
   missionaries,
-  userId: initialUserId,
+  initialUserId,
   className,
   onClose
-}: ProfileSelectorProps) {
+}: {
+  missionaries: any[]
+  initialUserId?: string
+  className?: string
+  onClose?: () => void
+}) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [selected, setSelected] = useState(initialUserId || 'clear')
 
   useEffect(() => {
@@ -34,7 +48,7 @@ export default function ProfileSelector({
   const handleValueChange = (value: string) => {
     setSelected(value)
 
-    const newParams = new URLSearchParams(window.location.search)
+    const newParams = new URLSearchParams(searchParams?.toString() || "")
     // Add a timestamp parameter to force refresh if needed.
     newParams.set('_t', Date.now().toString())
 
@@ -44,7 +58,7 @@ export default function ProfileSelector({
       newParams.set('userId', value)
     }
 
-    router.push(`${window.location.pathname}?${newParams.toString()}`, {
+    router.push(`${pathname}?${newParams.toString()}`, {
       scroll: false,
     })
     
@@ -70,5 +84,21 @@ export default function ProfileSelector({
         </SelectContent>
       </Select>
     </div>
+  )
+}
+
+export default function ProfileSelector(props: ProfileSelectorProps) {
+  return (
+    <Suspense fallback={
+      <div className={props.className}>
+        <Select disabled value={props.userId || "clear"}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Loading..." />
+          </SelectTrigger>
+        </Select>
+      </div>
+    }>
+      <SelectorContent {...props} initialUserId={props.userId} />
+    </Suspense>
   )
 }

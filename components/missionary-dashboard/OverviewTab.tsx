@@ -16,13 +16,13 @@
 
 "use client";
 
-import { LeaveRequestModal } from "@/components/missionary-dashboard/LeaveRequestModal";
-import { SurplusRequestModal } from "@/components/missionary-dashboard/SurplusRequestModal";
-import { DashboardCards } from "@/components/missionary-dashboard/DashboardCards";
-import { RecentDonations } from "@/components/missionary-dashboard/RecentDonations";
+import { LeaveRequestModal } from "./LeaveRequestModal";
+import { SurplusRequestModal } from "./SurplusRequestModal";
+import { DashboardCards } from "./DashboardCards";
+import { RecentDonations } from "./RecentDonations";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 // Define interfaces for type safety
@@ -49,18 +49,14 @@ interface OverviewTabProps {
   recentDonations?: DonationData[];
 }
 
-export default function OverviewTab({ 
-  missionaryId, 
-  statsData = {
-    monthly_goal: 0,
-    current_donations: 0,
-    active_partners_count: 0,
-    surplus_balance: 0,
-    new_partners_count: 0
-  }, 
-  surplusBalance = 0, 
-  recentDonations = [] 
-}: OverviewTabProps) {
+/**
+ * RefreshButton Component
+ * 
+ * Client component that handles the refresh functionality.
+ * This is separated to properly handle the useSearchParams hook
+ * which needs to be wrapped in a Suspense boundary.
+ */
+function RefreshButton() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -82,19 +78,43 @@ export default function OverviewTab({
   };
 
   return (
+    <Button 
+      variant="outline" 
+      size="sm" 
+      onClick={handleRefresh}
+      className="flex items-center gap-1 text-xs"
+      disabled={isRefreshing}
+    >
+      <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+      {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+    </Button>
+  );
+}
+
+export default function OverviewTab({ 
+  missionaryId, 
+  statsData = {
+    monthly_goal: 0,
+    current_donations: 0,
+    active_partners_count: 0,
+    surplus_balance: 0,
+    new_partners_count: 0
+  }, 
+  surplusBalance = 0, 
+  recentDonations = [] 
+}: OverviewTabProps) {
+  return (
     <div className="space-y-8">
-      {/* Refresh Button */}
+      {/* Refresh Button with Suspense boundary */}
       <div className="flex justify-end">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleRefresh}
-          className="flex items-center gap-1 text-xs"
-          disabled={isRefreshing}
-        >
-          <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-        </Button>
+        <Suspense fallback={
+          <Button variant="outline" size="sm" disabled className="flex items-center gap-1 text-xs">
+            <RefreshCw className="h-3 w-3" />
+            Loading...
+          </Button>
+        }>
+          <RefreshButton />
+        </Suspense>
       </div>
       
       {/* Action Buttons Section */}

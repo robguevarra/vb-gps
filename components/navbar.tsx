@@ -19,7 +19,7 @@
  */
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import ProfileSelector from '@/components/ProfileSelector';
 import { Button } from '@/components/ui/button';
@@ -35,10 +35,32 @@ import {
 import { Sidebar } from '@/components/Sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 
+/**
+ * TabStateManager Component
+ * 
+ * This component handles the tab state management and URL synchronization.
+ * It's separated to properly handle the useSearchParams hook which needs
+ * to be wrapped in a Suspense boundary.
+ */
+function TabStateManager({
+  onTabChange
+}: {
+  onTabChange: (tab: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  
+  // Update active tab from URL
+  useEffect(() => {
+    const tabFromUrl = searchParams?.get("tab") || "overview";
+    onTabChange(tabFromUrl);
+  }, [searchParams, onTabChange]);
+  
+  return null; // This component doesn't render anything
+}
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [selectedDashboard, setSelectedDashboard] = useState("");
   const [userRole, setUserRole] = useState<string | null>(null);
   const supabase = createClient();
@@ -78,11 +100,10 @@ export default function Navbar() {
     };
   }, []);
 
-  // Update active tab from URL
-  useEffect(() => {
-    const tabFromUrl = searchParams?.get("tab") || "overview";
-    setActiveTab(tabFromUrl);
-  }, [searchParams]);
+  // Handle tab change from URL
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
 
   useEffect(() => {
     const fetchUserAndData = async () => {
@@ -152,6 +173,11 @@ export default function Navbar() {
 
   return (
     <>
+      {/* TabStateManager with Suspense boundary */}
+      <Suspense fallback={null}>
+        <TabStateManager onTabChange={handleTabChange} />
+      </Suspense>
+      
       <nav className="fixed top-0 left-0 right-0 h-16 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-4">
           {/* Sidebar toggle button for mobile */}

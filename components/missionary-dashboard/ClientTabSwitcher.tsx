@@ -15,7 +15,7 @@
  * @component
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { DashboardTabSkeleton } from "./DashboardTabSkeleton";
@@ -27,6 +27,53 @@ interface ClientTabSwitcherProps {
   missionaryId: string;
 }
 
+/**
+ * TabStateManager Component
+ * 
+ * This component handles the tab state management and URL synchronization.
+ * It's separated to properly handle the useSearchParams hook which needs
+ * to be wrapped in a Suspense boundary.
+ */
+function TabStateManager({
+  initialTab,
+  onTabChange,
+  onTabLoad,
+  renderedTabs,
+  triggerPreloading,
+  preloadingTriggered
+}: {
+  initialTab: string;
+  onTabChange: (tab: string) => void;
+  onTabLoad: (tab: string) => void;
+  renderedTabs: Record<string, React.ReactNode>;
+  triggerPreloading: () => void;
+  preloadingTriggered: React.MutableRefObject<boolean>;
+}) {
+  const searchParams = useSearchParams();
+  
+  // Update active tab from URL
+  useEffect(() => {
+    const tab = searchParams?.get("tab") || initialTab;
+    onTabChange(tab);
+    
+    // If we haven't rendered this tab yet, load it
+    if (!renderedTabs[tab]) {
+      onTabLoad(tab);
+    } else {
+      // For already loaded tabs, just dispatch contentloaded event
+      // Don't show loading state for URL-based navigation of cached tabs
+      window.dispatchEvent(new CustomEvent("contentloaded"));
+    }
+    
+    // Trigger preloading after initial render
+    if (!preloadingTriggered.current) {
+      setTimeout(triggerPreloading, 3000); // Wait 3 seconds before starting preloading
+    }
+  }, [searchParams, initialTab, onTabChange, onTabLoad, renderedTabs, triggerPreloading, preloadingTriggered]);
+  
+  return null; // This component doesn't render anything
+}
+
 export default function ClientTabSwitcher({
   initialTab,
   initialContent,
@@ -34,7 +81,6 @@ export default function ClientTabSwitcher({
   missionaryId,
 }: ClientTabSwitcherProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [clientSideTab, setClientSideTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
@@ -127,31 +173,17 @@ export default function ClientTabSwitcher({
     };
   }, [renderedTabs]);
 
-  // Update active tab from URL
-  useEffect(() => {
-    const tab = searchParams?.get("tab") || initialTab;
-    if (tab !== activeTab) {
-      // Update state
-      setActiveTab(tab);
-      setClientSideTab(tab);
-      
-      // If we haven't rendered this tab yet, show skeleton and load it
-      if (!renderedTabs[tab]) {
-        setShowSkeleton(true);
-        setLoading(true);
-        loadTab(tab);
-      } else {
-        // For already loaded tabs, just dispatch contentloaded event
-        // Don't show loading state for URL-based navigation of cached tabs
-        window.dispatchEvent(new CustomEvent("contentloaded"));
-      }
-    }
+  // Handle tab change from URL
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setClientSideTab(tab);
     
-    // Trigger preloading after initial render
-    if (!preloadingTriggered.current) {
-      setTimeout(triggerPreloading, 3000); // Wait 3 seconds before starting preloading
+    // If we haven't rendered this tab yet, show skeleton
+    if (!renderedTabs[tab]) {
+      setShowSkeleton(true);
+      setLoading(true);
     }
-  }, [searchParams]);
+  };
 
   // Load a tab dynamically
   const loadTab = async (tab: string) => {
@@ -234,24 +266,38 @@ export default function ClientTabSwitcher({
   };
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={clientSideTab}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }} // Reduced from 0.2s to 0.15s for faster transitions
-        onAnimationComplete={() => {
-          // Ensure contentloaded event is dispatched when animation completes
-          if (loading) {
-            setLoading(false);
-            setShowSkeleton(false);
-            window.dispatchEvent(new CustomEvent("contentloaded"));
-          }
-        }}
-      >
-        {getContent()}
-      </motion.div>
-    </AnimatePresence>
+    <>
+      {/* TabStateManager with Suspense boundary */}
+      <Suspense fallback={null}>
+        <TabStateManager
+          initialTab={initialTab}
+          onTabChange={handleTabChange}
+          onTabLoad={loadTab}
+          renderedTabs={renderedTabs}
+          triggerPreloading={triggerPreloading}
+          preloadingTriggered={preloadingTriggered}
+        />
+      </Suspense>
+      
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={clientSideTab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }} // Reduced from 0.2s to 0.15s for faster transitions
+          onAnimationComplete={() => {
+            // Ensure contentloaded event is dispatched when animation completes
+            if (loading) {
+              setLoading(false);
+              setShowSkeleton(false);
+              window.dispatchEvent(new CustomEvent("contentloaded"));
+            }
+          }}
+        >
+          {getContent()}
+        </motion.div>
+      </AnimatePresence>
+    </>
   );
 } 

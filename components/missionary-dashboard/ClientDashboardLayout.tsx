@@ -15,7 +15,7 @@
  * @component
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
@@ -34,6 +34,128 @@ interface ClientDashboardLayoutProps {
   churchName: string;
 }
 
+/**
+ * TabStateManager Component
+ * 
+ * This component handles the tab state management and URL synchronization.
+ * It's separated to properly handle the useSearchParams hook which needs
+ * to be wrapped in a Suspense boundary.
+ */
+function TabStateManager({
+  currentTab,
+  onTabChange,
+  onTitleChange,
+}: {
+  currentTab: string;
+  onTabChange: (tab: string) => void;
+  onTitleChange: (title: string, subtitle: string) => void;
+}) {
+  const searchParams = useSearchParams();
+  
+  // Update active tab from URL
+  useEffect(() => {
+    const tab = searchParams?.get("tab") || currentTab;
+    onTabChange(tab);
+    updateTitleAndSubtitle(tab);
+  }, [searchParams, currentTab, onTabChange]);
+  
+  // Update title and subtitle based on active tab
+  const updateTitleAndSubtitle = (tab: string) => {
+    let title = "Dashboard";
+    let subtitle = "";
+    
+    switch(tab) {
+      case "overview":
+        title = "Dashboard Overview";
+        break;
+      case "history":
+        title = "Request History";
+        break;
+      case "approvals":
+        title = "Pending Approvals";
+        break;
+      case "manual-remittance":
+        title = "Manual Remittance";
+        break;
+      case "reports":
+        title = "Reports";
+        break;
+      case "staff-reports":
+        title = "Staff Reports";
+        break;
+    }
+    
+    onTitleChange(title, subtitle);
+  };
+  
+  return null; // This component doesn't render anything
+}
+
+/**
+ * MainContent Component
+ * 
+ * This component handles the main content rendering and animations.
+ * It's separated to improve component organization.
+ */
+function MainContent({
+  activeTab,
+  loading,
+  setLoading,
+  title,
+  initialContent
+}: {
+  activeTab: string;
+  loading: boolean;
+  setLoading: (loading: boolean) => void;
+  title: string;
+  initialContent: React.ReactNode;
+}) {
+  return (
+    <main className="flex-1 lg:ml-72">
+      <div className="container px-4 py-6 max-w-7xl mx-auto">
+        {/* Header with animated title */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="mb-6"
+          >
+            <h1 className="text-2xl font-bold tracking-tight">
+              {title}
+              {loading && (
+                <span className="ml-3 inline-block h-4 w-4 rounded-full border-2 border-t-transparent border-gray-400 animate-spin" />
+              )}
+            </h1>
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* Tab content */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            onAnimationComplete={() => {
+              // Ensure contentloaded event is dispatched when animation completes
+              if (loading) {
+                setLoading(false);
+                window.dispatchEvent(new CustomEvent("contentloaded"));
+              }
+            }}
+          >
+            {initialContent}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </main>
+  );
+}
+
 export function ClientDashboardLayout({
   initialContent,
   currentTab,
@@ -43,19 +165,11 @@ export function ClientDashboardLayout({
   churchName,
 }: ClientDashboardLayoutProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
   const [loading, setLoading] = useState(false);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState("Dashboard");
   const [subtitle, setSubtitle] = useState("");
-  
-  // Update active tab from URL
-  useEffect(() => {
-    const tab = searchParams?.get("tab") || currentTab;
-    setActiveTab(tab);
-    updateTitleAndSubtitle(tab);
-  }, [searchParams, currentTab]);
   
   // Listen for tab change events
   useEffect(() => {
@@ -67,7 +181,6 @@ export function ClientDashboardLayout({
       
       setActiveTab(tab);
       setLoading(true);
-      updateTitleAndSubtitle(tab);
     };
     
     window.addEventListener("tabchange", handleTabChange as EventListener);
@@ -88,37 +201,15 @@ export function ClientDashboardLayout({
     };
   }, []);
   
-  // Update title and subtitle based on active tab
-  const updateTitleAndSubtitle = (tab: string) => {
-    switch(tab) {
-      case "overview":
-        setTitle("Dashboard Overview");
-        setSubtitle("");
-        break;
-      case "history":
-        setTitle("Request History");
-        setSubtitle("");
-        break;
-      case "approvals":
-        setTitle("Pending Approvals");
-        setSubtitle("");
-        break;
-      case "manual-remittance":
-        setTitle("Manual Remittance");
-        setSubtitle("");
-        break;
-      case "reports":
-        setTitle("Reports");
-        setSubtitle("");
-        break;
-      case "staff-reports":
-        setTitle("Staff Reports");
-        setSubtitle("");
-        break;
-      default:
-        setTitle("Dashboard");
-        setSubtitle("");
-    }
+  // Handle tab change from URL
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
+  
+  // Handle title change
+  const handleTitleChange = (newTitle: string, newSubtitle: string) => {
+    setTitle(newTitle);
+    setSubtitle(newSubtitle);
   };
   
   // Determine if user should have access to campus director tabs
@@ -136,6 +227,15 @@ export function ClientDashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* TabStateManager with Suspense boundary */}
+      <Suspense fallback={null}>
+        <TabStateManager
+          currentTab={currentTab}
+          onTabChange={handleTabChange}
+          onTitleChange={handleTitleChange}
+        />
+      </Suspense>
+      
       {/* Sidebar */}
       <Sidebar 
         isCampusDirector={isCampusDirector}
@@ -144,48 +244,13 @@ export function ClientDashboardLayout({
       />
       
       {/* Main content */}
-      <main className="flex-1 lg:ml-72">
-        <div className="container px-4 py-6 max-w-7xl mx-auto">
-          {/* Header with animated title */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.15 }}
-              className="mb-6"
-            >
-              <h1 className="text-2xl font-bold tracking-tight">
-                {title}
-                {loading && (
-                  <span className="ml-3 inline-block h-4 w-4 rounded-full border-2 border-t-transparent border-gray-400 animate-spin" />
-                )}
-              </h1>
-            </motion.div>
-          </AnimatePresence>
-          
-          {/* Tab content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              onAnimationComplete={() => {
-                // Ensure contentloaded event is dispatched when animation completes
-                if (loading) {
-                  setLoading(false);
-                  window.dispatchEvent(new CustomEvent("contentloaded"));
-                }
-              }}
-            >
-              {initialContent}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </main>
+      <MainContent
+        activeTab={activeTab}
+        loading={loading}
+        setLoading={setLoading}
+        title={title}
+        initialContent={initialContent}
+      />
     </div>
   );
 } 
