@@ -10,6 +10,7 @@
  * 3. Showing immediate visual feedback when switching tabs
  * 4. Maintaining tab state between navigations
  * 5. Caching the overview tab for instant access
+ * 6. Adding visual loading indicators for better feedback
  * 
  * @component
  */
@@ -18,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePathname } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 interface Tab {
   id: string;
@@ -38,6 +40,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   const pathname = usePathname();
   const [isNavigating, setIsNavigating] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
+  const [loadingTab, setLoadingTab] = useState<string | null>(null);
   
   // Reference to store the overview tab content
   const overviewTabRef = useRef<HTMLDivElement | null>(null);
@@ -46,6 +49,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   // Update active tab when currentTab changes (e.g. from URL)
   useEffect(() => {
     setActiveTab(currentTab);
+    setLoadingTab(null);
     
     // If we're on the overview tab, store its content for quick access
     if (currentTab === 'overview' && !overviewTabContentRef.current) {
@@ -64,6 +68,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
     // Set navigating state to show immediate feedback
     setIsNavigating(true);
     setActiveTab(value);
+    setLoadingTab(value);
     
     // Special case for overview tab - use cached content if available
     if (value === 'overview' && overviewTabContentRef.current) {
@@ -85,6 +90,7 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
         // Reset navigating state
         setTimeout(() => {
           setIsNavigating(false);
+          setLoadingTab(null);
         }, 100);
         
         return;
@@ -110,24 +116,40 @@ export function TabSwitcher({ tabs, currentTab, userId }: TabSwitcherProps) {
   }, [activeTab, pathname, router, userId]);
 
   return (
-    <div className="mb-6">
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {tabs.map((tab) => (
-            <TabsTrigger
-              key={tab.id}
-              value={tab.id}
-              onMouseEnter={() => prefetchTab(tab.id)}
-              onFocus={() => prefetchTab(tab.id)}
-              disabled={isNavigating}
-              className={isNavigating && activeTab === tab.id ? "animate-pulse" : ""}
-              data-state={activeTab === tab.id ? "active" : "inactive"}
-            >
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-    </div>
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+      <TabsList className="w-full md:w-auto flex overflow-x-auto">
+        {tabs.map((tab) => (
+          <TabsTrigger
+            key={tab.id}
+            value={tab.id}
+            onMouseEnter={() => prefetchTab(tab.id)}
+            onFocus={() => prefetchTab(tab.id)}
+            disabled={isNavigating}
+            className="relative min-w-[100px] flex items-center justify-center gap-2 transition-all"
+          >
+            {tab.label}
+            {loadingTab === tab.id && (
+              <Loader2 className="h-3 w-3 animate-spin inline-block ml-1" />
+            )}
+            {/* Active tab indicator with animation */}
+            {activeTab === tab.id && (
+              <span 
+                className="absolute bottom-0 left-0 w-full h-[3px] bg-primary rounded-t-full" 
+                style={{
+                  animation: "tabIndicatorIn 0.2s ease forwards"
+                }}
+              />
+            )}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      
+      <style jsx global>{`
+        @keyframes tabIndicatorIn {
+          from { transform: scaleX(0.5); opacity: 0.5; }
+          to { transform: scaleX(1); opacity: 1; }
+        }
+      `}</style>
+    </Tabs>
   );
 } 

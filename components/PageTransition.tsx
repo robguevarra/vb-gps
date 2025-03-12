@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 interface PageTransitionProps {
@@ -14,6 +14,7 @@ interface PageTransitionProps {
  * 
  * Provides smooth transitions between pages or tab content.
  * Implements various animation modes with accessibility considerations.
+ * Optimized for performance with shorter durations and better timing.
  * 
  * @param children - The content to be animated
  * @param mode - The animation mode to use (default: "fade")
@@ -26,6 +27,14 @@ export function PageTransition({
   const searchParams = useSearchParams();
   const currentTab = searchParams?.get("tab") || "overview";
   const shouldReduceMotion = useReducedMotion();
+  const [isFirstRender, setIsFirstRender] = useState(true);
+  
+  // Skip animation on first render for better initial load performance
+  useEffect(() => {
+    if (isFirstRender) {
+      setIsFirstRender(false);
+    }
+  }, []);
   
   // Create a unique key for the current view
   const viewKey = `${pathname}-${currentTab}`;
@@ -33,37 +42,37 @@ export function PageTransition({
   // Different animation variants based on mode
   const variants = {
     fade: {
-      initial: { opacity: 0 },
+      initial: isFirstRender ? { opacity: 1 } : { opacity: 0 },
       animate: { opacity: 1 },
       exit: { opacity: 0 },
-      transition: { duration: shouldReduceMotion ? 0.1 : 0.3, ease: "easeInOut" }
+      transition: { duration: shouldReduceMotion ? 0.1 : 0.2, ease: "easeInOut" }
     },
     slide: {
-      initial: { opacity: 0, x: shouldReduceMotion ? 0 : 20 },
+      initial: isFirstRender ? { opacity: 1, x: 0 } : { opacity: 0, x: shouldReduceMotion ? 0 : 20 },
       animate: { opacity: 1, x: 0 },
       exit: { opacity: 0, x: shouldReduceMotion ? 0 : -20 },
-      transition: { duration: shouldReduceMotion ? 0.1 : 0.4, ease: [0.25, 1, 0.5, 1] }
+      transition: { duration: shouldReduceMotion ? 0.1 : 0.25, ease: [0.25, 1, 0.5, 1] }
     },
     scale: {
-      initial: { opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 },
+      initial: isFirstRender ? { opacity: 1, scale: 1 } : { opacity: 0, scale: shouldReduceMotion ? 1 : 0.95 },
       animate: { opacity: 1, scale: 1 },
       exit: { opacity: 0, scale: shouldReduceMotion ? 1 : 1.05 },
-      transition: { duration: shouldReduceMotion ? 0.1 : 0.3, ease: [0.19, 1, 0.22, 1] }
+      transition: { duration: shouldReduceMotion ? 0.1 : 0.25, ease: [0.19, 1, 0.22, 1] }
     },
     slideUp: {
-      initial: { opacity: 0, y: shouldReduceMotion ? 0 : 20 },
+      initial: isFirstRender ? { opacity: 1, y: 0 } : { opacity: 0, y: shouldReduceMotion ? 0 : 20 },
       animate: { opacity: 1, y: 0 },
       exit: { opacity: 0, y: shouldReduceMotion ? 0 : -20 },
-      transition: { duration: shouldReduceMotion ? 0.1 : 0.3, ease: "easeOut" }
+      transition: { duration: shouldReduceMotion ? 0.1 : 0.25, ease: "easeOut" }
     },
     slideDown: {
-      initial: { opacity: 0, y: shouldReduceMotion ? 0 : -20 },
+      initial: isFirstRender ? { opacity: 1, y: 0 } : { opacity: 0, y: shouldReduceMotion ? 0 : -20 },
       animate: { opacity: 1, y: 0 },
       exit: { opacity: 0, y: shouldReduceMotion ? 0 : 20 },
-      transition: { duration: shouldReduceMotion ? 0.1 : 0.3, ease: "easeOut" }
+      transition: { duration: shouldReduceMotion ? 0.1 : 0.25, ease: "easeOut" }
     },
     elastic: {
-      initial: { opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 },
+      initial: isFirstRender ? { opacity: 1, scale: 1 } : { opacity: 0, scale: shouldReduceMotion ? 1 : 0.9 },
       animate: { 
         opacity: 1, 
         scale: 1,
@@ -71,15 +80,16 @@ export function PageTransition({
           ? { duration: 0.1 }
           : {
               type: "spring",
-              stiffness: 300,
-              damping: 20
+              stiffness: 400, // Increased stiffness for faster animation
+              damping: 25,    // Increased damping for less oscillation
+              mass: 0.8       // Reduced mass for faster movement
             }
       },
       exit: { 
         opacity: 0, 
         scale: shouldReduceMotion ? 1 : 0.95,
         transition: {
-          duration: shouldReduceMotion ? 0.1 : 0.2,
+          duration: shouldReduceMotion ? 0.1 : 0.15, // Reduced exit duration
           ease: "easeInOut"
         }
       },
@@ -98,7 +108,7 @@ export function PageTransition({
   const selectedVariant = variants[effectiveMode];
   
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="sync">
       <motion.div
         key={viewKey}
         initial={selectedVariant.initial}
@@ -108,7 +118,7 @@ export function PageTransition({
         className="w-full"
         // Improve performance with will-change for complex animations
         style={
-          mode !== "none" && !shouldReduceMotion
+          mode !== "none" && !shouldReduceMotion && !isFirstRender
             ? { willChange: "opacity, transform" }
             : undefined
         }

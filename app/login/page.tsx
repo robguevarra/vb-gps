@@ -23,9 +23,11 @@ export default async function LoginPage() {
                 src="/victorywhite.png" 
                 alt="Victory Bulacan Logo" 
                 fill
-                sizes="(max-width: 768px) 7rem, 7rem"
+                sizes="112px"
                 className="object-contain"
                 priority
+                loading="eager"
+                fetchPriority="high"
               />
             </div>
             <h1 className="text-2xl font-bold text-white text-center">Victory Bulacan</h1>

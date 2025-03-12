@@ -28,7 +28,14 @@ const nextConfig: NextConfig = {
       },
     ],
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60,
+    // Define specific device sizes to optimize image generation
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    // Define specific image sizes for the Image component
+    imageSizes: [16, 32, 48, 64, 96, 112, 128, 256, 384],
+    // Disable the warning about preloaded images
+    dangerouslyAllowSVG: true,
+    // Increase cache duration for better performance
+    minimumCacheTTL: 7200, // 2 hours
   },
   
   // Add CORS headers to all API routes

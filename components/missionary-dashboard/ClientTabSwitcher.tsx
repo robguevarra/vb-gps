@@ -14,6 +14,8 @@
  * - Provides manual refresh option for each tab
  * - Uses URL parameters for deep linking and sharing
  * - Triggers background preloading of other tabs
+ * - Shows loading indicators during content fetching
+ * - Provides immediate visual feedback on tab changes
  * 
  * @component
  */
@@ -23,6 +25,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { DashboardTabSkeleton } from "./DashboardTabSkeleton";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface TabContent {
   [key: string]: React.ReactNode | null;
@@ -49,6 +52,7 @@ export function ClientTabSwitcher({
   const tabContentRef = useRef<TabContent>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -59,6 +63,7 @@ export function ClientTabSwitcher({
       tabContentRef.current[currentTab] = initialContent;
     }
     setActiveTab(currentTab);
+    setIsLoading(false);
   }, [currentTab, initialContent]);
   
   // Trigger preloading of other tabs
@@ -86,6 +91,7 @@ export function ClientTabSwitcher({
   // Handle manual refresh
   const handleRefresh = () => {
     setIsRefreshing(true);
+    setIsLoading(true);
     
     // Create new search params with refresh timestamp
     const newParams = new URLSearchParams(searchParams?.toString() || "");
@@ -101,6 +107,19 @@ export function ClientTabSwitcher({
     setTimeout(() => {
       setIsRefreshing(false);
     }, 1000);
+  };
+  
+  // Get the appropriate tab type for the skeleton
+  const getTabType = () => {
+    switch(activeTab) {
+      case "overview": return "overview";
+      case "history": return "history";
+      case "approvals": return "approvals";
+      case "manual-remittance": return "manual-remittance";
+      case "reports": return "reports";
+      case "staff-reports": return "staff-reports";
+      default: return "overview";
+    }
   };
   
   return (
@@ -119,8 +138,30 @@ export function ClientTabSwitcher({
       </div>
       
       {/* Show cached content if available, otherwise show initial content */}
-      <div data-tab-content={activeTab}>
-        {tabContentRef.current[activeTab] || initialContent}
+      <div data-tab-content={activeTab} className="relative">
+        <AnimatePresence mode="wait">
+          {isLoading ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DashboardTabSkeleton type={getTabType()} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {tabContentRef.current[activeTab] || initialContent}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
