@@ -19,8 +19,6 @@ import { useState, useEffect } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { 
   ChevronRight, 
   LayoutDashboard, 
@@ -29,22 +27,16 @@ import {
   FileText, 
   BarChart, 
   Users,
-  Loader2,
-  X
+  Loader2
 } from "lucide-react";
-import { motion } from "framer-motion";
 
 interface SidebarProps {
   isCampusDirector?: boolean;
-  mobileMenuOpen?: boolean;
-  setMobileMenuOpen?: (open: boolean) => void;
 }
 
 // Main Sidebar component
 export function Sidebar({ 
-  isCampusDirector = false,
-  mobileMenuOpen = false,
-  setMobileMenuOpen
+  isCampusDirector = false
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -53,6 +45,21 @@ export function Sidebar({
   // Get active tab from URL or default to overview
   const [activeTab, setActiveTab] = useState<string>(searchParams?.get("tab") || "overview");
   const [loadingTab, setLoadingTab] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Listen for sidebar toggle events from navbar
+  useEffect(() => {
+    const handleSidebarToggle = (event: Event) => {
+      if ((event as CustomEvent).detail) {
+        setSidebarOpen((event as CustomEvent).detail.open);
+      }
+    };
+    
+    window.addEventListener('sidebarToggle', handleSidebarToggle as EventListener);
+    return () => {
+      window.removeEventListener('sidebarToggle', handleSidebarToggle as EventListener);
+    };
+  }, []);
   
   // Update active tab when URL changes
   useEffect(() => {
@@ -82,9 +89,12 @@ export function Sidebar({
     // Use router.push for client-side navigation
     router.push(`${pathname}?${newParams.toString()}`, { scroll: false });
     
-    // Close mobile menu if applicable
-    if (setMobileMenuOpen) {
-      setMobileMenuOpen(false);
+    // Close mobile sidebar by dispatching an event
+    if (window.innerWidth < 1024) { // lg breakpoint
+      const event = new CustomEvent('sidebarToggle', {
+        detail: { open: false }
+      });
+      window.dispatchEvent(event);
     }
   };
 
@@ -130,32 +140,12 @@ export function Sidebar({
     }
   ];
 
-  // Animation variants for list items
-  const listItemVariants = {
-    hidden: { opacity: 0, x: -5 },
-    visible: (i: number) => ({
-      opacity: 1,
-      x: 0,
-      transition: {
-        delay: i * 0.03,
-        duration: 0.15
-      }
-    })
-  };
-
   // Render navigation items
   const renderNavItems = () => {
     return navigationItems
       .filter(item => item.alwaysVisible || (item.campusDirectorOnly && isCampusDirector))
-      .map((item, index) => (
-        <motion.li 
-          key={item.tab}
-          custom={index}
-          initial="hidden"
-          animate="visible"
-          variants={listItemVariants}
-          layoutId={`nav-item-${item.tab}`}
-        >
+      .map((item) => (
+        <li key={item.tab}>
           <Button
             variant="ghost"
             className={cn(
@@ -176,56 +166,34 @@ export function Sidebar({
               <ChevronRight className="ml-auto h-4 w-4" />
             )}
           </Button>
-        </motion.li>
+        </li>
       ));
   };
 
-  // Desktop sidebar
-  const DesktopSidebar = () => (
-    <div className="hidden lg:fixed lg:inset-y-0 lg:z-10 lg:flex lg:w-72 lg:flex-col">
-      <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6">
-        <div className="flex h-16 shrink-0 items-center">
-          <h2 className="text-lg font-semibold">Staff Portal</h2>
-        </div>
-        <nav className="flex flex-1 flex-col">
-          <ScrollArea className="h-[calc(100vh-4rem)]">
+  return (
+    <>
+      {/* Desktop sidebar - always visible on large screens */}
+      <div className="hidden lg:fixed lg:z-10 lg:flex lg:w-72 lg:flex-col top-16 bottom-0"> {/* Simplified positioning */}
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6">
+          <nav className="flex flex-1 flex-col pt-4">
             <ul className="flex flex-1 flex-col gap-y-1">
               {renderNavItems()}
             </ul>
-          </ScrollArea>
-        </nav>
-      </div>
-    </div>
-  );
-
-  // Mobile sidebar
-  const MobileSidebar = () => (
-    <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-      <SheetContent side="left" className="w-72 sm:max-w-sm">
-        <div className="flex h-16 shrink-0 items-center">
-          <h2 className="text-lg font-semibold">Staff Portal</h2>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="ml-auto" 
-            onClick={() => setMobileMenuOpen?.(false)}
-          >
-            <X className="h-5 w-5" />
-          </Button>
+          </nav>
         </div>
-        <nav className="flex flex-1 flex-col mt-4">
+      </div>
+
+      {/* Mobile sidebar - controlled by the navbar */}
+      <div className={cn(
+        "fixed z-30 w-72 bg-white dark:bg-gray-900 shadow-lg transform transition-transform duration-300 ease-in-out lg:hidden top-16 bottom-0 left-0", /* Simplified positioning */
+        sidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <nav className="flex flex-1 flex-col p-4">
           <ul className="flex flex-1 flex-col gap-y-1">
             {renderNavItems()}
           </ul>
         </nav>
-      </SheetContent>
-    </Sheet>
-  );
-
-  return (
-    <>
-      <DesktopSidebar />
-      {setMobileMenuOpen && <MobileSidebar />}
+      </div>
     </>
   );
 }

@@ -161,12 +161,22 @@ export default function Navbar() {
     { value: "/dashboard/superadmin", label: "Superadmin Dashboard" }
   ];
 
-  // Close mobile menu when sidebar is opened
-  useEffect(() => {
-    if (sidebarOpen) {
+  // Handle sidebar toggle
+  const handleSidebarToggle = () => {
+    const newState = !sidebarOpen;
+    setSidebarOpen(newState);
+    
+    // Dispatch custom event for sidebar components to listen to
+    const event = new CustomEvent('sidebarToggle', {
+      detail: { open: newState }
+    });
+    window.dispatchEvent(event);
+    
+    // Close mobile menu when sidebar is opened
+    if (newState) {
       setMobileMenuOpen(false);
     }
-  }, [sidebarOpen]);
+  };
 
   // Determine if user should have access to campus director tabs
   const hasAccessToCampusDirectorTabs = isCampusDirector || isSuperAdmin;
@@ -178,14 +188,14 @@ export default function Navbar() {
         <TabStateManager onTabChange={handleTabChange} />
       </Suspense>
       
-      <nav className="fixed top-0 left-0 right-0 h-16 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between px-4 py-2">
+      <nav className="fixed top-0 left-0 right-0 h-16 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-4">
           {/* Sidebar toggle button for mobile */}
           {pathname?.startsWith('/dashboard/missionary') && (
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={handleSidebarToggle}
               className="lg:hidden mr-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800"
             >
               <PanelLeft className={`h-5 w-5 transition-transform duration-200 ${sidebarOpen ? 'rotate-180' : ''}`} />
@@ -353,9 +363,6 @@ export default function Navbar() {
           )}
         </AnimatePresence>
       </nav>
-      
-      {/* Add padding to account for fixed navbar */}
-      <div className="h-16"></div>
     </>
   );
 }

@@ -59,7 +59,6 @@ export async function RequestHistoryTabWrapper({ missionaryId }: RequestHistoryT
   return (
     <ErrorBoundaryProvider componentName="Request History Tab">
       <div className="space-y-8">
-        <h2 className="text-2xl font-semibold">Request History</h2>
         <Suspense fallback={<RequestHistoryTabSkeleton />}>
           <RequestHistoryTab
             pendingLeaveRequests={pendingLeaveRequests}

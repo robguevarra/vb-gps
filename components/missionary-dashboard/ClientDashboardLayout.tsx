@@ -10,6 +10,7 @@
  * - Client-side tab switching for instant feedback
  * - URL state maintenance for deep linking
  * - Optimized animations for smooth transitions
+ * - Mobile-responsive design with toggle menu
  * 
  * @component
  */
@@ -42,9 +43,7 @@ export function ClientDashboardLayout({
   churchName,
 }: ClientDashboardLayoutProps) {
   const searchParams = useSearchParams();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(currentTab);
-  const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState(getTabTitle(currentTab));
   
   // Update active tab and title when URL changes
@@ -78,35 +77,30 @@ export function ClientDashboardLayout({
   const isCampusDirector = userRole === "campus_director" || userRole === "superadmin";
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 pt-16">
+      {/* Sidebar - controlled by the navbar */}
       <Sidebar 
         isCampusDirector={isCampusDirector}
-        mobileMenuOpen={mobileMenuOpen}
-        setMobileMenuOpen={setMobileMenuOpen}
       />
       
       {/* Main content */}
       <main className="flex-1 lg:ml-72">
-        <div className="container px-4 py-6 max-w-7xl mx-auto">
-          {/* Header with animated title */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.15 }}
-              className="mb-6"
-            >
-              <h1 className="text-2xl font-bold tracking-tight">
+        <div className="container px-4 py-4 max-w-7xl mx-auto">
+          {/* Page title */}
+          <div className="mb-4">
+            <AnimatePresence mode="wait">
+              <motion.h1
+                key={activeTab}
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.15 }}
+                className="text-2xl font-bold tracking-tight"
+              >
                 {title}
-                {loading && (
-                  <span className="ml-3 inline-block h-4 w-4 rounded-full border-2 border-t-transparent border-gray-400 animate-spin" />
-                )}
-              </h1>
-            </motion.div>
-          </AnimatePresence>
+              </motion.h1>
+            </AnimatePresence>
+          </div>
           
           {/* Tab content */}
           {initialContent}
