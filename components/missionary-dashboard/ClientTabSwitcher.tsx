@@ -8,14 +8,13 @@
  * Features:
  * - Caches rendered tab content for instant switching
  * - Manages loading states for smooth transitions
- * - Dispatches events for coordination with other components
- * - Intelligent preloading of tabs in the background
- * - Skeleton loading states for immediate visual feedback
+ * - Simple URL-based tab switching
+ * - Background preloading of tabs for better performance
  * 
  * @component
  */
 
-import { useEffect, useRef, useState, Suspense } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { DashboardTabSkeleton } from "./DashboardTabSkeleton";
@@ -27,53 +26,6 @@ interface ClientTabSwitcherProps {
   missionaryId: string;
 }
 
-/**
- * TabStateManager Component
- * 
- * This component handles the tab state management and URL synchronization.
- * It's separated to properly handle the useSearchParams hook which needs
- * to be wrapped in a Suspense boundary.
- */
-function TabStateManager({
-  initialTab,
-  onTabChange,
-  onTabLoad,
-  renderedTabs,
-  triggerPreloading,
-  preloadingTriggered
-}: {
-  initialTab: string;
-  onTabChange: (tab: string) => void;
-  onTabLoad: (tab: string) => void;
-  renderedTabs: Record<string, React.ReactNode>;
-  triggerPreloading: () => void;
-  preloadingTriggered: React.MutableRefObject<boolean>;
-}) {
-  const searchParams = useSearchParams();
-  
-  // Update active tab from URL
-  useEffect(() => {
-    const tab = searchParams?.get("tab") || initialTab;
-    onTabChange(tab);
-    
-    // If we haven't rendered this tab yet, load it
-    if (!renderedTabs[tab]) {
-      onTabLoad(tab);
-    } else {
-      // For already loaded tabs, just dispatch contentloaded event
-      // Don't show loading state for URL-based navigation of cached tabs
-      window.dispatchEvent(new CustomEvent("contentloaded"));
-    }
-    
-    // Trigger preloading after initial render
-    if (!preloadingTriggered.current) {
-      setTimeout(triggerPreloading, 3000); // Wait 3 seconds before starting preloading
-    }
-  }, [searchParams, initialTab, onTabChange, onTabLoad, renderedTabs, triggerPreloading, preloadingTriggered]);
-  
-  return null; // This component doesn't render anything
-}
-
 export default function ClientTabSwitcher({
   initialTab,
   initialContent,
@@ -81,30 +33,55 @@ export default function ClientTabSwitcher({
   missionaryId,
 }: ClientTabSwitcherProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [clientSideTab, setClientSideTab] = useState(initialTab);
   const [loading, setLoading] = useState(false);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [renderedTabs, setRenderedTabs] = useState<Record<string, React.ReactNode>>({
     [initialTab]: initialContent,
   });
   
-  // Track which tabs have been preloaded to avoid redundant preloading
+  // Track which tabs have been preloaded
   const preloadedTabs = useRef<Set<string>>(new Set([initialTab]));
   const preloadingTriggered = useRef(false);
   
-  // Intelligent preloading function - only preload tabs once per session
-  const triggerPreloading = () => {
-    if (preloadingTriggered.current) return;
-    preloadingTriggered.current = true;
+  // Update active tab from URL
+  useEffect(() => {
+    const tab = searchParams?.get("tab") || initialTab;
     
+    // If tab changed
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+      
+      // If we haven't rendered this tab yet, show skeleton and load it
+      if (!renderedTabs[tab]) {
+        setShowSkeleton(true);
+        setLoading(true);
+        loadTab(tab);
+      } else {
+        // For already loaded tabs, just show them immediately
+        setLoading(false);
+        setShowSkeleton(false);
+      }
+    }
+    
+    // Trigger background preloading after initial render
+    if (!preloadingTriggered.current) {
+      setTimeout(() => {
+        preloadingTriggered.current = true;
+        triggerPreloading();
+      }, 3000); // Wait 3 seconds before starting preloading
+    }
+  }, [searchParams, initialTab, activeTab, renderedTabs]);
+  
+  // Preload all tabs in the background
+  const triggerPreloading = () => {
     // Get all tabs that haven't been preloaded yet
     const tabsToPreload = Object.keys(tabs).filter(tab => !preloadedTabs.current.has(tab));
     
     // Stagger preloading to avoid overwhelming the network
     tabsToPreload.forEach((tab, index) => {
       setTimeout(() => {
-        console.log(`Preloading tab: ${tab}`);
         preloadTab(tab);
       }, index * 1000); // Stagger by 1 second per tab
     });
@@ -136,55 +113,7 @@ export default function ClientTabSwitcher({
       console.error(`Error preloading tab ${tab}:`, error);
     }
   };
-
-  // Listen for tab change events from Sidebar
-  useEffect(() => {
-    const handleTabChange = (event: CustomEvent) => {
-      const { tab, source } = event.detail;
-      
-      // Skip if this event was triggered by URL change to avoid double-handling
-      if (source === "url") return;
-      
-      // Update client-side tab immediately for instant feedback
-      setClientSideTab(tab);
-      
-      // Show skeleton immediately for visual feedback
-      setShowSkeleton(true);
-      setLoading(true);
-      
-      // If we haven't loaded this tab yet, load it
-      if (!renderedTabs[tab]) {
-        loadTab(tab);
-      } else {
-        // For cached tabs, just show a very brief loading state
-        // This creates a smoother transition without a noticeable blink
-        setTimeout(() => {
-          setLoading(false);
-          setShowSkeleton(false);
-          // Dispatch contentloaded event
-          window.dispatchEvent(new CustomEvent("contentloaded"));
-        }, 50); // Reduced from 100ms to 50ms for faster response
-      }
-    };
-
-    window.addEventListener("tabchange", handleTabChange as EventListener);
-    return () => {
-      window.removeEventListener("tabchange", handleTabChange as EventListener);
-    };
-  }, [renderedTabs]);
-
-  // Handle tab change from URL
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    setClientSideTab(tab);
-    
-    // If we haven't rendered this tab yet, show skeleton
-    if (!renderedTabs[tab]) {
-      setShowSkeleton(true);
-      setLoading(true);
-    }
-  };
-
+  
   // Load a tab dynamically
   const loadTab = async (tab: string) => {
     try {
@@ -208,16 +137,10 @@ export default function ClientTabSwitcher({
       preloadedTabs.current.add(tab);
       setLoading(false);
       setShowSkeleton(false);
-      
-      // Dispatch contentloaded event
-      window.dispatchEvent(new CustomEvent("contentloaded"));
     } catch (error) {
       console.error(`Error loading tab ${tab}:`, error);
       setLoading(false);
       setShowSkeleton(false);
-      
-      // Dispatch contentloaded event even on error
-      window.dispatchEvent(new CustomEvent("contentloaded"));
     }
   };
 
@@ -240,64 +163,40 @@ export default function ClientTabSwitcher({
 
   // Get the content to display
   const getContent = () => {
-    // If we're showing a skeleton, return that
     if (showSkeleton) {
-      return <DashboardTabSkeleton type={getTabType()} />;
+      return <DashboardTabSkeleton type={activeTab as "overview" | "history" | "approvals" | "manual-remittance" | "reports" | "staff-reports"} />;
     }
-    
-    // Otherwise return the rendered tab content
-    return renderedTabs[clientSideTab] || renderedTabs[activeTab] || <DashboardTabSkeleton type={getTabType()} />;
-  };
-
-  // Get the appropriate tab type for the skeleton
-  const getTabType = () => {
-    // If we have a client-side tab change, use that
-    const tabToUse = clientSideTab || activeTab;
-    
-    switch(tabToUse) {
-      case "overview": return "overview";
-      case "history": return "history";
-      case "approvals": return "approvals";
-      case "manual-remittance": return "manual-remittance";
-      case "reports": return "reports";
-      case "staff-reports": return "staff-reports";
-      default: return "overview";
-    }
+    return renderedTabs[activeTab];
   };
 
   return (
-    <>
-      {/* TabStateManager with Suspense boundary */}
-      <Suspense fallback={null}>
-        <TabStateManager
-          initialTab={initialTab}
-          onTabChange={handleTabChange}
-          onTabLoad={loadTab}
-          renderedTabs={renderedTabs}
-          triggerPreloading={triggerPreloading}
-          preloadingTriggered={preloadingTriggered}
-        />
-      </Suspense>
+    <div className="relative">
+      {/* Refresh button */}
+      <button
+        onClick={handleRefresh}
+        className="absolute right-0 top-0 z-10 p-2 text-gray-500 hover:text-gray-700"
+        aria-label="Refresh"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 2v6h-6"></path>
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+          <path d="M3 22v-6h6"></path>
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+        </svg>
+      </button>
       
+      {/* Tab content with animation */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={clientSideTab}
+          key={activeTab}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }} // Reduced from 0.2s to 0.15s for faster transitions
-          onAnimationComplete={() => {
-            // Ensure contentloaded event is dispatched when animation completes
-            if (loading) {
-              setLoading(false);
-              setShowSkeleton(false);
-              window.dispatchEvent(new CustomEvent("contentloaded"));
-            }
-          }}
+          transition={{ duration: 0.15 }}
         >
           {getContent()}
         </motion.div>
       </AnimatePresence>
-    </>
+    </div>
   );
 } 

@@ -9,14 +9,13 @@
  * Features:
  * - Responsive design with mobile and desktop variants
  * - Role-based navigation items
- * - Client-side navigation for instant page transitions
- * - Visual feedback for active and loading states
- * - Coordination with tab switching system
+ * - Client-side navigation for instant feedback
+ * - Visual loading states for better UX
  * 
  * @component
  */
 
-import { useState, useEffect, Suspense, useRef } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -41,96 +40,52 @@ interface SidebarProps {
   setMobileMenuOpen?: (open: boolean) => void;
 }
 
-// Main Sidebar component that wraps the content with Suspense
+// Main Sidebar component
 export function Sidebar({ 
   isCampusDirector = false,
   mobileMenuOpen = false,
   setMobileMenuOpen
 }: SidebarProps) {
-  return (
-    <Suspense fallback={<div className="w-64 bg-gray-100 dark:bg-gray-900 h-screen" />}>
-      <SidebarContent 
-        isCampusDirector={isCampusDirector}
-        mobileMenuOpen={mobileMenuOpen}
-        setMobileMenuOpen={setMobileMenuOpen}
-      />
-    </Suspense>
-  );
-}
-
-// The actual sidebar content
-function SidebarContent({ 
-  isCampusDirector = false,
-  mobileMenuOpen = false,
-  setMobileMenuOpen
-}: SidebarProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<string>("overview");
-  const [loadingTab, setLoadingTab] = useState<string | null>(null);
-  const navigationInProgressRef = useRef(false);
-  const eventDispatchedRef = useRef(false);
+  const searchParams = useSearchParams();
   
-  // Update active tab from URL on initial load and when URL changes
+  // Get active tab from URL or default to overview
+  const [activeTab, setActiveTab] = useState<string>(searchParams?.get("tab") || "overview");
+  const [loadingTab, setLoadingTab] = useState<string | null>(null);
+  
+  // Update active tab when URL changes
   useEffect(() => {
     const tab = searchParams?.get("tab") || "overview";
     setActiveTab(tab);
-    // Clear loading state when URL changes to prevent stale loading states
-    setLoadingTab(null);
-    navigationInProgressRef.current = false;
-    eventDispatchedRef.current = false;
-  }, [searchParams]);
-  
-  // Listen for content loaded events to clear loading state
-  useEffect(() => {
-    const handleContentLoaded = () => {
-      setLoadingTab(null);
-      navigationInProgressRef.current = false;
-      eventDispatchedRef.current = false;
-    };
     
-    window.addEventListener("contentloaded", handleContentLoaded);
-    return () => {
-      window.removeEventListener("contentloaded", handleContentLoaded);
-    };
-  }, []);
+    // Clear loading state if it matches the current tab
+    if (loadingTab === tab) {
+      setLoadingTab(null);
+    }
+  }, [searchParams, loadingTab]);
 
   // Handle navigation item click
   const handleNavigation = (tab: string) => {
-    // Don't do anything if this tab is already active or navigation is in progress
-    if ((tab === activeTab && !loadingTab) || navigationInProgressRef.current) return;
-    
-    // Set navigation in progress to prevent multiple clicks
-    navigationInProgressRef.current = true;
+    // Don't do anything if this tab is already active
+    if (tab === activeTab && !loadingTab) {
+      return;
+    }
     
     // Set loading state immediately for instant feedback
     setLoadingTab(tab);
     
-    // Only dispatch the event if we haven't already for this navigation
-    if (!eventDispatchedRef.current) {
-      eventDispatchedRef.current = true;
-      
-      // Dispatch tab change event for other components to react
-      const tabChangeEvent = new CustomEvent("tabchange", {
-        detail: { tab, source: "sidebar" }
-      });
-      window.dispatchEvent(tabChangeEvent);
-    }
+    // Update URL with the new tab
+    const newParams = new URLSearchParams(window.location.search);
+    newParams.set("tab", tab);
     
-    // Update URL with the new tab - use a very small timeout to ensure the UI updates first
-    setTimeout(() => {
-      const newParams = new URLSearchParams(searchParams?.toString() || "");
-      newParams.set("tab", tab);
-      
-      // Use router.push for client-side navigation
-      router.push(`${pathname}?${newParams.toString()}`, { scroll: false });
-      
-      // Close mobile menu if applicable
-      if (setMobileMenuOpen) {
-        setMobileMenuOpen(false);
-      }
-    }, 10);
+    // Use router.push for client-side navigation
+    router.push(`${pathname}?${newParams.toString()}`, { scroll: false });
+    
+    // Close mobile menu if applicable
+    if (setMobileMenuOpen) {
+      setMobileMenuOpen(false);
+    }
   };
 
   // Define navigation items with icons and descriptions
@@ -177,16 +132,13 @@ function SidebarContent({
 
   // Animation variants for list items
   const listItemVariants = {
-    hidden: { 
-      opacity: 0, 
-      x: -5 // Reduced from -10 to -5 for subtler animation
-    },
+    hidden: { opacity: 0, x: -5 },
     visible: (i: number) => ({
       opacity: 1,
       x: 0,
       transition: {
-        delay: i * 0.03, // Reduced from 0.05 to 0.03 for faster animations
-        duration: 0.15 // Reduced from 0.2 to 0.15 for faster animations
+        delay: i * 0.03,
+        duration: 0.15
       }
     })
   };
@@ -202,7 +154,6 @@ function SidebarContent({
           initial="hidden"
           animate="visible"
           variants={listItemVariants}
-          // Prevent re-animation on tab change
           layoutId={`nav-item-${item.tab}`}
         >
           <Button
@@ -214,7 +165,6 @@ function SidebarContent({
                 : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
             )}
             onClick={() => handleNavigation(item.tab)}
-            disabled={navigationInProgressRef.current}
           >
             {loadingTab === item.tab ? (
               <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
@@ -222,7 +172,7 @@ function SidebarContent({
               item.icon
             )}
             <span>{item.name}</span>
-            {activeTab === item.tab && !loadingTab && (
+            {activeTab === item.tab && (
               <ChevronRight className="ml-auto h-4 w-4" />
             )}
           </Button>
@@ -232,40 +182,42 @@ function SidebarContent({
 
   // Desktop sidebar
   const DesktopSidebar = () => (
-    <div className="hidden lg:flex h-screen fixed left-0 top-16 z-30 w-72 flex-col border-r bg-white dark:bg-gray-900 dark:border-gray-800">
-      <ScrollArea className="flex-1 py-4">
-        <nav className="grid gap-1 px-2">
-          <ul className="space-y-2">
-            {renderNavItems()}
-          </ul>
+    <div className="hidden lg:fixed lg:inset-y-0 lg:z-10 lg:flex lg:w-72 lg:flex-col">
+      <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6">
+        <div className="flex h-16 shrink-0 items-center">
+          <h2 className="text-lg font-semibold">Staff Portal</h2>
+        </div>
+        <nav className="flex flex-1 flex-col">
+          <ScrollArea className="h-[calc(100vh-4rem)]">
+            <ul className="flex flex-1 flex-col gap-y-1">
+              {renderNavItems()}
+            </ul>
+          </ScrollArea>
         </nav>
-      </ScrollArea>
+      </div>
     </div>
   );
 
   // Mobile sidebar
   const MobileSidebar = () => (
     <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-      <SheetContent side="left" className="w-72 pt-16 z-20">
-        <div className="flex justify-between items-center mb-4 pr-4">
-          <h2 className="text-lg font-semibold">Dashboard Navigation</h2>
+      <SheetContent side="left" className="w-72 sm:max-w-sm">
+        <div className="flex h-16 shrink-0 items-center">
+          <h2 className="text-lg font-semibold">Staff Portal</h2>
           <Button 
             variant="ghost" 
             size="icon" 
+            className="ml-auto" 
             onClick={() => setMobileMenuOpen?.(false)}
-            className="h-8 w-8"
           >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <X className="h-5 w-5" />
           </Button>
         </div>
-        <ScrollArea className="h-[calc(100vh-8rem)]">
-          <nav className="grid gap-1 px-2">
-            <ul className="space-y-2">
-              {renderNavItems()}
-            </ul>
-          </nav>
-        </ScrollArea>
+        <nav className="flex flex-1 flex-col mt-4">
+          <ul className="flex flex-1 flex-col gap-y-1">
+            {renderNavItems()}
+          </ul>
+        </nav>
       </SheetContent>
     </Sheet>
   );
@@ -273,7 +225,7 @@ function SidebarContent({
   return (
     <>
       <DesktopSidebar />
-      <MobileSidebar />
+      {setMobileMenuOpen && <MobileSidebar />}
     </>
   );
 }
